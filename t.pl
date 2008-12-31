@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+
 use strict;
 use warnings;
 
@@ -10,51 +11,43 @@ sub xis {
     return ($v1 eq $v2);
 }
 
-my $PARENT_RDR;
-my $CHILD_RDR;
-my $PARENT_WTR;
-my $CHILD_WTR;
+my $parent_reader;
+my $child_reader;
+my $parent_writer;
+my $child_writer;
 
-pipe($PARENT_RDR, $CHILD_WTR);                # XXX: failure?
-pipe($CHILD_RDR,  $PARENT_WTR);               # XXX: failure?
-$CHILD_WTR->autoflush(1);
-$PARENT_WTR->autoflush(1);
+pipe($parent_reader, $child_writer);                # XXX: failure?
+pipe($child_reader,  $parent_writer);               # XXX: failure?
+$child_writer->autoflush(1);
+$parent_writer->autoflush(1);
 
 my $pid;
 my $line;
 
 use_ok("RMI");
-$RMI::DEBUG=1;
 
 if (my $pid = fork()) {
     # parent
-   close $PARENT_RDR; close $PARENT_WTR;
-   #print $CHILD_WTR "Parent Pid $$ is sending this\n";
-   #chomp($line = <$CHILD_RDR>);
-   #print "Parent Pid $$ just read this: ‘$line’\n";
+    close $parent_reader; close $parent_writer;
 
-    my @result = RMI::call($CHILD_WTR, $CHILD_RDR, undef, 'main::f1', 2, 3); 
+    my @result = RMI::call($child_writer, $child_reader, undef, 'main::f1', 2, 3); 
     is($result[0], $pid, "retval indicates the method was called in the child/server process");
     is($result[1], 5, "result value is as expected");
 
-    @result = RMI::call($CHILD_WTR, $CHILD_RDR, undef, 'main::f1', 6, 7);
+    @result = RMI::call($child_writer, $child_reader, undef, 'main::f1', 6, 7);
     is($result[1], 13, "result value is as expected");  
 
-   close $CHILD_RDR; close $CHILD_WTR;
-   waitpid($pid,0);
-
+    close $child_reader; close $child_writer;
+    waitpid($pid,0);
 } else {
     # child
-   die "cannot fork: $!" unless defined $pid;
-   close $CHILD_RDR; close $CHILD_WTR;
-   #chomp($line = <$PARENT_RDR>);
-   #print "Child Pid $$ just read this: ‘$line’\n";
-   #print $PARENT_WTR "Child Pid $$ is sending this\n";
+    die "cannot fork: $!" unless defined $pid;
+    close $child_reader; close $child_writer;
    
-    RMI::serve($PARENT_RDR, $PARENT_WTR); 
+    RMI::serve($parent_reader, $parent_writer); 
    
-   close $PARENT_RDR; close $PARENT_WTR;
-   exit;
+    close $parent_reader; close $parent_writer;
+    exit;
 }
 
 sub f1 {

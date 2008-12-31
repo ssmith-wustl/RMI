@@ -4,7 +4,8 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-our $DEBUG = 0;
+BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; };
+our $DEBUG;
 
 # client
 sub call {
