@@ -4,15 +4,7 @@ package RMI::Client;
 
 use strict;
 use warnings;
-use RMI;
-use RMI::Server;
-
-use RMI;
-
-sub new {
-    return RMI::new_node(@_);
-}
-
+use base 'RMI::Node';
 
 our @types = qw{
     fork/pipes
@@ -36,21 +28,22 @@ sub new {
         $parent_writer->autoflush(1);
 
         # child process acts as a server for this test and then exits
-        my $pid = fork();
-        die "cannot fork: $!" unless defined $pid;
-        unless ($pid) {
+        my $parent_pid = $$;
+        my $child_pid = fork();
+        die "cannot fork: $!" unless defined $child_pid;
+        unless ($child_pid) {
+            $child_pid = $$;
             close $child_reader; close $child_writer;
             my ($sent,$received) = ({},{});
-            my $client_pid = -1; #TODO: fixme
             $RMI::DEBUG_INDENT = '  ';
             my $server = RMI::Server->new(
-                client_pid => $client_pid,
+                peer_pid => $parent_pid,
                 writer => $parent_writer,
                 reader => $parent_reader,
                 sent => $sent,
                 received => $received,
             );
-            RMI::serve($parent_reader, $parent_writer, $sent, $received, $client_pid); 
+            RMI::serve($parent_reader, $parent_writer, $sent, $received, $child_pid); 
             close $parent_reader; close $parent_writer;
             exit;
         }
@@ -58,13 +51,13 @@ sub new {
         # parent/original process is the client which does tests
         close $parent_reader; close $parent_writer;
 
-        my $self = bless { 
-            server_pid => $pid,
+        my $self = $class->SUPER::new(
+            peer_pid => $child_pid,
             writer => $child_writer,
             reader => $child_reader,
             sent => {},
             received => {},
-        }, $class;
+        );
 
         return $self;
     }
