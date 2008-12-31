@@ -18,13 +18,19 @@ our $DEBUG;
 sub call {
     my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
     my $os = $o || '<none>';
+    my $wantarray = wantarray;
     print "$DEBUG_INDENT C: $$ calling $os $m @p\n" if $DEBUG;
     $RMI::server_for_id{$hin} = [ $hout, $hin, $sent, $received ];
     unless (send_query($hout,$hin,$sent,$received,$o,$m,@p)) {
         die "failed to send! $!";
     }
     my @result = receive_result($hin, $hout, $sent, $received);
-    return @result;
+    if ($wantarray) {
+        return @result;        
+    }
+    else {
+        return $result[0];    
+    }
 }
 
 sub _convert_references {
@@ -107,7 +113,15 @@ sub receive_result {
     }
 }
 
-# server 
+# server
+
+sub eval {
+    my $src = shift;
+    my @result = eval $src;
+    die $@ if $@;
+    return @result;
+}
+
 sub serve {
     my ($hin,$hout, $sent, $received, $client_pid) = @_;
     $sent ||= {};
@@ -201,17 +215,6 @@ sub send_result {
     $h->print($s,"\n");
 }
 
-my @p = qw/reader writer sent received/;
-sub new_node {
-    my $class = shift;
-    my $self = bless { @_ }, $class;
-    for my $p (@p) {
-        unless ($self->{$p}) {
-            die "no $p on object!"
-        }
-    }
-    return $self;
-}
 
 1;
 

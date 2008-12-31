@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 22;
+use Test::More tests => 27;
 use IO::Handle;     # thousands of lines just for autoflush :−(
 
 use_ok("RMI");
@@ -17,6 +17,7 @@ my $sent = $c->{sent};
 my $received = $c->{received};
 
 my @result;
+my $result;
 
 diag("basic remote function attempt 1");
 @result = RMI::call($writer, $reader, $sent, $received, undef, 'main::f1', 2, 3); 
@@ -30,6 +31,10 @@ diag("basic remote function attempt 2");
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  
 is(scalar(keys(%$sent)), 0, "no sent objects");
 is(scalar(keys(%$received)), 0, "no received objects");
+
+diag("remote eval");
+my $rx = RMI::call($writer, $reader, $sent, $received, undef, "eval", "$$");
+diag($rx);
 
 diag("local object call");
 my $local1 = RMI::Test::Class1->new(foo => 111);
@@ -48,15 +53,27 @@ is(scalar(keys(%$sent)), 1, "one sent object?!"); #"no sent objects b/c this one
 is(scalar(keys(%$received)), 0, "no received objects");
 
 diag("make a remote object");
-my ($r) = RMI::call($writer, $reader, $sent, $received, 'RMI::Test::Class1', 'new');
+my $r = RMI::call($writer, $reader, $sent, $received, 'RMI::Test::Class1', 'new');
 ok($r, "got an object");
 isa_ok($r,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($r));
 is(scalar(keys(%$sent)), 1, "one sent object");
 is(scalar(keys(%$received)), 1, "one received objects");
 
 diag("call methods on the remote object");
+
 @result = $r->m2(8);
 is($result[0], 16, "return values is as expected for remote object with primitive params");
+
+@result = $r->m3($local1);
+is($result[0], $$, "return values are as expected for remote object with local object params");
+
+my ($r2) = RMI::call($writer, $reader, $sent, $received, 'RMI::Test::Class1', 'new');
+ok($r2, "made another remote object to use for a more complicated method call");
+@result = $r->m3($r2);
+ok($result[0] != $$, "return value is as expected for remote object with remote object params");
+
+$result = $r->m4($r2,$local1);
+ok($result =~ /.$$.$$/, "result $result has other process id, and this process id ($$) 2x");
 
 close $reader; close $writer;
 waitpid($pid,0);
@@ -94,7 +111,17 @@ sub m2 {
 sub m3 {
     my $self = shift;
     my $other = shift;
-    return "the pid of the other object is " . $other->m1 . " while mine is " . $self->m1;
+    $other->m1;
+}
+
+sub m4 {
+    my $self = shift;
+    my $other1 = shift;
+    my $other2 = shift;
+    my $p1 = $other1->m1;
+    my $p2 = $other2->m1;
+    my $p3 = $other1->m3($other2);
+    return "$p1.$p2.$p3";
 }
 
 

@@ -7,6 +7,13 @@ use warnings;
 use RMI;
 use RMI::Server;
 
+use RMI;
+
+sub new {
+    return RMI::new_node(@_);
+}
+
+
 our @types = qw{
     fork/pipes
 };
