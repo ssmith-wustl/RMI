@@ -6,9 +6,10 @@ sub AUTOLOAD {
     my $method = $AUTOLOAD;
     $method =~ s/^.*:://g;
     
-    my $key = $RMI::server_for_object{$object};
-    my $server = $RMI::server_for_key{$key};
-    die unless $server and @$server == 4;
+    my $key = $RMI::server_id_for_remote_object{$object};
+    my $server = $RMI::server_for_id{$key};
+
+    die "No server $server for key $key!?" unless $server and @$server == 4;
     print "$RMI::DEBUG_INDENT P: $$ $object $method : @$server\n" if $RMI::DEBUG;
     if (wantarray) {
         my @r = RMI::call(@$server, $object, $method, @_); 

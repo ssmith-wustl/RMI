@@ -19,10 +19,11 @@ sub call {
     my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
     my $os = $o || '<none>';
     print "$DEBUG_INDENT C: $$ calling $os $m @p\n" if $DEBUG;
+    $RMI::server_for_id{$hin} = [ $hout, $hin, $sent, $received ];
     unless (send_query($hout,$hin,$sent,$received,$o,$m,@p)) {
         die "failed to send! $!";
     }
-    my @result = receive_result($hin,$hout, $sent, $received);
+    my @result = receive_result($hin, $hout, $sent, $received);
     return @result;
 }
 
@@ -111,7 +112,7 @@ sub serve {
     my ($hin,$hout, $sent, $received, $client_pid) = @_;
     $sent ||= {};
     $received ||= {};
-    $RMI::server_for_key{$hin} = [ $hout, $hin, $sent, $received ];
+    $RMI::server_for_id{$hin} = [ $hout, $hin, $sent, $received ];
     while (1) {
         print "$DEBUG_INDENT S: $$ waiting\n" if $DEBUG;
         my $incoming_text = $hin->getline;
@@ -162,7 +163,7 @@ sub _convert_stream {
             bless $o, "RMI::ProxyObject";
             $r->{$value} = $o;
             push @p, $o;
-            $RMI::server_for_object{"$o"} = $hin;
+            $RMI::server_id_for_remote_object{"$o"} = $hin;
             print "$DEBUG_INDENT S: $$ - made proxy for $value\n" if $DEBUG;
         }
         elsif ($type == 2) {
@@ -198,6 +199,18 @@ sub send_result {
     my $s = Data::Dumper::Dumper(['result', _convert_references($sent, $received, @r)]);   
     $s =~ s/\n/ /gms;
     $h->print($s,"\n");
+}
+
+my @p = qw/reader writer sent received/;
+sub new_node {
+    my $class = shift;
+    my $self = bless { @_ }, $class;
+    for my $p (@p) {
+        unless ($self->{$p}) {
+            die "no $p on object!"
+        }
+    }
+    return $self;
 }
 
 1;

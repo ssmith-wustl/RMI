@@ -34,16 +34,16 @@ is(scalar(keys(%$received)), 0, "no received objects");
 diag("local object call");
 my $local1 = RMI::Test::Class1->new(foo => 111);
 ok($local1, "made a local object");
-@result = $local1->m2(8);
+@result = $local1->m1();
 ok(scalar(@result), "called method locally");
-is($result[0], 16, "result value $result[0] is as expected for 8 * 2");  
+is($result[0], $$, "result value $result[0] matches pid $$");  
 is(scalar(keys(%$sent)), 0, "no sent object");
 is(scalar(keys(%$received)), 0, "no received objects");
 
-diag("request that remote server do a method call on a local object");
-@result = RMI::call($writer, $reader, $sent, $received, $local1, 'm2', 8);
+diag("request that remote server do a method call on a local object, which just comes right back");
+@result = RMI::call($writer, $reader, $sent, $received, $local1, 'm1');
 ok(scalar(@result), "called method remotely");
-is($result[0], 16, "result value $result[0] is as expected for 8 * 2");  
+is($result[0], $$, "result value $result[0] is matches pid $$");  
 is(scalar(keys(%$sent)), 1, "one sent object?!"); #"no sent objects b/c this one is gone by the time the method call finishes");
 is(scalar(keys(%$received)), 0, "no received objects");
 
@@ -53,6 +53,10 @@ ok($r, "got an object");
 isa_ok($r,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($r));
 is(scalar(keys(%$sent)), 1, "one sent object");
 is(scalar(keys(%$received)), 1, "one received objects");
+
+diag("call methods on the remote object");
+@result = $r->m2(8);
+is($result[0], 16, "return values is as expected for remote object with primitive params");
 
 close $reader; close $writer;
 waitpid($pid,0);
