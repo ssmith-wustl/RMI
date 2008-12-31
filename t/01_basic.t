@@ -3,22 +3,27 @@
 use strict;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More tests => 5;
 use IO::Handle;     # thousands of lines just for autoflush :−(
 
 use_ok("RMI");
+use_ok("RMI::Client");
 
-my ($pid, $child_writer, $child_reader) = RMI::fork_pipe_server();
+my $c = RMI::Client->new("fork/pipes");
+my $pid = $c->{server_pid};
+my $reader = $c->{reader};
+my $writer = $c->{writer};
+
 my @result;
 
-@result = RMI::call($child_writer, $child_reader, undef, 'main::f1', 2, 3); 
+@result = RMI::call($writer, $reader, undef, 'main::f1', 2, 3); 
 is($result[0], $pid, "retval indicates the method was called in the child/server process");
 is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
 
-@result = RMI::call($child_writer, $child_reader, undef, 'main::f1', 6, 7);
+@result = RMI::call($writer, $reader, undef, 'main::f1', 6, 7);
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  
 
-close $child_reader; close $child_writer;
+close $reader; close $writer;
 waitpid($pid,0);
 exit;
 
@@ -29,5 +34,8 @@ sub f1 {
     return($$, $v1+$v2);
 }
 
+sub f2 {
+    my ($v1, $v2, $s, $r) = @_;
+}
 
 

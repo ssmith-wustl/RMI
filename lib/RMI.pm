@@ -100,33 +100,5 @@ sub send_result {
     $h->print($s,"\n");
 }
 
-# utils
-
-sub fork_pipe_server {
-    my $parent_reader;
-    my $parent_writer;
-    my $child_reader;
-    my $child_writer;
-    pipe($parent_reader, $child_writer);  
-    pipe($child_reader,  $parent_writer); 
-    $child_writer->autoflush(1);
-    $parent_writer->autoflush(1);
-
-    # child process acts as a server for this test and then exits
-    my $pid = fork();
-    die "cannot fork: $!" unless defined $pid;
-    unless ($pid) {
-        close $child_reader; close $child_writer;
-        RMI::serve($parent_reader, $parent_writer); 
-        close $parent_reader; close $parent_writer;
-        exit;
-    }
-
-    # parent/original process is the client which does tests
-    close $parent_reader; close $parent_writer;
-
-    return ($pid, $child_writer, $child_reader);
-}
-
 1;
 

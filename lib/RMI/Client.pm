@@ -1,18 +1,57 @@
 #!/usr/bin/env perl
+
+package RMI::Client;
+
 use strict;
 use warnings;
+use RMI;
 
-use IO::Socket;
-my $remote = IO::Socket::INET->new(
-    Proto    => "tcp",
-    PeerAddr => "127.0.0.1",
-    PeerPort => 9000, 
-) or die "cannot connect to daytime port at localhost: $!";
-$remote->autoflush(1);
-print $remote->getline,"\n";
-for (1..10) {
-    my $line = <>;
-    $remote->print($line);
-    print $remote->getline,"\n";
+our @types = qw{
+    fork/pipes
+};
+
+sub new {
+    my $class = shift;
+    my $server = shift;
+    my $self = bless { @_ }, $class;
+   
+    if ($server eq 'fork/pipes') { 
+        # no params: fork a server and talk to it with pipes
+
+        my $parent_reader;
+        my $parent_writer;
+        my $child_reader;
+        my $child_writer;
+        pipe($parent_reader, $child_writer);  
+        pipe($child_reader,  $parent_writer); 
+        $child_writer->autoflush(1);
+        $parent_writer->autoflush(1);
+
+        # child process acts as a server for this test and then exits
+        my $pid = fork();
+        die "cannot fork: $!" unless defined $pid;
+        unless ($pid) {
+            close $child_reader; close $child_writer;
+            RMI::serve($parent_reader, $parent_writer); 
+            close $parent_reader; close $parent_writer;
+            exit;
+        }
+
+        # parent/original process is the client which does tests
+        close $parent_reader; close $parent_writer;
+
+        my $self = bless { 
+            writer => $child_writer,
+            reader => $child_reader,
+            server_pid => $pid,
+        }, $class;
+
+        return $self;
+    }
+    else {
+        die "unexpected server $server\ntry @types";
+    }
 }
+
+1;
 
