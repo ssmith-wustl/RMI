@@ -16,24 +16,6 @@ our $DEBUG;
 
 # client
 
-sub call {
-    my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
-    my $os = $o || '<none>';
-    my $wantarray = wantarray;
-    print "$DEBUG_INDENT C: $$ calling $os $m @p\n" if $DEBUG;
-    $RMI::server_for_id{$hin} = [ $hout, $hin, $sent, $received ];
-    unless (send_query($hout,$hin,$sent,$received,$o,$m,@p)) {
-        die "failed to send! $!";
-    }
-    my @result = receive_result($hin, $hout, $sent, $received);
-    if ($wantarray) {
-        return @result;        
-    }
-    else {
-        return $result[0];    
-    }
-}
-
 sub _convert_references {
     my ($sent,$received,@p) = @_;
     my @px;

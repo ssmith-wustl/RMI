@@ -12,11 +12,11 @@ sub AUTOLOAD {
     die "No server $server for key $key!?" unless $server and @$server == 4;
     print "$RMI::DEBUG_INDENT P: $$ $object $method : @$server\n" if $RMI::DEBUG;
     if (wantarray) {
-        my @r = RMI::call(@$server, $object, $method, @_); 
+        my @r = RMI::Node::_call(@$server, $object, $method, @_); 
         return @r;
     }
     else {
-        my $r = RMI::call(@$server, $object, $method, @_); 
+        my $r = RMI::Node::_call(@$server, $object, $method, @_); 
         return $r;
     }
 }
@@ -24,8 +24,6 @@ sub AUTOLOAD {
 sub DESTROY {
     
 }
-
-package RMI::ProxyObject::Util;
 
 1;
 
