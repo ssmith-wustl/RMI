@@ -32,7 +32,7 @@ sub new {
         die "cannot fork: $!" unless defined $pid;
         unless ($pid) {
             close $child_reader; close $child_writer;
-            RMI::serve($parent_reader, $parent_writer); 
+            RMI::serve($parent_reader, $parent_writer, {}); 
             close $parent_reader; close $parent_writer;
             exit;
         }
@@ -41,9 +41,11 @@ sub new {
         close $parent_reader; close $parent_writer;
 
         my $self = bless { 
+            server_pid => $pid,
             writer => $child_writer,
             reader => $child_reader,
-            server_pid => $pid,
+            sent => {},
+            received => {},
         }, $class;
 
         return $self;
