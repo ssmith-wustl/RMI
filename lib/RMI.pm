@@ -1,20 +1,26 @@
 
 package RMI;
+
 use strict;
 use warnings;
-use Data::Dumper;
+
+use RMI::Client;
+use RMI::Server;
 use RMI::ProxyObject;
 
+use Data::Dumper;
+
 BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; };
+our $DEBUG_INDENT = '';
 our $DEBUG;
 
 # client
 sub call {
     my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
     my $os = $o || '<none>';
-    print " C: calling $os $m @p\n" if $DEBUG;
+    print "$DEBUG_INDENT C: $$ calling $os $m @p\n" if $DEBUG;
     unless (send_query($hout,$hin,$sent,$received,$o,$m,@p)) {
-        die "failed to send!";
+        die "failed to send! $!";
     }
     my @result = receive_result($hin,$hout, $sent, $received);
     return @result;
@@ -23,59 +29,91 @@ sub call {
 sub send_query {
     my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
     my @px;
-    for my $p (@p) {
+    for my $p ($o,@p) {
         if (ref($p)) {
-            my $key = "$p";
-            push @px, 1, $key;
-            $sent->{$key} = $p;
+            if ($received->{$p}) {
+                #push @px, 2, $key;
+                die "received $p?"
+            }
+            elsif ($p->isa("RMI::ProxyObject")) {
+                my $key = $$p;
+                print "$DEBUG_INDENT C: $$ proxy $p references remote $key:\n" if $RMI::DEBUG;
+                push @px, 2, $key;
+            }
+            else {
+                my $key = "$p";
+                push @px, 1, $key;
+                $sent->{$key} = $p;
+            }
         }
         else {
             push @px, 0, $p;
         }
     }
-    my $s = Data::Dumper::Dumper(['query',$o,$m,@px]);
+    my $s = Data::Dumper::Dumper(['query',$m,@px]);
     $s =~ s/\n/ /gms;
-    $hout->print($s,"\n");
+    print "$DEBUG_INDENT C: $$ sending $s\n" if $DEBUG;
+    my $r = $hout->print($s,"\n");
+    unless (defined $r) {
+        Carp::confess("failed to send: $!");
+    }
+    return $r;
 }
 
 sub receive_result {
-    my ($hin,$hout, $sent, $received) = @_;
+    my ($hin,$hout, $sent, $received, $client_pid) = @_;
+    $client_pid = -1;
     while (1) {
-        print " C: receiving\n" if $DEBUG;
+        print "$DEBUG_INDENT C: $$ receiving\n" if $DEBUG;
         my $incoming_text = $hin->getline;
         if (not defined $incoming_text) {
             die "Undef result?";
         }
-        print " C: got $incoming_text" if $DEBUG;
+        print "$DEBUG_INDENT C: $$ got $incoming_text" if $DEBUG;
         print "\n" if $DEBUG and not defined $incoming_text;
         my $incoming_data = eval "no strict; no warnings; $incoming_text";
         if ($@) {
             die "Exception: $@";
         }
         my $type = shift @$incoming_data;
-        if ($type ne 'result') {
-            die "unexpected type $type";
+        if ($type eq 'result') {
+            print "$DEBUG_INDENT C: $$ returning @$incoming_data\n" if $DEBUG;
+            return @$incoming_data;            
+        }
+        elsif ($type eq 'query') {
+            no warnings;
+            print "$DEBUG_INDENT C: $$ running @$incoming_data\n" if $DEBUG;
+            my @result = process_query(
+                $hin,
+                $hout,
+                $sent,
+                $received,
+                $client_pid,
+                $incoming_data
+            );
+            print "$DEBUG_INDENT C: $$ sending back @result\n" if $DEBUG;
+            send_result($hout,@result);            
         }
         else {
-            print " C: returning @$incoming_data\n" if $DEBUG;
-            return @$incoming_data;
+            die "unexpected type $type";
         }
     }
 }
 
 # server 
 sub serve {
-    my ($hin,$hout,$data) = @_;
-    my $sent = {};
-    my $received = {};
+    my ($hin,$hout, $sent, $received, $client_pid) = @_;
+    $sent ||= {};
+    $received ||= {};
+    $RMI::server_for_key{$hin} = [ $hout, $hin, $sent, $received ];
     while (1) {
-        print "  S: waiting\n" if $DEBUG;
+        print "$DEBUG_INDENT S: $$ waiting\n" if $DEBUG;
         my $incoming_text = $hin->getline;
         if (not defined $incoming_text) {
-            print "  S: shutting down\n" if $DEBUG;
+            print "$DEBUG_INDENT S: $$ shutting down\n" if $DEBUG;
             last;
         }
-        print "  S: got $incoming_text" if $DEBUG;
+        print "$DEBUG_INDENT S: $$ got $incoming_text" if $DEBUG;
         my $incoming_data = eval "no strict; no warnings; package main; $incoming_text";
         if ($@) {
             die "Exception: $@";
@@ -86,43 +124,53 @@ sub serve {
         }
         else {
             no warnings;
-            print "  S: running @$incoming_data\n" if $DEBUG;
-            my @result = process_query($sent,$received,@$incoming_data);
-            print "  S: sending back @result\n" if $DEBUG;
+            print "$DEBUG_INDENT S: $$ running @$incoming_data\n" if $DEBUG;
+            my @result = process_query(
+                $hin,
+                $hout,
+                $sent,
+                $received,
+                $client_pid,
+                $incoming_data
+            );
+            print "$DEBUG_INDENT S: $$ sending back @result\n" if $DEBUG;
             send_result($hout,@result);
         }
     }
 }
 
 sub process_query {
-    my ($s,$r,$o,$m,@px) = @_;
+    my ($hin,$hout,$s,$r,$client_pid,$incoming_data) = @_;
+    my ($m,@px) = @$incoming_data;
     my @p;
-    print "  S: got params @px\n" if $DEBUG;
+    print "$DEBUG_INDENT S: $$ got params @px\n" if $DEBUG;
     while (@px) { 
         my $type = shift @px;
         my $value = shift @px;
         if ($type == 0) {
             # primitive value
-            print "  S: - primitive $value\n" if $DEBUG;
+            print "$DEBUG_INDENT S: $$ - primitive $value\n" if $DEBUG;
             push @p, $value;
         }   
         elsif ($type == 1) {
             # exists on the other side: make a proxy
             my $o = \$value;
-            bless $o, "RMI::Proxy";
+            bless $o, "RMI::ProxyObject";
             $r->{$value} = $o;
             push @p, $o;
-            print "  S: - made proxy for $value\n" if $DEBUG;
+            $RMI::server_for_object{"$o"} = $hin;
+            print "$DEBUG_INDENT S: $$ - made proxy for $value\n" if $DEBUG;
         }
         elsif ($type == 2) {
             # was a proxy on the other side: get the real object
             my $o = $s->{$value};
             die "no object $o!" unless $o;
             push @p, $o;
-            print "  S: - resolved local object for $value\n" if $DEBUG;
+            print "$DEBUG_INDENT S: $$ - resolved local object for $value\n" if $DEBUG;
         }
     }
-    print "  S: got values @p\n" if $DEBUG;
+    print "$DEBUG_INDENT S: $$ got values @p\n" if $DEBUG;
+    my $o = shift @p;
     my @r;
     if (defined $o) {
         @r = $o->$m(@p);

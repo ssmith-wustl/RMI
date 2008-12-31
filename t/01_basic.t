@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 5;
+use Test::More tests => 9;
 use IO::Handle;     # thousands of lines just for autoflush :−(
 
 use_ok("RMI");
@@ -18,12 +18,41 @@ my $received = $c->{received};
 
 my @result;
 
+diag("basic remote function attempt 1");
 @result = RMI::call($writer, $reader, $sent, $received, undef, 'main::f1', 2, 3); 
 is($result[0], $pid, "retval indicates the method was called in the child/server process");
 is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
+is(scalar(keys(%$sent)), 0, "no sent objects");
+is(scalar(keys(%$received)), 0, "no received objects");
 
+diag("basic remote function attempt 2");
 @result = RMI::call($writer, $reader, $sent, $received, undef, 'main::f1', 6, 7);
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  
+is(scalar(keys(%$sent)), 0, "no sent objects");
+is(scalar(keys(%$received)), 0, "no received objects");
+
+diag("local object call");
+my $local1 = RMI::Test::Class1->new(foo => 111);
+ok($local1, "made a local object");
+@result = $local1->m2(8);
+ok(scalar(@result), "called method locally");
+is($result[0], 16, "result value $result[0] is as expected for 8 * 2");  
+is(scalar(keys(%$sent)), 0, "no sent object");
+is(scalar(keys(%$received)), 0, "no received objects");
+
+diag("request that remote server do a method call on a local object");
+@result = RMI::call($writer, $reader, $sent, $received, $local1, 'm2', 8);
+ok(scalar(@result), "called method remotely");
+is($result[0], 16, "result value $result[0] is as expected for 8 * 2");  
+is(scalar(keys(%$sent)), 1, "one sent object?!"); #"no sent objects b/c this one is gone by the time the method call finishes");
+is(scalar(keys(%$received)), 0, "no received objects");
+
+diag("make a remote object");
+my ($r) = RMI::call($writer, $reader, $sent, $received, 'RMI::Test::Class1', 'new');
+ok($r, "got an object");
+isa_ok($r,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($r));
+is(scalar(keys(%$sent)), 1, "one sent object");
+is(scalar(keys(%$received)), 1, "one received objects");
 
 close $reader; close $writer;
 waitpid($pid,0);
@@ -51,3 +80,17 @@ sub m1 {
     my $self = shift;
     return $self->{pid};
 }
+
+sub m2 {
+    my $self = shift;
+    my $v = shift;
+    return($v*2);
+}
+
+sub m3 {
+    my $self = shift;
+    my $other = shift;
+    return "the pid of the other object is " . $other->m1 . " while mine is " . $self->m1;
+}
+
+
