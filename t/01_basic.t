@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 9;
+use Test::More tests => 22;
 use IO::Handle;     # thousands of lines just for autoflush :−(
 
 use_ok("RMI");

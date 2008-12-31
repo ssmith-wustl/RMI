@@ -26,10 +26,10 @@ sub call {
     return @result;
 }
 
-sub send_query {
-    my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
+sub _convert_references {
+    my ($sent,$received,@p) = @_;
     my @px;
-    for my $p ($o,@p) {
+    for my $p (@p) {
         if (ref($p)) {
             if ($received->{$p}) {
                 #push @px, 2, $key;
@@ -50,6 +50,12 @@ sub send_query {
             push @px, 0, $p;
         }
     }
+    return @px;
+}
+
+sub send_query {
+    my ($hout, $hin, $sent, $received, $o, $m, @p) = @_;
+    my @px = _convert_references($sent,$received,$o,@p);
     my $s = Data::Dumper::Dumper(['query',$m,@px]);
     $s =~ s/\n/ /gms;
     print "$DEBUG_INDENT C: $$ sending $s\n" if $DEBUG;
@@ -78,7 +84,7 @@ sub receive_result {
         my $type = shift @$incoming_data;
         if ($type eq 'result') {
             print "$DEBUG_INDENT C: $$ returning @$incoming_data\n" if $DEBUG;
-            return @$incoming_data;            
+            return _convert_stream($hin, $sent,$received,@$incoming_data);            
         }
         elsif ($type eq 'query') {
             no warnings;
@@ -92,7 +98,7 @@ sub receive_result {
                 $incoming_data
             );
             print "$DEBUG_INDENT C: $$ sending back @result\n" if $DEBUG;
-            send_result($hout,@result);            
+            send_result($hout,$sent,$received,@result);            
         }
         else {
             die "unexpected type $type";
@@ -134,16 +140,14 @@ sub serve {
                 $incoming_data
             );
             print "$DEBUG_INDENT S: $$ sending back @result\n" if $DEBUG;
-            send_result($hout,@result);
+            send_result($hout,$sent,$received,@result);
         }
     }
 }
 
-sub process_query {
-    my ($hin,$hout,$s,$r,$client_pid,$incoming_data) = @_;
-    my ($m,@px) = @$incoming_data;
+sub _convert_stream {
+    my ($hin, $s, $r, @px) = @_;
     my @p;
-    print "$DEBUG_INDENT S: $$ got params @px\n" if $DEBUG;
     while (@px) { 
         my $type = shift @px;
         my $value = shift @px;
@@ -169,6 +173,13 @@ sub process_query {
             print "$DEBUG_INDENT S: $$ - resolved local object for $value\n" if $DEBUG;
         }
     }
+    return @p;    
+}
+sub process_query {
+    my ($hin,$hout,$s,$r,$client_pid,$incoming_data) = @_;
+    my ($m,@px) = @$incoming_data;
+    print "$DEBUG_INDENT S: $$ got params @px\n" if $DEBUG;
+    my @p = _convert_stream($hin,$s,$r,@px);
     print "$DEBUG_INDENT S: $$ got values @p\n" if $DEBUG;
     my $o = shift @p;
     my @r;
@@ -183,8 +194,8 @@ sub process_query {
 }
 
 sub send_result {
-    my ($h, @r) = @_;
-    my $s = Data::Dumper::Dumper(['result',@r]);   
+    my ($h, $sent, $received, @r) = @_;
+    my $s = Data::Dumper::Dumper(['result', _convert_references($sent, $received, @r)]);   
     $s =~ s/\n/ /gms;
     $h->print($s,"\n");
 }
