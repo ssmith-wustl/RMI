@@ -13,14 +13,16 @@ my $c = RMI::Client->new("fork/pipes");
 my $pid = $c->{server_pid};
 my $reader = $c->{reader};
 my $writer = $c->{writer};
+my $sent = $c->{sent};
+my $received = $c->{received};
 
 my @result;
 
-@result = RMI::call($writer, $reader, undef, 'main::f1', 2, 3); 
+@result = RMI::call($writer, $reader, $sent, $received, undef, 'main::f1', 2, 3); 
 is($result[0], $pid, "retval indicates the method was called in the child/server process");
 is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
 
-@result = RMI::call($writer, $reader, undef, 'main::f1', 6, 7);
+@result = RMI::call($writer, $reader, $sent, $received, undef, 'main::f1', 6, 7);
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  
 
 close $reader; close $writer;
@@ -38,4 +40,14 @@ sub f2 {
     my ($v1, $v2, $s, $r) = @_;
 }
 
+package RMI::Test::Class1;
 
+sub new {
+    my $class = shift;
+    return bless { pid => $$, @_ }, $class;
+}
+
+sub m1 {
+    my $self = shift;
+    return $self->{pid};
+}
