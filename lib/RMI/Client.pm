@@ -5,6 +5,7 @@ package RMI::Client;
 use strict;
 use warnings;
 use base 'RMI::Node';
+use IO::Handle;     # thousands of lines just for autoflush :(
 
 our @types = qw{
     fork/pipes
@@ -43,7 +44,7 @@ sub new {
                 sent => $sent,
                 received => $received,
             );
-            RMI::serve($parent_reader, $parent_writer, $sent, $received, $child_pid); 
+            $server->serve($parent_reader, $parent_writer, $sent, $received, $child_pid); 
             close $parent_reader; close $parent_writer;
             exit;
         }

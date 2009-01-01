@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Test::More tests => 28;
-use IO::Handle;     # thousands of lines just for autoflush :−(
 
 use_ok("RMI::Client");
 
