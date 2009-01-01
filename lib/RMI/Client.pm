@@ -44,7 +44,7 @@ sub new {
                 sent => $sent,
                 received => $received,
             );
-            $server->serve($parent_reader, $parent_writer, $sent, $received, $child_pid); 
+            $server->serve; 
             close $parent_reader; close $parent_writer;
             exit;
         }
