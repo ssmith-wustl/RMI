@@ -7,7 +7,7 @@ sub AUTOLOAD {
     $method =~ s/^.*:://g;    
     my $node = $RMI::Node::node_for_object{"$object"};
     print "$RMI::DEBUG_INDENT P: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_call($object, $method, @_);
+    $node->_send($object, $method, @_);
 }
 
 sub DESTROY {
