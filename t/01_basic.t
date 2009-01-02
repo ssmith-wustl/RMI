@@ -7,7 +7,7 @@ use Test::More tests => 28;
 
 use_ok("RMI::Client");
 
-my $c = RMI::Client->new("fork/pipes");
+my $c = RMI::Client->new();
 
 # check the count of objects sent and received after each call
 my $sent = $c->sent;
