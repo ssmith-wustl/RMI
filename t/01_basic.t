@@ -131,7 +131,9 @@ my $v1 = pop @$a;
 is($v1,'three',"pop works again");
 is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the remote side match");
 
-#my $a2 = $remote1->last_arrayref;
+my $a2 = $remote1->last_arrayref;
+diag($a2);
+is("@$a2","@$a", "2nd copy of arrayref from the remote side matches");
 
 diag("closing connection");
 $c->close;
