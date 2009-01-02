@@ -9,6 +9,9 @@ sub AUTOLOAD {
     my $method = $AUTOLOAD;
     $method =~ s/^.*:://g;    
     my $node = $RMI::Node::node_for_object{"$object"};
+    unless ($node) {
+        die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+    }
     print "$RMI::DEBUG_INDENT P: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
     $node->_send($object, $method, @_);
 }
@@ -26,7 +29,6 @@ sub DESTROY {
     }
     push @{ $node->{_received_and_destroyed_ids} }, $remote_id;
 }
-
 
 1;
 
