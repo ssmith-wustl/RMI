@@ -2,20 +2,26 @@
 
 use strict;
 use warnings;
-
-use Test::More tests => 28;
+use Test::More tests => 73;
 
 use_ok("RMI::Client");
 
 my $c = RMI::Client->new();
+ok($c, "created an RMI::Client using the default constructor (fored process with a pair of pipes connected to it)");
 
 # check the count of objects sent and received after each call
-my $sent = $c->sent;
-my $received = $c->received;
+my $sent = $c->_sent_objects;
+my $received = $c->_received_objects;
 sub expect_counts {
-    my ($sent_count, $received_count) = @_;
-    is(scalar(keys(%$sent)), $sent_count, "count of sent objects is $sent_count, as expected");
-    is(scalar(keys(%$received)), $received_count, "count of sent objects is $received_count, as expected");    
+    my ($expected_sent, $expected_received) = @_;
+    my $actual_sent = scalar(keys(%$sent));
+    my $actual_received = scalar(keys(%$received));
+    is($actual_sent, $expected_sent, "  count of sent objects $actual_sent is $expected_sent, as expected");
+    is($actual_received, $expected_received, "  count of received objects $actual_received is $expected_received, as expected");    
+    my ($remote_received) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_received_objects}}))');
+    my ($remote_sent) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_sent_objects}}))');
+    is($remote_received,$actual_sent, "  count of remote received objects $remote_received matches actual sent count $actual_sent");
+    is($remote_sent,$actual_received, "  count of remote received objects $remote_sent matches actual sent count $actual_received");
 }
 
 my @result;
@@ -48,33 +54,70 @@ diag("request that remote server do a method call on a local object, which just 
 $result = $c->call_object_method($local1, 'm1');
 ok(scalar($result), "called method remotely");
 is($result, $$, "result value $result matches pid $$");  
-expect_counts(1,0);
+expect_counts(0,0);
 
 diag("make a remote object");
 my $remote1 = $c->call_class_method('RMI::Test::Class1', 'new', name => 'remote1');
 ok($remote1, "got an object");
 isa_ok($remote1,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($remote1));
-expect_counts(1,1);
+expect_counts(0,1);
 
 diag("call methods on the remote object");
 
 $result = $remote1->m2(8);
 is($result, 16, "return values is as expected for remote object with primitive params");
+expect_counts(0,1);
 
 $result = $remote1->m3($local1);
 is($result, $$, "return values are as expected for remote object with local object params");
+expect_counts(0,1);
 
 my $remote2 = $c->call_class_method('RMI::Test::Class1', 'new', name => 'remote2');
 ok($remote2, "made another remote object to use for a more complicated method call");
 $result = $remote1->m3($remote2);
 ok($result != $$, "return value is as expected for remote object with remote object params");
+expect_counts(0,2);
 
 $result = $remote1->m4($remote2,$local1);
 is($result, "$rpid.$$.$$", "result $result has other process id, and this process id ($$) 2x");
+expect_counts(0,2);
 
+
+diag("dereference local objects and ensure we pass along this to the other side");
+
+is(scalar(@{$c->{_received_and_destroyed_ids}}), 0, "zero objects in queue to be be derefed on the other side");
+expect_counts(0,2); # 2 objects from the remote end
+
+$remote2 = undef;
+is($remote2,undef,"got rid of reference to remote object #2");
+
+is(scalar(@{$c->{_received_and_destroyed_ids}}), 1, "one object in queue to be be derefed on the other side");
+ok($remote1->m1,"arbitrary method call made across the client to trigger sync of remote objects");
+is(scalar(@{$c->{_received_and_destroyed_ids}}), 0, "zero objects in queue to be be derefed on the other side after a method call");
+
+expect_counts(0,1); # 1 object from the remote end 
+
+
+diag("test holding references");
+
+ok(!$c->_remote_has_ref($local1), "local object is not referenced on the other side before we pass it");
+$remote1->dummy_accessor($local1);
+ok($c->_remote_has_ref($local1), "local object is now referenced on the otehr side after passing to a method which retains it");
+$remote1->dummy_accessor(undef);
+ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the remote object to undef it");
+
+
+diag("test returned non-object references");
+my $a = $remote1->return_arrayref([one => 111, two => 222]);
+isa_ok($a,"RMI::ProxyObject");
+my @a = eval { @$a; };
+ok(!$@, "treated returned value as an arrayref");
+is("@a", "one 111 two 222", "content is as expected");
+
+diag("closing connection");
 $c->close;
+diag("exiting");
 exit;
-
 
 # these may be called from the client or server
 sub f1 {
@@ -88,9 +131,19 @@ sub f2 {
 
 package RMI::Test::Class1;
 
+my %obj_this_process;
+
 sub new {
     my $class = shift;
-    return bless { pid => $$, @_ }, $class;
+    my $self = bless { pid => $$, @_ }, $class;
+    $obj_this_process{$self} = $self;
+    Scalar::Util::weaken($obj_this_process{$self});
+    return $self;
+}
+
+sub DESTROY {
+    my $self = shift;
+    delete $obj_this_process{$self};
 }
 
 sub m1 {
@@ -120,4 +173,15 @@ sub m4 {
     return "$p1.$p2.$p3";
 }
 
+sub dummy_accessor {
+    my $self = shift;
+    if (@_) {
+        $self->{m5} = shift;
+    }
+    return $self->{m5};
+}
 
+sub return_arrayref {
+    my $self = shift;
+    return $self->{return_arrayref} = $a = [@_];
+}

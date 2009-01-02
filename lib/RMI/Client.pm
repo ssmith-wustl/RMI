@@ -5,7 +5,6 @@ package RMI::Client;
 use strict;
 use warnings;
 use base 'RMI::Node';
-use IO::Handle;     # thousands of lines just for autoflush :(
 
 sub new {
     my $class = shift;
@@ -18,6 +17,27 @@ sub new {
     }
 }
 
+sub call_function {
+    my ($self,$fname,@params) = @_;
+    return $self->_send(undef, $fname, @params);
+}
+
+sub call_class_method {
+    my ($self,$class,$method,@params) = @_;
+    return $self->_send($class, $method, @params);
+}
+
+sub call_object_method {
+    my ($self,$object,$method,@params) = @_;
+    return $self->_send($object, $method, @params);
+}
+
+sub remote_eval {
+    my ($self,$src) = @_;
+    return $self->_send(undef, 'RMI::Node::_eval', $src);
+}
+
+use IO::Handle;     # thousands of lines just for autoflush :(
 sub _new_forked_pipes {
     my $class = $_[0];
     
@@ -37,16 +57,13 @@ sub _new_forked_pipes {
     unless ($child_pid) {
         $child_pid = $$;
         close $child_reader; close $child_writer;
-        my ($sent,$received) = ({},{});
         $RMI::DEBUG_INDENT = '  ';
         my $server = RMI::Server->new(
             peer_pid => $parent_pid,
             writer => $parent_writer,
             reader => $parent_reader,
-            sent => $sent,
-            received => $received,
         );
-        $server->serve; 
+        $server->start; 
         close $parent_reader; close $parent_writer;
         exit;
     }
@@ -58,8 +75,6 @@ sub _new_forked_pipes {
         peer_pid => $child_pid,
         writer => $child_writer,
         reader => $child_reader,
-        sent => {},
-        received => {},
     );
 
     return $self;    

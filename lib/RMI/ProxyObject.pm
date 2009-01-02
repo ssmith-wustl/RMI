@@ -1,7 +1,10 @@
 
 package RMI::ProxyObject;
+use strict;
+use warnings;
 
 sub AUTOLOAD {
+    no strict;
     my $object = shift;
     my $method = $AUTOLOAD;
     $method =~ s/^.*:://g;    
@@ -13,14 +16,17 @@ sub AUTOLOAD {
 sub DESTROY {
     my $self = $_[0];
     my $id = "$self";
-    my $node = $RMI::Node::node_for_ojbect{$id};
-    print "DESTROYING $id from $node\n" if $RMI::DEBUG;
-    my $other_ref = delete $self->{received}{$id};
-    unless ($other_ref) {
-        print "NOT ON RECORD AS RECEIVED?";
+    my $remote_id = $$self;
+    my $node = $RMI::Node::node_for_object{$id};
+    print "$RMI::DEBUG_INDENT P: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
+    my $other_ref = delete $node->{_received_objects}{$remote_id};
+    if (!$other_ref and !$RMI::process_is_ending) {
+        warn "$RMI::DEBUG_INDENT P: $$ DESTROYING $id wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
+            . Data::Dumper::Dumper($node->{_received_objects});
     }
-    $self->SUPER::DESTROY(@_);
+    push @{ $node->{_received_and_destroyed_ids} }, $remote_id;
 }
+
 
 1;
 
