@@ -7,7 +7,8 @@ use warnings;
 use base 'RMI::Node';
 
 sub start {
-    shift->_receive('query');
+    my $self = shift;
+    $self->_receive('query');
 }
 
 

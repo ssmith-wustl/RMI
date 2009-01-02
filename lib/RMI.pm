@@ -9,6 +9,7 @@ use RMI::Node;
 use RMI::Client;
 use RMI::Server;
 use RMI::ProxyObject;
+use RMI::ProxyReference;
 use Data::Dumper;
 
 # turn on debug messages

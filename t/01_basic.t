@@ -108,11 +108,29 @@ ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the re
 
 
 diag("test returned non-object references");
-my $a = $remote1->return_arrayref([one => 111, two => 222]);
-isa_ok($a,"RMI::ProxyObject");
+my $a = $remote1->return_arrayref(one => 111, two => 222);
+isa_ok($a,"ARRAY", "object $a is an ARRAY");
+
 my @a = eval { @$a; };
 ok(!$@, "treated returned value as an arrayref");
-is("@a", "one 111 two 222", "content is as expected");
+is("@a", "one 111 two 222", " content is as expected");
+
+push @$a, three => 333;
+is($a->[4],"three", "successfully mutated array with push");
+is($a->[5],"333", "successfully mutated array with push");
+my $s = $remote1->last_arrayref_as_string();
+is($s, "one:111:two:222:three:333", " contents on the remote side match");
+
+$a->[3] = '2222';
+is($a->[3],'2222',"updated one value in the array");
+is($remote1->last_arrayref_as_string(), "one:111:two:2222:three:333", " contents on the remote side match");
+
+my $v2 = pop @$a;
+is($v2,'333',"pop works");
+my $v1 = pop @$a;
+is($v1,'three',"pop works again");
+is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the remote side match");
+
 
 diag("closing connection");
 $c->close;
@@ -184,4 +202,10 @@ sub dummy_accessor {
 sub return_arrayref {
     my $self = shift;
     return $self->{return_arrayref} = $a = [@_];
+}
+
+sub last_arrayref_as_string {
+    my $self = shift;
+    my $s = join(":", @{ $self->{return_arrayref} });
+    return $s;
 }
