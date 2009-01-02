@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 73;
+use Test::More tests => 84;
 
 use_ok("RMI::Client");
 
@@ -108,7 +108,7 @@ ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the re
 
 
 diag("test returned non-object references");
-my $a = $remote1->return_arrayref(one => 111, two => 222);
+my $a = $remote1->create_and_return_arrayref(one => 111, two => 222);
 isa_ok($a,"ARRAY", "object $a is an ARRAY");
 
 my @a = eval { @$a; };
@@ -131,6 +131,7 @@ my $v1 = pop @$a;
 is($v1,'three',"pop works again");
 is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the remote side match");
 
+#my $a2 = $remote1->last_arrayref;
 
 diag("closing connection");
 $c->close;
@@ -199,13 +200,20 @@ sub dummy_accessor {
     return $self->{m5};
 }
 
-sub return_arrayref {
+sub create_and_return_arrayref {
     my $self = shift;
-    return $self->{return_arrayref} = $a = [@_];
+    return $self->{last_arrayref} = $a = [@_];
+}
+
+sub last_arrayref {
+    my $self = shift;
+    return $self->{last_arrayref};
+    
 }
 
 sub last_arrayref_as_string {
     my $self = shift;
-    my $s = join(":", @{ $self->{return_arrayref} });
+    my $s = join(":", @{ $self->{last_arrayref} });
     return $s;
 }
+
