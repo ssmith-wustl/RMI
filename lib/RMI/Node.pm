@@ -133,6 +133,10 @@ sub _receive {
         elsif ($type eq 'deref') {
             $self->_deserialize($sent_objects,$received_objects,@$incoming_data)
         }
+        elsif ($type eq 'exception') {
+            my ($e) = $self->_deserialize($sent_objects,$received_objects,@$incoming_data);
+            die $e;
+        }
         elsif ($type eq 'query') {
             no warnings;
             print "$RMI::DEBUG_INDENT X: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
@@ -142,24 +146,37 @@ sub _receive {
             print "$RMI::DEBUG_INDENT X: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
             my @result;
             push @executing_nodes, $self;
-            if (defined $o) {
-                @result = $o->$m(@p);
-            }
-            else {
-                no strict 'refs';
-                @result = $m->(@p);
-            }
+            eval {
+                if (defined $o) {
+                    @result = $o->$m(@p);
+                }
+                else {
+                    no strict 'refs';
+                    @result = $m->(@p);
+                }
+            };
             pop @executing_nodes;
             # we MUST undef these in case they are the only references to objects which need to be destroyed
             $o = undef;
             @p = ();
-            print "$RMI::DEBUG_INDENT X: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
-            my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
-            print "$RMI::DEBUG_INDENT X: $$ result serialized as @serialized\n" if $RMI::DEBUG;
-            my $s = Data::Dumper::Dumper(['result', @serialized]);
-            @$received_and_destroyed_ids = ();
-            $s =~ s/\n/ /gms;
-            $hout->print($s,"\n");
+            if ($@) {
+                print "$RMI::DEBUG_INDENT X: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
+                my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
+                print "$RMI::DEBUG_INDENT X: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
+                my $s = Data::Dumper::Dumper(['exception', @serialized]);
+                @$received_and_destroyed_ids = ();
+                $s =~ s/\n/ /gms;
+                $hout->print($s,"\n");                
+            }
+            else {
+                print "$RMI::DEBUG_INDENT X: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
+                my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
+                print "$RMI::DEBUG_INDENT X: $$ result serialized as @serialized\n" if $RMI::DEBUG;
+                my $s = Data::Dumper::Dumper(['result', @serialized]);
+                @$received_and_destroyed_ids = ();
+                $s =~ s/\n/ /gms;
+                $hout->print($s,"\n");
+            }
         }
         else {
             die "unexpected type $type";
@@ -324,10 +341,8 @@ sub _exec_coderef_for_id {
     my $sub_id = shift;
     my $sub = $RMI::Node::executing_nodes[-1]{_sent_objects}{$sub_id};
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
-    return $sub->(@_);
+    goto $sub;
 }
-
-
 
 # used for testing
 
