@@ -11,7 +11,12 @@ use base 'RMI::Node';
 
 sub start {
     my $self = shift;
-    $self->_receive('query');
+    $self->_receive('query',0);
+}
+
+sub process_message {
+    my $self = shift;
+    $self->_receive('query',1);
 }
 
 1;

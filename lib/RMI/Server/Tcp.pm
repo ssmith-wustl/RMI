@@ -1,7 +1,7 @@
 
-package RMI::Server::TcpSingleThread;
+package RMI::Server::Tcp;
 
-# use RMI::Server::TcpSingleThread;
+# use RMI::Server::Tcp;
 # my $s= RMI::Server::TcpSingleThread->new(host => '0.0.0.0', port => 10293);
 # $s->start(undef);
 
@@ -14,12 +14,7 @@ use Time::HiRes;
 use Fcntl;
 use RMI;
 
-my @p = qw/host port listen_socket all_select sockets_select use_sigio listen_queue_size/;
-for my $p (@p) {
-    my $pname = $p;
-    no strict 'refs';
-    *$p = sub { Carp::confess("@_") if @_ > 1; $_[0]->{$pname}; };
-}
+RMI::Node::mk_ro_accessors(__PACKAGE__, qw/host port listen_socket all_select sockets_select use_sigio listen_queue_size/);
 
 sub new {
     my $class = shift;
@@ -38,8 +33,6 @@ sub new {
 
     return $self;
 }
-
-sub start { shift->process_messages(3000) }
 
 sub error_message {
     shift;
@@ -64,6 +57,55 @@ sub _create_listen_socket {
 
     return 1;
 }
+
+# go into a loop processing messages from all the connected sockets (and 
+# the listen socket), for the given time period in seconds.  0 seconds
+# means do one pass through all that are readable and return, undef
+# means stay in the loop forever
+#
+# FIXME socket communication needs to be refactored out to some common location
+# for example, the listen socket and client sockets can both implement
+# process_message(), where the listen socket does what is accept_connection()
+sub start {
+    my($self,$timeout) = @_;
+
+    my $select = $self->all_select;
+    my $start_time = Time::HiRes::time();
+
+    while(1) {
+        next unless $self->process_message($timeout);
+        last if(defined($timeout) && 
+                    ( $timeout == 0 ||
+                      (Time::HiRes::time() - $start_time > $timeout)
+                    )
+               );
+    }
+
+    return 1;
+}
+
+sub process_message {
+    my ($self,$timeout) = @_;
+    my $select = $self->all_select;
+    my @ready = $select->can_read($timeout);
+    for (my $i = 0; $i < @ready; $i++) {
+        if ($ready[$i] eq $self->listen_socket) {
+            $self->accept_connection();
+            # If we're running as a signal handler for sigio, and the client has already sent
+            # data down the newly-connected socket before we can leave the handler, then we've
+            # already lost the signal for that new data since it was masked.  This workaround
+            # gives the above select() a chance to see the data being ready.
+            #next SELECT_LOOP;
+            return;
+        } else {
+            my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
+            $delegate_server->process_message();
+            #$self->process_message_from_client($ready[$i]);
+        }
+    }
+    return 1;
+}
+
 
 # Add the given socket to the list of connected clients.
 # if socket is undef, it blocks waiting on an incoming connection 
@@ -98,7 +140,6 @@ sub accept_connection {
     return $socket;
 }
 
-
 sub close_connection {
     my $self = shift;
     my $socket = shift;
@@ -115,49 +156,6 @@ sub close_connection {
     return 1;
 }
 
-
-# go into a loop processing messages from all the connected sockets (and 
-# the listen socket), for the given time period in seconds.  0 seconds
-# means do one pass through all that are readable and return, undef
-# means stay in the loop forever
-#
-# FIXME socket communication needs to be refactored out to some common location
-# for example, the listen socket and client sockets can both implement
-# process_message(), where the listen socket does what is accept_connection()
-sub process_messages {
-    my($self,$timeout) = @_;
-
-    my $select = $self->all_select;
-    my $start_time = Time::HiRes::time();
-
-    SELECT_LOOP:
-    while(1) {
-        my @ready = $select->can_read($timeout);
-        for (my $i = 0; $i < @ready; $i++) {
-            if ($ready[$i] eq $self->listen_socket) {
-                $self->accept_connection();
-                # If we're running as a signal handler for sigio, and the client has already sent
-                # data down the newly-connected socket before we can leave the handler, then we've
-                # already lost the signal for that new data since it was masked.  This workaround
-                # gives the above select() a chance to see the data being ready.
-                next SELECT_LOOP;
-            } else {
-                my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
-                $delegate_server->start;
-                #$self->process_message_from_client($ready[$i]);
-            }
-        }
-        last if(defined($timeout) && 
-                    ( $timeout == 0 ||
-                      (Time::HiRes::time() - $start_time > $timeout)
-                    )
-               );
-    }
-
-    return 1;
-}
-
-
 # FIXME There's a more efficient method of determining which handles 
 # need attention during a sigio than select()ing.  See the manpage of
 # fcntl(2) and the section on F_SETSIG and setting SA_SIGINFO.  Implement
@@ -171,7 +169,7 @@ sub enable_sigio_processing {
     
     # Step 1, set the closure for handling the signal
     $SIG{'IO'} = sub {
-        $self->process_messages(0);
+        $self->start(0);
         return unless $prev_sigio_handler;
         $prev_sigio_handler->();
     };

@@ -7,12 +7,7 @@ use warnings;
 use IO::Socket;
 use base 'RMI::Client';
 
-my @p = qw/host port/;
-for my $p (@p) {
-    my $pname = $p;
-    no strict 'refs';
-    *$p = sub { $_[0]->{$pname} };
-}
+__PACKAGE__->mk_ro_accessors(qw/host port/);
 
 sub new {
     my $class = shift;

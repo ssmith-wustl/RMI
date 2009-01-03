@@ -9,12 +9,18 @@ use Tie::Scalar;
 
 # basic accessors
 
-my @p = qw/reader writer _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
-for my $p (@p) {
-    my $pname = $p;
+sub mk_ro_accessors {
     no strict 'refs';
-    *$p = sub { $_[0]->{$pname} };
+    my $class = caller();
+    for my $p (@_) {
+        my $pname = $p;
+        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
+    }
+    no warnings;
+    push @{ $class . '::properties'}, @_;
 }
+
+mk_ro_accessors qw/reader writer _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
 
 # public API
 
@@ -27,7 +33,7 @@ sub new {
         _tied_objects_for_tied_refs => {},
         @_
     }, $class;
-    for my $p (@p) {
+    for my $p (@RMI::Node::properties) {
         unless ($self->{$p}) {
             die "no $p on object!"
         }
@@ -83,7 +89,7 @@ sub _send {
 our @executing_nodes; # required for the implementation of proxied CODE references
 
 sub _receive {
-    my ($self, $expect) = @_;
+    my ($self, $expect, $number) = @_;
     
     # The $expect value determines the _last_ thing
     # which should happen before we return as a sanity check.
@@ -104,7 +110,9 @@ sub _receive {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $peer_pid = $self->{peer_pid};
     
-    while (1) {
+    $number = 0 if not defined $number; # unlimited
+    my $attempts = 0;
+    for (1) {
         print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
         my $incoming_text = $hin->getline;
         if (not defined $incoming_text) {
@@ -182,6 +190,8 @@ sub _receive {
         else {
             die "unexpected type $type";
         }
+        $attempts++;
+        last if $attempts == $number;
     }
 }
 
