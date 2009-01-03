@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 10;
+use Test::More tests => 13;
 use IO::File;
 
 # $c = RMI::Client->new();
@@ -18,7 +18,8 @@ ok($c, "created an RMI::Client using the default constructor (fored process with
 
 ok(!RMI::TestClass1->can("new"), "test class has NOT been used before we proxy it");
 
-eval "use lib \$c->virtual_lib";
+$c->use_lib_remote;
+#eval "use lib \$c->virtual_lib";
 ok(!$@, 'added a virtual lib to the @INC list which will make all attempts to use modules auto-proxy.');
 
 use_ok("RMI::TestClass1");

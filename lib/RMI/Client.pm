@@ -45,6 +45,11 @@ sub use_remote {
     return 1;
 }
 
+sub use_lib_remote {
+    my $self = shift;
+    unshift @INC, $self->virtual_lib;
+}
+
 use IO::Handle;     # thousands of lines just for autoflush :(
 sub _new_forked_pipes {
     my $class = $_[0];

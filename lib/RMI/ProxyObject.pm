@@ -9,6 +9,7 @@ sub AUTOLOAD {
     my $method = $AUTOLOAD;
     my ($class,$subname) = ($method =~ /^(.*)::(.*?)$/);
     $method = $subname;
+    no warnings;
     my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$class};
     unless ($node) {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
