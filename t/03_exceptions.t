@@ -3,13 +3,15 @@
 use strict;
 use warnings;
 use Test::More tests => 10;
+use FindBin;
+use lib $FindBin::Bin;
 use RMI::TestClass2;
 
 sub local_exception { die 'local exception'; }
 
-use_ok("RMI::Client");
-my $c = RMI::Client->new();
-ok($c, "created an RMI::Client using the default constructor (fored process with a pair of pipes connected to it)");
+use_ok("RMI::Client::ForkedPipes");
+my $c = RMI::Client::ForkedPipes->new();
+ok($c, "created an RMI::Client::ForkedPipes using the default constructor (fored process with a pair of pipes connected to it)");
 
 my $remote1 = $c->call_class_method('RMI::TestClass2', 'new', name => 'remote1');
 ok($remote1, "got a remote object");

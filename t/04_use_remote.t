@@ -3,18 +3,20 @@
 use strict;
 use warnings;
 use Test::More tests => 16;
+use FindBin;
+use lib $FindBin::Bin;
 use IO::File;
 
-# $c = RMI::Client->new();
+# $c = RMI::Client::ForkedPipes->new();
 # $c->use_remote("DBI");
 #
 # $c = DBI->connect(); # DBI is not really here...
 
 my @matches;
 
-use_ok("RMI::Client");
-my $c = RMI::Client->new();
-ok($c, "created an RMI::Client using the default constructor (fored process with a pair of pipes connected to it)");
+use_ok("RMI::Client::ForkedPipes");
+my $c = RMI::Client::ForkedPipes->new();
+ok($c, "created an RMI::Client::ForkedPipes using the default constructor (fored process with a pair of pipes connected to it)");
 
 eval { $c->use_remote("IO::File") };
 ok($@, "correctly failed to proxy a package which is already in use.");

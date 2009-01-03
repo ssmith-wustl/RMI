@@ -1,6 +1,9 @@
-#!/usr/bin/env perl
 
 package RMI::Server;
+
+# use RMI;
+# my $s= RMI::Server::TcpSingleThread->new(host => '0.0.0.0', port => 10293);
+# $s->start(undef);
 
 use strict;
 use warnings;
@@ -10,6 +13,5 @@ sub start {
     my $self = shift;
     $self->_receive('query');
 }
-
 
 1;
