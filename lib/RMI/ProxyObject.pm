@@ -8,12 +8,32 @@ sub AUTOLOAD {
     my $object = shift;
     my $method = $AUTOLOAD;
     $method =~ s/^.*:://g;    
-    my $node = $RMI::Node::node_for_object{"$object"};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
+    unless ($node) {
+        die "no node for object $object? - " . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+    }
+    print "$RMI::DEBUG_INDENT O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
+    $node->_send($object, $method, @_);
+}
+
+sub can {
+    my $object = shift;
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
-    print "$RMI::DEBUG_INDENT P: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_send($object, $method, @_);
+    print "$RMI::DEBUG_INDENT O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
+    $node->_send($object, 'can', @_);
+}
+
+sub isa {
+    my $object = shift;
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
+    unless ($node) {
+        die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+    }
+    print "$RMI::DEBUG_INDENT O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
+    $node->_send($object, 'isa', @_);
 }
 
 sub DESTROY {
@@ -21,10 +41,10 @@ sub DESTROY {
     my $id = "$self";
     my $remote_id = $$self;
     my $node = delete $RMI::Node::node_for_object{$id};
-    print "$RMI::DEBUG_INDENT P: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_INDENT O: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
     my $other_ref = delete $node->{_received_objects}{$remote_id};
     if (!$other_ref and !$RMI::process_is_ending) {
-        warn "$RMI::DEBUG_INDENT P: $$ DESTROYING $id wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
+        warn "$RMI::DEBUG_INDENT O: $$ DESTROYING $id wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
             . Data::Dumper::Dumper($node->{_received_objects});
     }
     push @{ $node->{_received_and_destroyed_ids} }, $remote_id;

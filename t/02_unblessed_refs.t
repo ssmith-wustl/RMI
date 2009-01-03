@@ -89,6 +89,7 @@ my $v5 = $x->();
 is($v5, $c->peer_pid, "value returned is as expected");
 my $v6 = $x->('a','b','c');
 is($v6, $c->peer_pid . ":a:b:c", "value returned from second call is as expected");
+$x = undef;
 
 diag("Test passing code refs");
 my @a1 = (11,22,33);

@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 73;
+use Test::More tests => 84;
 use RMI::TestClass1;
 
 use_ok("RMI::Client");
@@ -60,7 +60,8 @@ expect_counts(0,0);
 diag("make a remote object");
 my $remote1 = $c->call_class_method('RMI::TestClass1', 'new', name => 'remote1');
 ok($remote1, "got an object");
-isa_ok($remote1,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($remote1));
+ok($remote1->isa('RMI::TestClass1'), "isa() works") or diag(Data::Dumper::Dumper($remote1));
+ok($remote1->UNIVERSAL::isa('RMI::ProxyObject'), "real class is the proxy (from UNIVERSAL::isa)") or diag(Data::Dumper::Dumper($remote1));
 expect_counts(0,1);
 
 diag("call methods on the remote object");
@@ -106,6 +107,16 @@ $remote1->dummy_accessor($local1);
 ok($c->_remote_has_ref($local1), "local object is now referenced on the otehr side after passing to a method which retains it");
 $remote1->dummy_accessor(undef);
 ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the remote object to undef it");
+
+diag("can()");
+my $ref = $remote1->can('m2');
+ok($ref, "can() works with the remote object");
+$result = $ref->($remote1,8);
+is($result, 16, "return values the same when called via the remote CODE ref returned by can()");
+expect_counts(0,2);
+$ref = undef;
+$remote1->m1(8);
+expect_counts(0,2);
 
 diag("closing connection");
 $c->close;

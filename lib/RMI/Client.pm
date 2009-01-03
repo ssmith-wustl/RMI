@@ -37,6 +37,31 @@ sub remote_eval {
     return $self->_send(undef, 'RMI::Node::_eval', $src);
 }
 
+our %proxied_classes;
+sub use_remote {
+    my $self = shift;
+    no strict 'refs';
+    for my $class (@_) {
+        if (keys %{ $class . '::' }) {
+            die "namespace $class already has contents";
+        }
+        if (my $prior = $proxied_classes{$class}) {
+            die "class $class has already been proxied by $prior!";
+        }
+        my $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';        
+        my $path = $self->remote_eval("use $class; \$INC{'$module'}");
+        for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+            *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+        }
+        $proxied_classes{$class} = $self;
+        $INC{$module} = $path;
+        print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;
+    }
+    return 1;
+}
+
 use IO::Handle;     # thousands of lines just for autoflush :(
 sub _new_forked_pipes {
     my $class = $_[0];
