@@ -7,20 +7,21 @@ sub AUTOLOAD {
     no strict;
     my $object = shift;
     my $method = $AUTOLOAD;
-    $method =~ s/^.*:://g;    
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
+    my ($class,$subname) = ($method =~ /^(.*)::(.*?)$/);
+    $method = $subname;
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$class};
     unless ($node) {
-        die "no node for object $object? - " . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+        die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_send($object, $method, @_);
+    $node->_send(($object||$class), $method, @_);
 }
 
 sub can {
     my $object = shift;
     my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
     unless ($node) {
-        die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+        die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
     $node->_send($object, 'can', @_);
@@ -30,7 +31,7 @@ sub isa {
     my $object = shift;
     my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
     unless ($node) {
-        die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+        die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
     $node->_send($object, 'isa', @_);

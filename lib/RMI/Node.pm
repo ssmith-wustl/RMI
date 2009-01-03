@@ -353,7 +353,7 @@ sub _exec_coderef_for_id {
 
 our %proxied_classes;
 
-sub _use_remote {
+sub _implement_class_locally_to_proxy {
     my ($self,$class,$module) = @_;
     no strict 'refs';
     if ($class and not $module) {
@@ -366,8 +366,9 @@ sub _use_remote {
         $class =~ s/\//::/g;
         $class =~ s/.pm$//; 
     }
-    if (keys %{ $class . '::' }) {
-        die "namespace $class already has contents";
+    if ($INC{$module}) {
+    #if (keys %{ $class . '::' }) {
+        die "namespace $class already has contents " . Data::Dumper::Dumper(\%{ $class . '::' });
     }
     if (my $prior = $proxied_classes{$class}) {
         die "class $class has already been proxied by $prior!";
@@ -377,8 +378,28 @@ sub _use_remote {
         *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
     }
     $proxied_classes{$class} = $self;
-    $INC{$module} = $path;
+    $INC{$module} = -1; #$path;
     print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
+sub virtual_lib {
+    my $self = shift;
+    my $virtual_lib = sub {
+        my $module = pop;
+        $self->_implement_class_locally_to_proxy(undef,$module);
+        my $sym = Symbol::gensym();
+        my $done = 0;
+        return $sym, sub {
+            if (! $done) {
+                $_ = '1;';
+                $done++;
+                return 1;
+            }
+            else {
+                return 0;
+            }
+        };
+    }
 }
 
 # used for testing

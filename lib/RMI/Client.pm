@@ -37,11 +37,10 @@ sub remote_eval {
     return $self->_send(undef, 'RMI::Node::_eval', $src);
 }
 
-
 sub use_remote {
     my $self = shift;
     for my $class (@_) {
-        $self->_use_remote($class);
+        $self->_implement_class_locally_to_proxy($class);
     }
     return 1;
 }
