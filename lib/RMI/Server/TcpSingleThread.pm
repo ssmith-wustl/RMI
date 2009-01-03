@@ -12,12 +12,13 @@ use IO::Select;
 use FreezeThaw;
 use Time::HiRes;
 use Fcntl;
+use RMI;
 
 my @p = qw/host port listen_socket all_select sockets_select use_sigio listen_queue_size/;
 for my $p (@p) {
     my $pname = $p;
     no strict 'refs';
-    *$p = sub { $_[0]->{$pname} };
+    *$p = sub { Carp::confess("@_") if @_ > 1; $_[0]->{$pname}; };
 }
 
 sub new {
@@ -38,6 +39,10 @@ sub new {
     return $self;
 }
 
+sub start {
+    shift->process_messages(3000);
+}
+
 sub error_message {
     shift;
     warn @_;
@@ -55,9 +60,9 @@ sub _create_listen_socket {
         $self->error_message("Couldn't create socket: $!");
         return;
     }
-    $self->listen_socket($listen);
-    $self->all_select(IO::Select->new($listen));
-    $self->sockets_select(IO::Select->new());
+    $self->{listen_socket} = $listen;
+    $self->{all_select} = IO::Select->new($listen);
+    $self->{sockets_select} = IO::Select->new();
 
     return 1;
 }

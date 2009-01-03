@@ -7,6 +7,14 @@ use warnings;
 use base 'RMI::Client';
 use IO::Handle;     # thousands of lines just for autoflush :(
 
+my @p = qw/peer_pid/;
+for my $p (@p) {
+    my $pname = $p;
+    no strict 'refs';
+    *$p = sub { $_[0]->{$pname} };
+}
+
+
 sub new {
     my $class = $_[0];
     

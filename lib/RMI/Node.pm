@@ -9,7 +9,7 @@ use Tie::Scalar;
 
 # basic accessors
 
-my @p = qw/reader writer peer_pid _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
+my @p = qw/reader writer _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
 for my $p (@p) {
     my $pname = $p;
     no strict 'refs';

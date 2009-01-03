@@ -8,7 +8,9 @@ use base 'RMI::Client';
 use IO::File;     
 
 sub new {
-    my ($class,$reader_path,$writer_path) = (@_); 
+    my ($class, %params) = (@_);
+    my $reader_path = $params{reader};
+    my $writer_path = $params{writer};
     my $reader = IO::File->new($reader_path);
     $reader or die "Failed to open reader $reader_path: $!";
     my $writer = IO::File->new('>' . $writer_path);   

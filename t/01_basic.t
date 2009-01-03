@@ -8,9 +8,9 @@ use lib $FindBin::Bin;
 use RMI::TestClass1;
 
 use_ok("RMI::Client::ForkedPipes");
-
 my $c = RMI::Client::ForkedPipes->new();
-ok($c, "created an RMI::Client::ForkedPipes using the default constructor (fored process with a pair of pipes connected to it)");
+ok($c, "created an RMI::Client");
+
 
 # check the count of objects sent and received after each call
 my $sent = $c->_sent_objects;
