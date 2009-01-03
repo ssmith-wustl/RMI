@@ -83,10 +83,13 @@ is($v4,"goodbye","value of scalar on remote side is correct");
 
 diag("test returned non-object references: CODE");
 
-my $x = $remote1->create_and_return_coderef('sub { return $$ }');
+my $x = $remote1->create_and_return_coderef('sub { $r = $$; return join(":",$r,@_); }');
 isa_ok($x,"CODE", "object $h is a CODE reference");
 my $v5 = $x->();
 is($v5, $c->peer_pid, "value returned is as expected");
+my $v6 = $x->('a','b','c');
+is($v6, $c->peer_pid . ":a:b:c", "value returned from second call is as expected");
+
 
 ###################
 

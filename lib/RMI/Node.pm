@@ -222,7 +222,8 @@ sub _serialize {
                     push @serialized, 3, $key;                                        
                 }
                 elsif ($type eq 'CODE') {
-                    die "coderef not supported";
+                    # this doesn't use a class, but gets custom handling
+                    push @serialized, 3, $key;
                 }
                 else {
                     # regular object
@@ -275,6 +276,15 @@ sub _deserialize {
                         $o = \$anonymous_scalar;
                         tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
                     }
+                    elsif ($value =~ /^CODE/) {
+                        my $sub_id = $value;
+                        $o = sub {
+                            $self->_send(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
+                        }
+                    }
+                    else {
+                        die "unknown reference type for $value!!";
+                    }
                 }
             }
             $received_objects->{$value} = $o;
@@ -309,6 +319,15 @@ sub _eval {
     die $@ if $@;
     return @result;
 }
+
+sub _exec_coderef_for_id {
+    my $sub_id = shift;
+    my $sub = $RMI::Node::executing_nodes[-1]{_sent_objects}{$sub_id};
+    die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
+    return $sub->(@_);
+}
+
+
 
 # used for testing
 
