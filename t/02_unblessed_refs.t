@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 27;
+use Test::More tests => 31;
 use RMI::TestClass2;
 
 use_ok("RMI::Client");
@@ -90,6 +90,15 @@ is($v5, $c->peer_pid, "value returned is as expected");
 my $v6 = $x->('a','b','c');
 is($v6, $c->peer_pid . ":a:b:c", "value returned from second call is as expected");
 
+diag("Test passing code refs");
+my @a1 = (11,22,33);
+my $sub1 = sub {
+    for (@a1) {
+        $_ *= 2;
+    }
+};
+$remote1->call_my_sub($sub1);
+is_deeply(\@a1,[22,44,66], "remote server called back local sub and modified closure variables");
 
 ###################
 

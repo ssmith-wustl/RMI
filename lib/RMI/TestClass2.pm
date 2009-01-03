@@ -57,4 +57,10 @@ sub create_and_return_coderef {
     return $sub;
 }
 
+sub call_my_sub {
+    my $self = shift;
+    my $sub = shift;
+    return $sub->(@_);
+}
+
 1;

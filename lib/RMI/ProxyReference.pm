@@ -3,9 +3,15 @@ package RMI::ProxyReference;
 use strict;
 use warnings;   
 
+# When references are "passed" to a remote client/server, the proxy is tied using this package to proxy back all data access.
+# NOTE: if the reference is blessed, the proxy will also be blessed into RMI::ProxyObject, in addition to being _tied_ to this package.
+
 *TIEARRAY   = \&TIE;
 *TIEHASH    = \&TIE;
 *TIESCALAR  = \&TIE;
+
+# CODE references are handled specially, using an anonymous sub on the proxy side, without tie, since tie does not support them
+# GLOBs are not supported at this point
 
 sub TIE {
     my $obj = bless [@_], $_[0];
