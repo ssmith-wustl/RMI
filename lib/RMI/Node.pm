@@ -7,17 +7,16 @@ use Tie::Array;
 use Tie::Hash;
 use Tie::Scalar;
 
-# public interface
+# basic accessors
 
-my @p = qw/reader writer peer_pid _sent_objects _received_objects _received_and_destroyed_ids _tied_objects/;
+my @p = qw/reader writer peer_pid _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
 for my $p (@p) {
     my $pname = $p;
     no strict 'refs';
     *$p = sub { $_[0]->{$pname} };
 }
 
-# this stack is used for debugging methods
-our @executing_nodes;
+# public API
 
 sub new {
     my $class = shift;
@@ -25,7 +24,7 @@ sub new {
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
-        _tied_objects => {},
+        _tied_objects_for_tied_refs => {},
         @_
     }, $class;
     for my $p (@p) {
@@ -80,6 +79,8 @@ sub _send {
         return $result[0];    
     }
 }
+
+our @executing_nodes; # required for the implementation of proxied CODE references
 
 sub _receive {
     my ($self, $expect) = @_;
@@ -199,14 +200,15 @@ sub _serialize {
                 next;
             }
             elsif ($type eq "RMI::ProxyReference") {
+                # when a proxied reference has activity occur, the object is sent by its tied "object"
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 $key ||= $o->[2];
                 print "$RMI::DEBUG_INDENT N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;
             }            
-            elsif (my $t = $self->{_tied_objects}{$o}) {
-                # real array is on the other side
+            elsif (my $t = $self->{_tied_objects_for_tied_refs}{$o}) {
+                # when a proxied reference is passed as a parameter or return value, the object sent by its tied "reference"
                 my $key = $t; #$RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_INDENT N: $$ tied proxy ref $o ($t) references remote $key (@$t):\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
@@ -328,15 +330,17 @@ sub _deserialize {
     return @unserialized;    
 }
 
-# this allows requests for remote eval to be re-written as a static method call
+# this wraps Perl eval($src) in a method so that it can be called from the remote side
+# it allows requests for remote eval to be re-written as a static method call
 
 sub _eval {
-    # this wraps Perl eval($src) in a method so that it can be called from the remote side
     my $src = $_[0];
     my @result = eval $src;
     die $@ if $@;
     return @result;
 }
+
+# this is used when a CODE ref is proxied, since you can't tie CODE refs..
 
 sub _exec_coderef_for_id {
     my $sub_id = shift;
@@ -358,6 +362,5 @@ sub _remote_has_sent {
     my $id = "$obj";
     my $has_sent = $self->_send(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
-
 
 1;
