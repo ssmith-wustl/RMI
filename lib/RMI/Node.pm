@@ -349,6 +349,38 @@ sub _exec_coderef_for_id {
     goto $sub;
 }
 
+# this proxies an entire class instead of just a single object
+
+our %proxied_classes;
+
+sub _use_remote {
+    my ($self,$class,$module) = @_;
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
+    }
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+    if (keys %{ $class . '::' }) {
+        die "namespace $class already has contents";
+    }
+    if (my $prior = $proxied_classes{$class}) {
+        die "class $class has already been proxied by $prior!";
+    }
+    my $path = $self->remote_eval("use $class; \$INC{'$module'}");
+    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    $proxied_classes{$class} = $self;
+    $INC{$module} = $path;
+    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
 # used for testing
 
 sub _remote_has_ref {

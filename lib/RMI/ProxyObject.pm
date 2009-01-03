@@ -8,7 +8,7 @@ sub AUTOLOAD {
     my $object = shift;
     my $method = $AUTOLOAD;
     $method =~ s/^.*:://g;    
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object? - " . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
@@ -18,7 +18,7 @@ sub AUTOLOAD {
 
 sub can {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
@@ -28,7 +28,7 @@ sub can {
 
 sub isa {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Client::proxied_classes{$object};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
