@@ -24,7 +24,7 @@ for my $p (@p) {
 sub new {
     my $class = shift;
 
-    my $self = bless { @_ }, $class;
+    my $self = bless { port => 10293, @_ }, $class;
     return unless $self;
     return $self if ($self->listen_socket);
 
@@ -39,9 +39,7 @@ sub new {
     return $self;
 }
 
-sub start {
-    shift->process_messages(3000);
-}
+sub start { shift->process_messages(3000) }
 
 sub error_message {
     shift;
@@ -118,45 +116,6 @@ sub close_connection {
 }
 
 
-# process a message on the indicated socket.  If socket is undef,
-# then process a single message out of the many that may be ready
-# to read
-sub process_message_from_client {
-    my($self, $socket) = @_;
-
-    # FIXME this always picks the first in the list; it's not fair
-    $socket ||= ($self->sockets_select->can_read())[0];
-    return unless $socket;
-
-    my($string,$cmd) = UR::DataSource::RemoteCache::_read_message(undef, $socket);
-    if ($cmd == -1) {  # The other end closed the socket
-        $self->close_connection($socket);
-        return 1;
-    }
-
-    # We only support get() for now - cmd == 1
-    my($return_command_value, @results);
-
-    if ($cmd == 1)  {
-        my $rule = (FreezeThaw::thaw($string))[0]->[0];
-        my $class = $rule->subject_class_name();
-        @results = $class->get($rule);
-
-        $return_command_value = $cmd | 128;  # High bit set means a result code
-    } else {
-        $self->error_message("Unknown command request ID $cmd");
-        $return_command_value = 255;
-    }
-        
-    my $encoded = '';
-    if (@results) {
-        $encoded = FreezeThaw::freeze(\@results);
-    }
-    $socket->print(pack("LL", length($encoded), $return_command_value), $encoded);
-
-    return 1;
-}
-
 # go into a loop processing messages from all the connected sockets (and 
 # the listen socket), for the given time period in seconds.  0 seconds
 # means do one pass through all that are readable and return, undef
@@ -183,7 +142,9 @@ sub process_messages {
                 # gives the above select() a chance to see the data being ready.
                 next SELECT_LOOP;
             } else {
-                $self->process_message_from_client($ready[$i]);
+                my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
+                $delegate_server->start;
+                #$self->process_message_from_client($ready[$i]);
             }
         }
         last if(defined($timeout) && 
@@ -287,5 +248,45 @@ sub _disable_async_io_on_handle {
     return 1;
 }
 
+
+# TODO: mine this logic out and improve the basic way RMI::Node works
+# process a message on the indicated socket.  If socket is undef,
+# then process a single message out of the many that may be ready
+# to read
+sub XXXprocess_message_from_client {
+    my($self, $socket) = @_;
+
+    # FIXME this always picks the first in the list; it's not fair
+    $socket ||= ($self->sockets_select->can_read())[0];
+    return unless $socket;
+
+    my($string,$cmd) = UR::DataSource::RemoteCache::_read_message(undef, $socket);
+    if ($cmd == -1) {  # The other end closed the socket
+        $self->close_connection($socket);
+        return 1;
+    }
+
+    # We only support get() for now - cmd == 1
+    my($return_command_value, @results);
+
+    if ($cmd == 1)  {
+        my $rule = (FreezeThaw::thaw($string))[0]->[0];
+        my $class = $rule->subject_class_name();
+        @results = $class->get($rule);
+
+        $return_command_value = $cmd | 128;  # High bit set means a result code
+    } else {
+        $self->error_message("Unknown command request ID $cmd");
+        $return_command_value = 255;
+    }
+        
+    my $encoded = '';
+    if (@results) {
+        $encoded = FreezeThaw::freeze(\@results);
+    }
+    $socket->print(pack("LL", length($encoded), $return_command_value), $encoded);
+
+    return 1;
+}
 
 1;

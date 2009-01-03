@@ -16,7 +16,7 @@ for my $p (@p) {
 
 sub new {
     my $class = shift;
-    my $self = $class->SUPER::new(reader => 1, writer => 1, @_);
+    my $self = $class->SUPER::new(host => "127.0.0.1", port => 10293, reader => 1, writer => 1, @_);
     return unless $self;
 
     my $socket = IO::Socket::INET->new(PeerHost => $self->host,
