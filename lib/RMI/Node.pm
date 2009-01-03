@@ -4,6 +4,8 @@ use warnings;
 use RMI;
 use Scalar::Util;
 use Tie::Array;
+use Tie::Hash;
+use Tie::Scalar;
 
 # public interface
 
@@ -188,9 +190,8 @@ sub _serialize {
             }            
             elsif (my $t = $self->{_tied_objects}{$o}) {
                 # real array is on the other side
-                my $key = $RMI::Node::remote_id_for_object{$o};
-                $key ||= $t->[2];
-                print "$RMI::DEBUG_INDENT X: $$ tied proxy ref $o references remote $key:\n" if $RMI::DEBUG;
+                my $key = $t; #$RMI::Node::remote_id_for_object{$o};
+                print "$RMI::DEBUG_INDENT X: $$ tied proxy ref $o ($t) references remote $key (@$t):\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;                
             }
@@ -202,16 +203,29 @@ sub _serialize {
                 #my $base_type = substr($key,index($key,'=')+1);
                 #$base_type = substr($base_type,0,index($base_type,'('));
                 #print "base type $base_type for $o\n";                
-                
-                if ($type eq 'ARRAY' and not $self->{_tied_objects}{$o}) {
-                    # tie the array before sending
+                if ($type eq 'ARRAY') {
                     my @values = @$o;
-                    my $t = tie @$o, 'Tie::StdArray';
+                    my $t = tie @$o, 'Tie::Std' . ucfirst(lc($type));
                     @$o = @values;
-                    $self->{_tied_objects}{$o} = $t;
                     push @serialized, 3, $key;
                 }
+                elsif ($type eq 'HASH') {
+                    my @values = %$o;
+                    my $t = tie %$o, 'Tie::Std' . ucfirst(lc($type));
+                    %$o = @values;
+                    push @serialized, 3, $key;                    
+                }
+                elsif ($type eq 'SCALAR') {
+                    my $value = $$o;
+                    my $t = tie $$o, 'Tie::Std' . ucfirst(lc($type));
+                    $$o = $value;
+                    push @serialized, 3, $key;                                        
+                }
+                elsif ($type eq 'CODE') {
+                    die "coderef not supported";
+                }
                 else {
+                    # regular object
                     push @serialized, 1, $key;
                 }
                 
@@ -246,10 +260,22 @@ sub _deserialize {
                 bless $o, "RMI::ProxyObject";
             }
             elsif ($type == 3) {
-                $o = [];
-                #print "tie array $value\n";
-                tie @$o, 'RMI::ProxyReference', $self, $value, "$o";
-                #print "tied array $o has @$o\n";
+                $o = $received_objects->{$value};
+                unless ($o) {
+                    if ($value =~ /^ARRAY/) {
+                        $o = [];
+                        tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
+                    }
+                    elsif ($value =~ /^HASH/) {
+                        $o = {};
+                        tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
+                    }
+                    elsif ($value =~ /^SCALAR/) {
+                        my $anonymous_scalar;
+                        $o = \$anonymous_scalar;
+                        tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
+                    }
+                }
             }
             $received_objects->{$value} = $o;
             Scalar::Util::weaken($received_objects->{$value});
@@ -260,9 +286,9 @@ sub _deserialize {
         elsif ($type == 2) {
             # was a proxy on the other side: get the real object
             my $o = $sent_objects->{$value};
-            die "no object for $value in sent-back!" unless $o;
+            print "$RMI::DEBUG_INDENT X: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
             push @unserialized, $o;
-            print "$RMI::DEBUG_INDENT S: $$ - resolved local object for $value\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_INDENT X: $$ - resolved local object for $value\n" if $RMI::DEBUG;
         }
     }
     print "$RMI::DEBUG_INDENT X: $$ remote side destroyed: @$destroyed_remotely\n" if $RMI::DEBUG;

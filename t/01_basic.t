@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use Test::More tests => 84;
+use RMI::TestClass1;
 
 use_ok("RMI::Client");
 
@@ -44,7 +45,7 @@ ok($rpid > $$, "got pid for other process: $rpid, which is > $$");
 expect_counts(0,0);
 
 diag("local object call");
-my $local1 = RMI::Test::Class1->new(name => 'local1');
+my $local1 = RMI::TestClass1->new(name => 'local1');
 ok($local1, "made a local object");
 $result = $local1->m1();
 is($result, $$, "result value $result matches pid $$");  
@@ -57,7 +58,7 @@ is($result, $$, "result value $result matches pid $$");
 expect_counts(0,0);
 
 diag("make a remote object");
-my $remote1 = $c->call_class_method('RMI::Test::Class1', 'new', name => 'remote1');
+my $remote1 = $c->call_class_method('RMI::TestClass1', 'new', name => 'remote1');
 ok($remote1, "got an object");
 isa_ok($remote1,"RMI::ProxyObject") or diag(Data::Dumper::Dumper($remote1));
 expect_counts(0,1);
@@ -72,7 +73,7 @@ $result = $remote1->m3($local1);
 is($result, $$, "return values are as expected for remote object with local object params");
 expect_counts(0,1);
 
-my $remote2 = $c->call_class_method('RMI::Test::Class1', 'new', name => 'remote2');
+my $remote2 = $c->call_class_method('RMI::TestClass1', 'new', name => 'remote2');
 ok($remote2, "made another remote object to use for a more complicated method call");
 $result = $remote1->m3($remote2);
 ok($result != $$, "return value is as expected for remote object with remote object params");
@@ -107,7 +108,7 @@ $remote1->dummy_accessor(undef);
 ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the remote object to undef it");
 
 
-diag("test returned non-object references");
+diag("test returned non-object references: ARRAY");
 my $a = $remote1->create_and_return_arrayref(one => 111, two => 222);
 isa_ok($a,"ARRAY", "object $a is an ARRAY");
 
@@ -115,11 +116,13 @@ my @a = eval { @$a; };
 ok(!$@, "treated returned value as an arrayref");
 is("@a", "one 111 two 222", " content is as expected");
 
+my $a2 = $remote1->last_arrayref;
+is($a2,$a, "2nd copy of arrayref $a2 from the remote side matches he first $a");
+
 push @$a, three => 333;
 is($a->[4],"three", "successfully mutated array with push");
 is($a->[5],"333", "successfully mutated array with push");
-my $s = $remote1->last_arrayref_as_string();
-is($s, "one:111:two:222:three:333", " contents on the remote side match");
+is($remote1->last_arrayref_as_string(), "one:111:two:222:three:333", " contents on the remote side match");
 
 $a->[3] = '2222';
 is($a->[3],'2222',"updated one value in the array");
@@ -131,9 +134,38 @@ my $v1 = pop @$a;
 is($v1,'three',"pop works again");
 is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the remote side match");
 
-my $a2 = $remote1->last_arrayref;
-diag($a2);
-is("@$a2","@$a", "2nd copy of arrayref from the remote side matches");
+diag("test returned non-object references: HASH");
+my $h = $remote1->create_and_return_hashref(one => 111, two => 222);
+isa_ok($h,"HASH", "object $h is a HASH");
+
+my @h = eval { %$h; };
+ok(!$@, "treated returned value as an hashref");
+is("@h", "one 111 two 222", " content is as expected");
+
+$h->{three} = 333;
+is($h->{three},333,"key addition");
+
+$h->{two} = 2222;
+is($h->{two},2222,"key change works");
+
+ok(exists($h->{one}), "key exists before deletion");
+my $v = delete $h->{one};
+is($v,111,"value returns from deletion");
+ok(!exists($h->{one}), "key is gone after deletion");
+
+is($remote1->last_hashref_as_string(), "three:333:two:2222", " contents on the remote side match");
+
+
+diag("test returned non-object references: SCALAR");
+
+my $s = $remote1->create_and_return_scalarref("hello");
+isa_ok($s,"SCALAR", "object $h is a SCALAR");
+my $v3 = $$s;
+is($v3,"hello", "scalar ref returns correct value");
+$$s = "goodbye";
+my $v4 = $remote1->last_scalarref_as_string();
+is($v4,"goodbye","value of scalar on remote side is correct");
+
 
 diag("closing connection");
 $c->close;
@@ -148,74 +180,5 @@ sub f1 {
 
 sub f2 {
     my ($v1, $v2, $s, $r) = @_;
-}
-
-package RMI::Test::Class1;
-
-my %obj_this_process;
-
-sub new {
-    my $class = shift;
-    my $self = bless { pid => $$, @_ }, $class;
-    $obj_this_process{$self} = $self;
-    Scalar::Util::weaken($obj_this_process{$self});
-    return $self;
-}
-
-sub DESTROY {
-    my $self = shift;
-    delete $obj_this_process{$self};
-}
-
-sub m1 {
-    my $self = shift;
-    return $self->{pid};
-}
-
-sub m2 {
-    my $self = shift;
-    my $v = shift;
-    return($v*2);
-}
-
-sub m3 {
-    my $self = shift;
-    my $other = shift;
-    $other->m1;
-}
-
-sub m4 {
-    my $self = shift;
-    my $other1 = shift;
-    my $other2 = shift;
-    my $p1 = $other1->m1;
-    my $p2 = $other2->m1;
-    my $p3 = $other1->m3($other2);
-    return "$p1.$p2.$p3";
-}
-
-sub dummy_accessor {
-    my $self = shift;
-    if (@_) {
-        $self->{m5} = shift;
-    }
-    return $self->{m5};
-}
-
-sub create_and_return_arrayref {
-    my $self = shift;
-    return $self->{last_arrayref} = $a = [@_];
-}
-
-sub last_arrayref {
-    my $self = shift;
-    return $self->{last_arrayref};
-    
-}
-
-sub last_arrayref_as_string {
-    my $self = shift;
-    my $s = join(":", @{ $self->{last_arrayref} });
-    return $s;
 }
 
