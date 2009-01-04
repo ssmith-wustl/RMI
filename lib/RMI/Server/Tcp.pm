@@ -1,10 +1,6 @@
 
 package RMI::Server::Tcp;
 
-# use RMI::Server::Tcp;
-# my $s= RMI::Server::TcpSingleThread->new(host => '0.0.0.0', port => 10293);
-# $s->start(undef);
-
 use strict;
 use warnings;
 use IO::Socket;
@@ -47,8 +43,7 @@ sub _create_listen_socket {
                                        Listen    => $self->listen_queue_size,
                                        ReuseAddr => 1);
     unless ($listen) {
-        $self->error_message("Couldn't create socket: $!");
-        return;
+        die "Couldn't create socket: $!";
     }
     $self->{listen_socket} = $listen;
     $self->{all_select} = IO::Select->new($listen);
@@ -93,8 +88,7 @@ sub accept_connection {
         my $listen = $self->listen_socket;
         $socket = $listen->accept();
         unless ($socket) {
-            $self->error_message("accept() failed: $!");
-            return;
+            die "accept() failed: $!";
         }
     }
 
@@ -121,8 +115,7 @@ sub close_connection {
     my $socket = shift;
 
     unless ($self->sockets_select->exists($socket)) {
-        $self->error_message("Passed-in socket is not on the list of connected clients");
-        return;
+        die "Passed-in socket is not on the list of connected clients";
     }
 
     $self->_disable_async_io_on_handle($socket) if ($self->use_sigio);
@@ -172,8 +165,7 @@ sub _enable_async_io_on_handle {
     #my $pid = $$;
     #$pid += 0;   # if $$ was ever used in string context, fcntl does the wrong thing with it.  This forces it back to numberic context
     unless (fcntl($fh, $setowner, $$ + 0)) {
-        $self->error_message("fcntl F_SETOWN failed: $!");
-        return;
+        die "fcntl F_SETOWN failed: $!";
     }
 
 #    my $setsig = &Fcntl::F_SETSIG;
@@ -186,15 +178,13 @@ sub _enable_async_io_on_handle {
     # Enable the async IO flag
     my $flags = fcntl($fh, &Fcntl::F_GETFL,0);
     unless ($flags) {
-        $self->error_message("fcntl F_GETFL failed: $!");
         fcntl($fh, $setowner, $prev_owner);
-        return;
+        die "fcntl F_GETFL failed: $!";
     }
     $flags |= &Fcntl::O_ASYNC;
     unless (fcntl($fh, &Fcntl::F_SETFL, $flags)) {
-        $self->error_message("fcntl F_SETFL failed: $!");
         fcntl($fh, $setowner, $prev_owner);
-        return;
+        die "fcntl F_SETFL failed: $!";
     }
 
     return 1;
@@ -209,14 +199,12 @@ sub _disable_async_io_on_handle {
     # have to reset the FH's owner
     my $flags = fcntl($fh, &Fcntl::F_GETFL,0);
     unless ($flags) {
-        $self->error_message("fcntl F_GETFL failed: $!");
-        return;
+        die "fcntl F_GETFL failed: $!";
     }
 
     $flags &= ~(&Fcntl::O_ASYNC);
     unless (fcntl($fh, &Fcntl::F_SETFL, $flags)) {
-        $self->error_message("fcntl F_SETFL failed: $!");
-        return;
+        die "fcntl F_SETFL failed: $!";
     }
 
     return 1;

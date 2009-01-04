@@ -5,6 +5,8 @@ use strict;
 use warnings;
 use base 'RMI::Node';
 
+*call_sub = \&call_function;
+
 sub call_function {
     my ($self,$fname,@params) = @_;
     return $self->_send(undef, $fname, @params);
