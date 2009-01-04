@@ -29,11 +29,12 @@ sub END {
 
 =head1 NAME
 
-RMI - Remote Method Invocation
+RMI - mostly transparet Remote Method Invocation
 
 =head1 SYNOPSIS
 
- # process 1: the server on host "foo"
+process 1: the server on host "foo"
+
  $s = RMI::Server::Tcp->new(
     port => 1234,
     allow_eval => 1,
@@ -41,51 +42,42 @@ RMI - Remote Method Invocation
  );
  $s->run;
  
- # process 2: the client on another host
+process 2: the client on another host
+
  $c = RMI::Client::Tcp->new(
     host => "foo",
     port => 1234,
  );
 
- # get an object: this is a transparent proxy, NOT serialized
+ # do the whole class remotely...
+ $c->use_remote("IO::FILE");
+ $o = IO::File->new("/etc/passwd");
+ print $o->getlines;
+
+ # or do individual remote operations...
  $o = $c->call_class_method("IO::File","new","/etc/passwd");
-
- # all method calls run on the server...
- print scalar($o->getlines)," lines in the remote file\n";
- 
- # basic function calls work too
  $server_hostname = $c->call_function("Sys::Hostname::hostname");
+ $otherpid = $c->remote_eval('$$'); 
  
- # as does direct eval()
- $otherpid = $c->remote_eval('$$'); # nnnn
- 
- # changes to data structures appear on both sides
+ # changes to perl refs are visible from both sides 
  $a = $c->remote_eval('@main::x = [11,22,33]; return \@x;');
- print ref($a); # ARRAY
  push @$a, 44, 55;
- $c->remote_eval('push @main::x, 66, 77');
  $n1 = $c->remote_eval('scalar(@main::x));
- # 7!
- $n2 = scalar(@$a);
- # 7!
+ # 5!
 
- # you can pass local objects across, and pass-back remote objects
+ # references from either side can be used on either side
  $local_fh = IO::File->new("/etc/passwd");
  $remote_fh = $c->call_class_method('IO::File','new',"/etc/passwd");
  $remote_coderef = $c->remote_eval("sub { my $f1 = shift; my $f2 = shift; @lines = ($f1->getlines, $f2->getlines); return scalar(@lines) }");
  $total_line_count = $remote_coderef->($local_fh, $remote_fh);
 
- # objects look and works the same
+ # very transparent...
  $o->isa('IO::File');
- $o->can("getline");   # a CODE ref which, if called, goes to the other side
+ $o->can("getline");
 
- # EXCEPT HERE
- print ref($o); # RMI::ProxyObject
-
- # UNLESS YOU BRING IN THE ENTIRE CLASS
- $c->use_remote("IO::FILE");
- $o = IO::File->new("/etc/passwd");
- ref($o); # IO::File, but the object is still remote
+ # ...but not completely (this works if you bring in the whole class with use_remote)
+ ref($o); # RMI::ObjectProxy
+  
  
 =head1 DESCRIPTION
 
@@ -94,47 +86,52 @@ but be used transparently in the local process via proxy.
 
 This goes by the term RMI in Java, "Remoting" in .NET, and is similar in functionalty to architectures such as CORBA.
 
+Note: this implementation uses proxies for all references.  Objects are never serialized.
+
 =cut
 
 =head1 METHODS
 
-These methods provide the basic functionality common to (nearly) all
-applications.
-
-=over 4
-
-=item init
-
-  App->init
-
-This methods perfoms all initialization tasks.  Certain tasks will be
-set up by the packages that App uses.  You can set your own using
-App::Init::add_init_subroutine (see
-L<App::Init/"add_init_subroutine">).
-
- 
-=item authorization_handler 
- 
-    App->authorization_handler(\&mysub); 
- 
-Specify the subroutine which should authorize potentially restricted 
-actions in the application.  The subroutine should accept the same 
-parameters as are passed to App->authorize below. 
-
+The RMI module has no public methods of its own.  See <RMI::Client> and <RMI::Server> for APIs for interaction.
 
 =back
 
 =head1 BUGS
 
+=over 2
+
+=item Individually proxied objects reveal that they are proxies when ref($o) is called on them.
+
+ There is no way to override this, as far as I know.
+
+=item When unblessed references are passed, they are "tied" on the originating side.
+
+This will break if the reference is already tied.  The fix is to detect that it is tied, and retain the package name.
+That package name must be used when proxying back.
+This probably also introduces overhead, which could be handled by custom code instead.
+ 
+=item Handles are not transferred correctly.
+
+Methods wil work, but <$fh> will not.
+
+=item The serialization mechanism needs to be made more robust.
+
+The current implementation uses Data::Dumper, and removes newlines.  This must escape them to work robustly.
+Ideally, the text sent is the same text you could use in sprintf.  Storable/FreezeThaw are also options,
+but they will not work cross-language.
+
+=back
+
 Report bugs to <software@genome.wustl.edu>.
 
 =head1 SEE ALSO
 
-IO::Socket
+B<IO::Socket>
 
 =head1 AUTHOR
 
 Scott Smith <ssmith@genome.wustl.edu>
+Anthony Brummett <abrummet@genome.wustl.edu>
 
 =cut
 
