@@ -89,7 +89,7 @@ sub _send {
 our @executing_nodes; # required for the implementation of proxied CODE references
 
 sub _receive {
-    my ($self, $expect, $number) = @_;
+    my ($self, $expect) = @_;
     
     # The $expect value determines the _last_ thing
     # which should happen before we return as a sanity check.
@@ -110,9 +110,7 @@ sub _receive {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $peer_pid = $self->{peer_pid};
     
-    $number = 0 if not defined $number; # unlimited
-    my $attempts = 0;
-    for (1) {
+    while (1) {
         print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
         my $incoming_text = $hin->getline;
         if (not defined $incoming_text) {
@@ -190,8 +188,6 @@ sub _receive {
         else {
             die "unexpected type $type";
         }
-        $attempts++;
-        last if $attempts == $number;
     }
 }
 
