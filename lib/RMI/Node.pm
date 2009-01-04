@@ -110,7 +110,8 @@ sub _receive {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $peer_pid = $self->{peer_pid};
     
-    while (1) {
+    for (1) {
+        # this will occur once, or more than once if we get a counter-request
         print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
         my $incoming_text = $hin->getline;
         if (not defined $incoming_text) {
@@ -119,7 +120,8 @@ sub _receive {
             }
             else {
                 print "$RMI::DEBUG_INDENT N: $$ shutting down\n" if $RMI::DEBUG;
-                last;
+                $self->{is_closed} = 1;
+                return;
             }
         }
         print "$RMI::DEBUG_INDENT N: $$ got $incoming_text" if $RMI::DEBUG;
@@ -138,7 +140,8 @@ sub _receive {
             return $self->_deserialize($sent_objects,$received_objects,@$incoming_data);            
         }
         elsif ($type eq 'deref') {
-            $self->_deserialize($sent_objects,$received_objects,@$incoming_data)
+            $self->_deserialize($sent_objects,$received_objects,@$incoming_data);
+            redo;
         }
         elsif ($type eq 'exception') {
             my ($e) = $self->_deserialize($sent_objects,$received_objects,@$incoming_data);
@@ -184,11 +187,13 @@ sub _receive {
                 $s =~ s/\n/ /gms;
                 $hout->print($s,"\n");
             }
+            redo;
         }
         else {
             die "unexpected type $type";
         }
     }
+    return;
 }
 
 sub _serialize {

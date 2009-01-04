@@ -37,6 +37,8 @@ sub _init_created_socket {
     1;
 }
 
+__END__
+
 use FreezeThaw;
 
 sub _remote_get_with_rule {

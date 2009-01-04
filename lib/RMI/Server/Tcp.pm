@@ -10,7 +10,6 @@ use warnings;
 use IO::Socket;
 use IO::Select;
 use FreezeThaw;
-use Time::HiRes;
 use Fcntl;
 use RMI;
 
@@ -58,33 +57,11 @@ sub _create_listen_socket {
     return 1;
 }
 
-# go into a loop processing messages from all the connected sockets (and 
-# the listen socket), for the given time period in seconds.  0 seconds
-# means do one pass through all that are readable and return, undef
-# means stay in the loop forever
-#
-# FIXME socket communication needs to be refactored out to some common location
-# for example, the listen socket and client sockets can both implement
-# process_message(), where the listen socket does what is accept_connection()
-sub start {
-    my($self,$timeout) = @_;
 
-    my $select = $self->all_select;
-    my $start_time = Time::HiRes::time();
-
-    while(1) {
-        next unless $self->process_message($timeout);
-        last if(defined($timeout) && 
-                    ( $timeout == 0 ||
-                      (Time::HiRes::time() - $start_time > $timeout)
-                    )
-               );
-    }
-
-    return 1;
-}
-
-sub process_message {
+# Override in the base class to delegate to whichever socket returns a value next.
+# Note, that this only receives queries, since the delegate will receive all responses
+# to our own counter queries.
+sub _receive {
     my ($self,$timeout) = @_;
     my $select = $self->all_select;
     my @ready = $select->can_read($timeout);
@@ -99,8 +76,7 @@ sub process_message {
             return;
         } else {
             my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
-            $delegate_server->process_message();
-            #$self->process_message_from_client($ready[$i]);
+            $delegate_server->_receive('query');
         }
     }
     return 1;
