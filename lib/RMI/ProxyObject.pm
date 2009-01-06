@@ -15,7 +15,7 @@ sub AUTOLOAD {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_send(($object||$class), $method, @_);
+    $node->send_request_and_receive_response(($object||$class), $method, @_);
 }
 
 sub can {
@@ -25,7 +25,7 @@ sub can {
         die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_send($object, 'can', @_);
+    $node->send_request_and_receive_response($object, 'can', @_);
 }
 
 sub isa {
@@ -35,7 +35,7 @@ sub isa {
         die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_INDENT O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->_send($object, 'isa', @_);
+    $node->send_request_and_receive_response($object, 'isa', @_);
 }
 
 sub DESTROY {

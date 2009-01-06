@@ -29,7 +29,7 @@ sub AUTOLOAD {
     unless ($node) {
         die "no node for reference $o: method $method for @_ (@$o)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
-    $node->_send(undef, $delegate_class . '::' . $method, @_);
+    $node->send_request_and_receive_response(undef, $delegate_class . '::' . $method, @_);
 }
 
 sub DESTROY {

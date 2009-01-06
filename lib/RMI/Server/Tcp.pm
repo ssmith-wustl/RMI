@@ -1,5 +1,6 @@
 
 package RMI::Server::Tcp;
+use base 'RMI::Server';
 
 use strict;
 use warnings;
@@ -29,15 +30,8 @@ sub new {
     return $self;
 }
 
-sub error_message {
-    shift;
-    warn @_;
-}
-
-# FIXME This might work better as a UDP socket?
 sub _create_listen_socket {
     my $self = shift;
-
     my $listen = IO::Socket::INET->new(LocalHost => $self->host,
                                        LocalPort => $self->port,
                                        Listen    => $self->listen_queue_size,
@@ -48,7 +42,6 @@ sub _create_listen_socket {
     $self->{listen_socket} = $listen;
     $self->{all_select} = IO::Select->new($listen);
     $self->{sockets_select} = IO::Select->new();
-
     return 1;
 }
 
@@ -56,13 +49,13 @@ sub _create_listen_socket {
 # Override in the base class to delegate to whichever socket returns a value next.
 # Note, that this only receives queries, since the delegate will receive all responses
 # to our own counter queries.
-sub _receive {
+sub receive_request_and_send_response {
     my ($self,$timeout) = @_;
     my $select = $self->all_select;
     my @ready = $select->can_read($timeout);
     for (my $i = 0; $i < @ready; $i++) {
         if ($ready[$i] eq $self->listen_socket) {
-            $self->accept_connection();
+            $self->_accept_connection();
             # If we're running as a signal handler for sigio, and the client has already sent
             # data down the newly-connected socket before we can leave the handler, then we've
             # already lost the signal for that new data since it was masked.  This workaround
@@ -70,17 +63,17 @@ sub _receive {
             #next SELECT_LOOP;
             return;
         } else {
+            # delegate to the right "server" object, which manages just this particular client
             my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
-            $delegate_server->_receive('query');
+            $delegate_server->receive_request_and_send_response;
         }
     }
     return 1;
 }
 
-
 # Add the given socket to the list of connected clients.
 # if socket is undef, it blocks waiting on an incoming connection 
-sub accept_connection {
+sub _accept_connection {
     my $self = shift;
     my $socket = shift;
 
@@ -110,7 +103,7 @@ sub accept_connection {
     return $socket;
 }
 
-sub close_connection {
+sub _close_connection {
     my $self = shift;
     my $socket = shift;
 

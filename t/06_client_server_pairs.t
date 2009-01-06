@@ -30,7 +30,7 @@ else {
     $s or die "failed to create server" unless $s;
     print "starting server\n" if $RMI::DEBUG;
     for (1) {
-        if ($s->_receive()) {
+        if ($s->receive_request_and_send_response()) {
             print "server got message\n"  if $RMI::DEBUG;
         }
         else {

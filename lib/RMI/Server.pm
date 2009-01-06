@@ -17,7 +17,7 @@ sub run {
     my $start_time = Time::HiRes::time();
     while(1) {
         last if $self->{is_closed};
-        next unless $self->_receive('query',$timeout);        
+        next unless $self->receive_request_and_send_response($timeout);        
         last if(defined($timeout) && 
                     ( $timeout == 0 ||
                       (Time::HiRes::time() - $start_time > $timeout)

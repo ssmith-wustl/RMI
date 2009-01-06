@@ -7,22 +7,9 @@ use Tie::Array;
 use Tie::Hash;
 use Tie::Scalar;
 
-# basic accessors
-
-sub mk_ro_accessors {
-    no strict 'refs';
-    my $class = caller();
-    for my $p (@_) {
-        my $pname = $p;
-        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
-    }
-    no warnings;
-    push @{ $class . '::properties'}, @_;
-}
-
-mk_ro_accessors qw/reader writer _sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/;
-
 # public API
+
+_mk_ro_accessors(qw/reader writer/);
 
 sub new {
     my $class = shift;
@@ -41,15 +28,19 @@ sub new {
     return $self;
 }
 
-sub close {
-    my $self = $_[0];
-    $self->{reader}->close;
-    $self->{writer}->close;
+sub send_request_and_receive_response {
+    my $self = shift;
+    $self->_send_request(@_);
+    my @result = $self->_receive_response; 
+    if (wantarray) {
+        return @result;        
+    }
+    else {
+        return $result[0];    
+    }
 }
 
-# the real work is done by 4 methods
-
-sub _send {
+sub _send_request {
     my ($self, $o, $m, @p) = @_;
 
     my $hout = $self->{writer};
@@ -58,7 +49,6 @@ sub _send {
     my $received_objects = $self->{_received_objects};
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $os = $o || '<none>';
-    my $wantarray = wantarray;
 
     print "$RMI::DEBUG_INDENT N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
 
@@ -73,120 +63,27 @@ sub _send {
     unless ($r) {
         die "failed to send! $!";
     }
-    
-    # the process of getting the answer involves
-    # becoming a server to the other side during the call
-    my @result = $self->_receive('result');
- 
-    if ($wantarray) {
-        return @result;        
-    }
-    else {
-        return $result[0];    
-    }
+    return $r;    
 }
 
-our @executing_nodes; # required for the implementation of proxied CODE references
-
-sub _receive {
-    my ($self, $expect) = @_;
-    
-    # The $expect value determines the _last_ thing
-    # which should happen before we return as a sanity check.
-    
-    # when called from a server, expect is typically 'query'
-    # when called from a client, expect is typically 'result'
-    
-    # besides the final action, the work is the same:
-    #  sit in a loop getting messages from the other side
-    #  doing whatever the other side demands until they
-    #  give a result (if we are a client who sent_objects a query)
-    #  or return undef telling us to shut down (if we are a server)
-    
-    my $hin = $self->{reader};
-    my $hout = $self->{writer};
-    my $sent_objects = $self->{_sent_objects};
-    my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $peer_pid = $self->{peer_pid};
-    
+sub _receive_response {
+    my ($self) = @_;    
     for (1) {
         # this will occur once, or more than once if we get a counter-request
-        print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
-        my $incoming_text = $hin->getline;
-        if (not defined $incoming_text) {
-            if ($expect eq 'result') {
-                die "$RMI::DEBUG_INDENT N: $$ connection failure before result returned!";
-            }
-            else {
-                print "$RMI::DEBUG_INDENT N: $$ shutting down\n" if $RMI::DEBUG;
-                $self->{is_closed} = 1;
-                return;
-            }
+        my ($type, $incoming_data) = $self->_read();
+        if (not defined $type) {
+            die "$RMI::DEBUG_INDENT N: $$ connection failure before result returned!";
         }
-        print "$RMI::DEBUG_INDENT N: $$ got $incoming_text" if $RMI::DEBUG;
-        print "\n" if $RMI::DEBUG and not defined $incoming_text;
-        my $incoming_data = eval "no strict; no warnings; $incoming_text";
-        if ($@) {
-            die "Exception: $@";
-        }
-
-        my $type = shift @$incoming_data;
         if ($type eq 'result') {
-            if ($expect eq 'query') {
-                die "$RMI::DEBUG_INDENT N: $$ recieved result directly from client?!";
-            }
             print "$RMI::DEBUG_INDENT N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
-            return $self->_deserialize($sent_objects,$received_objects,@$incoming_data);            
-        }
-        elsif ($type eq 'deref') {
-            $self->_deserialize($sent_objects,$received_objects,@$incoming_data);
-            redo;
+            return $self->_deserialize($incoming_data);            
         }
         elsif ($type eq 'exception') {
-            my ($e) = $self->_deserialize($sent_objects,$received_objects,@$incoming_data);
+            my ($e) = $self->_deserialize($incoming_data);
             die $e;
         }
         elsif ($type eq 'query') {
-            no warnings;
-            print "$RMI::DEBUG_INDENT N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
-            my ($m,@px) = @$incoming_data;
-            my @p = $self->_deserialize($sent_objects,$received_objects,@px);
-            my $o = shift @p;
-            print "$RMI::DEBUG_INDENT N: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
-            my @result;
-            push @executing_nodes, $self;
-            eval {
-                if (defined $o) {
-                    @result = $o->$m(@p);
-                }
-                else {
-                    no strict 'refs';
-                    @result = $m->(@p);
-                }
-            };
-            pop @executing_nodes;
-            # we MUST undef these in case they are the only references to objects which need to be destroyed
-            $o = undef;
-            @p = ();
-            if ($@) {
-                print "$RMI::DEBUG_INDENT N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
-                my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
-                print "$RMI::DEBUG_INDENT N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
-                my $s = Data::Dumper::Dumper(['exception', @serialized]);
-                @$received_and_destroyed_ids = ();
-                $s =~ s/\n/ /gms;
-                $hout->print($s,"\n");                
-            }
-            else {
-                print "$RMI::DEBUG_INDENT N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
-                my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
-                print "$RMI::DEBUG_INDENT N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
-                my $s = Data::Dumper::Dumper(['result', @serialized]);
-                @$received_and_destroyed_ids = ();
-                $s =~ s/\n/ /gms;
-                $hout->print($s,"\n");
-            }
+            $self->_process_query($incoming_data);
             redo;
         }
         else {
@@ -194,6 +91,112 @@ sub _receive {
         }
     }
     return;
+}
+
+sub receive_request_and_send_response {
+    my ($self) = @_;    
+    for (1) {
+        # this will occur once, or more than once if we get a counter-request
+        my ($type, $incoming_data) = $self->_read();
+        unless (defined $type) {
+            print "$RMI::DEBUG_INDENT N: $$ shutting down\n" if $RMI::DEBUG;
+            $self->{is_closed} = 1;
+            return;
+        }
+        if ($type eq 'query') {
+            $self->_process_query($incoming_data);
+            redo;
+        }
+        else {
+            die "$RMI::DEBUG_INDENT N: $$ recieved $type directly from client instead of query?!";
+        }
+    }
+    return;
+}
+
+sub _read {
+    my ($self) = @_;
+    my $hin = $self->{reader};
+    my $hout = $self->{writer};
+    
+    print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
+    Carp::confess() unless $hin;
+    my $incoming_text = $hin->getline;
+    if (not defined $incoming_text) {
+        return;
+    }
+
+    print "$RMI::DEBUG_INDENT N: $$ got $incoming_text" if $RMI::DEBUG;
+    print "\n" if $RMI::DEBUG and not defined $incoming_text;
+    my $incoming_data = eval "no strict; no warnings; $incoming_text";
+    if ($@) {
+        die "Exception: $@";
+    }        
+    my $type = shift @$incoming_data;
+
+    return ($type, $incoming_data);    
+}
+
+sub close {
+    my $self = $_[0];
+    $self->{reader}->close;
+    $self->{writer}->close;
+}
+
+# the real work is done by 4 methods and 4 tracked data structures
+
+_mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
+
+our @executing_nodes; # required for the implementation of proxied CODE references
+
+sub _process_query {
+    my ($self,$incoming_data) = @_;
+
+    my $hin = $self->{reader};
+    my $hout = $self->{writer};
+    my $sent_objects = $self->{_sent_objects};
+    my $received_objects = $self->{_received_objects};
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    
+    no warnings;
+    print "$RMI::DEBUG_INDENT N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
+    my ($m,@px) = @$incoming_data;
+    my @p = $self->_deserialize(\@px);
+    my $o = shift @p;
+    print "$RMI::DEBUG_INDENT N: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
+    my @result;
+    push @executing_nodes, $self;
+    eval {
+        if (defined $o) {
+            @result = $o->$m(@p);
+        }
+        else {
+            no strict 'refs';
+            @result = $m->(@p);
+        }
+    };
+    pop @executing_nodes;
+    # we MUST undef these in case they are the only references to objects which need to be destroyed
+    $o = undef;
+    @p = ();
+    if ($@) {
+        print "$RMI::DEBUG_INDENT N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
+        my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
+        print "$RMI::DEBUG_INDENT N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
+        my $s = Data::Dumper::Dumper(['exception', @serialized]);
+        @$received_and_destroyed_ids = ();
+        $s =~ s/\n/ /gms;
+        $hout->print($s,"\n");                
+    }
+    else {
+        print "$RMI::DEBUG_INDENT N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
+        my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
+        print "$RMI::DEBUG_INDENT N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
+        my $s = Data::Dumper::Dumper(['result', @serialized]);
+        @$received_and_destroyed_ids = ();
+        $s =~ s/\n/ /gms;
+        $hout->print($s,"\n");
+    }    
 }
 
 sub _serialize {
@@ -273,11 +276,15 @@ sub _serialize {
 }
 
 sub _deserialize {
-    my ($self, $sent_objects, $received_objects, $destroyed_remotely, @serialized) = @_;
+    my ($self, $serialized) = @_;
+    my $sent_objects = $self->{_sent_objects};
+    my $received_objects = $self->{_received_objects};
+    my $received_and_destroyed_ids = shift @$serialized;
     my @unserialized;
-    while (@serialized) { 
-        my $type = shift @serialized;
-        my $value = shift @serialized;
+    #Carp::cluck(Data::Dumper::Dumper($serialized));
+    while (@$serialized) { 
+        my $type = shift @$serialized;
+        my $value = shift @$serialized;
         if ($type == 0) {
             # primitive value
             print "$RMI::DEBUG_INDENT N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
@@ -309,7 +316,7 @@ sub _deserialize {
                     elsif ($value =~ /^CODE/) {
                         my $sub_id = $value;
                         $o = sub {
-                            $self->_send(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
+                            $self->send_request_and_receive_response(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
                         };
                         # TODO: ensure this cleans up on the other side when it is destroyed
                     }
@@ -332,10 +339,10 @@ sub _deserialize {
             print "$RMI::DEBUG_INDENT N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
         }
     }
-    print "$RMI::DEBUG_INDENT N: $$ remote side destroyed: @$destroyed_remotely\n" if $RMI::DEBUG;
-    my @done = grep { defined $_ } delete @$sent_objects{@$destroyed_remotely};
-    unless (@done == @$destroyed_remotely) {
-        print "Some IDS not found in the sent list: done: @done, expected: @$destroyed_remotely\n";
+    print "$RMI::DEBUG_INDENT N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
+    unless (@done == @$received_and_destroyed_ids) {
+        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
         
     }
     return @unserialized;    
@@ -358,6 +365,21 @@ sub _exec_coderef_for_id {
     my $sub = $RMI::Node::executing_nodes[-1]{_sent_objects}{$sub_id};
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
     goto $sub;
+}
+
+# basic accessors
+
+*mk_ro_accessors = \&_mk_ro_accessors;
+
+sub _mk_ro_accessors {
+    no strict 'refs';
+    my $class = caller();
+    for my $p (@_) {
+        my $pname = $p;
+        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
+    }
+    no warnings;
+    push @{ $class . '::properties'}, @_;
 }
 
 # this proxies an entire class instead of just a single object
@@ -418,13 +440,13 @@ sub virtual_lib {
 sub _remote_has_ref {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->_send(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->_send(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
 
 1;
