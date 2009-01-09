@@ -449,4 +449,99 @@ sub _remote_has_sent {
     my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
 
+# TODO: mine this logic out and improve the basic way RMI::Node works
+# process a message on the indicated socket.  If socket is undef,
+# then process a single message out of the many that may be ready
+# to read
+sub XXXprocess_message_from_client {
+    my($self, $socket) = @_;
+
+    # FIXME this always picks the first in the list; it's not fair
+    $socket ||= ($self->sockets_select->can_read())[0];
+    return unless $socket;
+
+    my($string,$cmd) = UR::DataSource::RemoteCache::_read_message(undef, $socket);
+    if ($cmd == -1) {  # The other end closed the socket
+        $self->close_connection($socket);
+        return 1;
+    }
+
+    # We only support get() for now - cmd == 1
+    my($return_command_value, @results);
+
+    if ($cmd == 1)  {
+        my $rule = (FreezeThaw::thaw($string))[0]->[0];
+        my $class = $rule->subject_class_name();
+        @results = $class->get($rule);
+
+        $return_command_value = $cmd | 128;  # High bit set means a result code
+    } else {
+        $self->error_message("Unknown command request ID $cmd");
+        $return_command_value = 255;
+    }
+        
+    my $encoded = '';
+    if (@results) {
+        $encoded = FreezeThaw::freeze(\@results);
+    }
+    $socket->print(pack("LL", length($encoded), $return_command_value), $encoded);
+
+    return 1;
+}
+
+1;
+
+__END__
+
+use FreezeThaw;
+
+sub _remote_get_with_rule {
+    my $self = shift;
+
+    my $socket = $self->socket;
+
+    my $string = FreezeThaw::freeze(\@_);
+    $socket->print(pack("LL", length($string),1),$string);
+
+    # First word is message length, second is command - 1 is "get" 
+    my $cmd;
+    ($string,$cmd) = $self->_read_message($socket);
+
+    unless ($cmd == 129)  {
+        $self->error_message("Got back unexpected command code.  Expected 129 got $cmd\n");
+        return;
+    }
+      
+    return unless ($string);  # An empty response
+    
+    my($result) = FreezeThaw::thaw($string);
+
+    return @$result;
+}
+    
+    
+# This should be refactored into a messaging module later
+sub _read_message {
+    my $self = shift;
+    my $socket = shift;
+
+    my $buffer = "";
+    my $read = $socket->sysread($buffer,8);
+    if ($read == 0) {
+        # The handle must be closed, or someone set it to non-blocking
+        # and there's nothing to read
+        return (undef, -1);
+    }
+
+    unless ($read == 8) {
+        die "short read getting message length";
+    }
+
+    my($length,$cmd) = unpack("LL",$buffer);
+    my $string = "";
+    $read = $socket->sysread($string,$length);
+
+    return($string,$cmd);
+}
+
 1;

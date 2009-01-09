@@ -108,13 +108,18 @@ The RMI module has no public methods of its own.  See <RMI::Client> and <RMI::Se
 
 This will break if the reference is already tied.  The fix is to detect that it is tied, and retain the package name.
 That package name must be used when proxying back.
+
 This probably also introduces overhead, which could be handled by custom code instead.
  
 =item Handles are not transferred correctly.
 
-Methods wil work, but <$fh> will not.
+Methods wilil work, but <$fh> will not.  
 
-=item The serialization mechanism needs to be made more robust.
+=item Globs are not transferred correctly.
+
+As above.
+
+=item The serialization mechanism needs to be made more robust and efficient.
 
 The current implementation uses Data::Dumper, and removes newlines.  This must escape them to work robustly.
 Ideally, the text sent is the same text you could use in sprintf.  Storable/FreezeThaw are also options,

@@ -203,45 +203,4 @@ sub _disable_async_io_on_handle {
     return 1;
 }
 
-
-# TODO: mine this logic out and improve the basic way RMI::Node works
-# process a message on the indicated socket.  If socket is undef,
-# then process a single message out of the many that may be ready
-# to read
-sub XXXprocess_message_from_client {
-    my($self, $socket) = @_;
-
-    # FIXME this always picks the first in the list; it's not fair
-    $socket ||= ($self->sockets_select->can_read())[0];
-    return unless $socket;
-
-    my($string,$cmd) = UR::DataSource::RemoteCache::_read_message(undef, $socket);
-    if ($cmd == -1) {  # The other end closed the socket
-        $self->close_connection($socket);
-        return 1;
-    }
-
-    # We only support get() for now - cmd == 1
-    my($return_command_value, @results);
-
-    if ($cmd == 1)  {
-        my $rule = (FreezeThaw::thaw($string))[0]->[0];
-        my $class = $rule->subject_class_name();
-        @results = $class->get($rule);
-
-        $return_command_value = $cmd | 128;  # High bit set means a result code
-    } else {
-        $self->error_message("Unknown command request ID $cmd");
-        $return_command_value = 255;
-    }
-        
-    my $encoded = '';
-    if (@results) {
-        $encoded = FreezeThaw::freeze(\@results);
-    }
-    $socket->print(pack("LL", length($encoded), $return_command_value), $encoded);
-
-    return 1;
-}
-
 1;
