@@ -40,7 +40,7 @@ sub new {
             writer => $parent_writer,
             reader => $parent_reader,
         );
-        $server->start; 
+        $server->run; 
         close $parent_reader; close $parent_writer;
         exit;
     }

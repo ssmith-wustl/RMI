@@ -131,7 +131,7 @@ sub enable_sigio_processing {
     
     # Step 1, set the closure for handling the signal
     $SIG{'IO'} = sub {
-        $self->start(0);
+        $self->run(0);
         return unless $prev_sigio_handler;
         $prev_sigio_handler->();
     };

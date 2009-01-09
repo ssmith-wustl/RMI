@@ -3,14 +3,12 @@ package RMI::Server;
 
 # use RMI;
 # my $s= RMI::Server::TcpSingleThread->new(host => '0.0.0.0', port => 10293);
-# $s->start(undef);
+# $s->run(undef);
 
 use strict;
 use warnings;
 use Time::HiRes;
 use base 'RMI::Node';
-
-*start = \&run;
 
 sub run {
     my($self,$timeout) = @_;
