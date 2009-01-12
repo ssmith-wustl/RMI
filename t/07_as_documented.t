@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 18;
+use Test::More tests => 19;
 
 # THIS IS THE CODE IN THE POD
 # UPDATE THEM IN TANDEM!
@@ -87,7 +87,13 @@ open($local_fh, "/etc/passwd");
 my $remote_fh = $c->call_class_method('IO::File','new',"/etc/passwd");
 my $remote_coderef = $c->remote_eval('sub { my $f1 = shift; my $f2 = shift; my @lines = (<$f1>, <$f2>); return scalar(@lines) }');
 my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
-ok($total_line_count > 2, "read both files from the other side");
+is($total_line_count, scalar(@expect_lines)*2, "used a remote CODE ref to read from a local file handle and remote file handle on the remote side");
+
+# this works with Perl primitive IO handles too, if you want to do the work to pass them around in the standard way
+open(LOCAL_IO, "/etc/passwd");
+my $remote_io = $c->remote_eval('open(SOME_FH,"/etc/passwd"); return *SOME_FH{IO}');
+$total_line_count = $remote_coderef->(*LOCAL_IO{IO}, $remote_io);
+is($total_line_count, scalar(@expect_lines)*2, "used the same code ref on a local old-stype Perl IO hande and a reference to a remote old-style Perl IO handle reference");
 
 # very transparent...
 isa_ok($o, 'IO::File');
