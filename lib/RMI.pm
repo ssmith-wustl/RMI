@@ -17,7 +17,7 @@ our $DEBUG;
 BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; };
 
 # control debug messages
-our $DEBUG_INDENT = '';
+our $DEBUG_MSG_PREFIX = '';
 
 # flag checked by DESTROY handlers
 our $process_is_ending = 0;
@@ -113,7 +113,7 @@ information to STDERR during its conversation.
 for example, using bash to run the first test case:
 RMI_DEBUG=1 perl -I lib t/01_*.t
 
-The package variable $RMI::DEBUG_INDENT will be printed at the beginning of each message.
+The package variable $RMI::DEBUG_MSG_PREFIX will be printed at the beginning of each message.
 Changing this value allows the viewer to separate both halves of a conversation.
 The test suite sets this value to ' ' for the server side, causing server activity
 to be indented.

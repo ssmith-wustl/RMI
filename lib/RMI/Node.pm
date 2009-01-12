@@ -54,7 +54,7 @@ sub _send_request {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $os = $o || '<none>';
 
-    print "$RMI::DEBUG_INDENT N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
 
     # pacakge the call and params for transmission
     my @px = $self->_serialize($sent_objects,$received_objects,$received_and_destroyed_ids,[$o,@p]);
@@ -62,7 +62,7 @@ sub _send_request {
     if ($s =~ /\n/) {
         die "found a newline in dumper output!\n$s<\n";
     }
-    print "$RMI::DEBUG_INDENT N: $$ sending $s\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending $s\n" if $RMI::DEBUG;
     
     # send it
     my $r = $hout->print($s,"\n");
@@ -78,10 +78,10 @@ sub _receive_response {
         # this will occur once, or more than once if we get a counter-request
         my ($type, $incoming_data) = $self->_read();
         if (not defined $type) {
-            die "$RMI::DEBUG_INDENT N: $$ connection failure before result returned!";
+            die "$RMI::DEBUG_MSG_PREFIX N: $$ connection failure before result returned!";
         }
         if ($type eq 'result') {
-            print "$RMI::DEBUG_INDENT N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
             my @result = $self->_deserialize($incoming_data);
             if ($wantarray) {
                 return @result;
@@ -111,7 +111,7 @@ sub receive_request_and_send_response {
         # this will occur once, or more than once if we get a counter-request
         my ($type, $incoming_data) = $self->_read();
         unless (defined $type) {
-            print "$RMI::DEBUG_INDENT N: $$ shutting down\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ shutting down\n" if $RMI::DEBUG;
             $self->{is_closed} = 1;
             return;
         }
@@ -120,7 +120,7 @@ sub receive_request_and_send_response {
             redo;
         }
         else {
-            die "$RMI::DEBUG_INDENT N: $$ recieved $type directly from client instead of query?!";
+            die "$RMI::DEBUG_MSG_PREFIX N: $$ recieved $type directly from client instead of query?!";
         }
     }
     return;
@@ -131,14 +131,14 @@ sub _read {
     my $hin = $self->{reader};
     my $hout = $self->{writer};
     
-    print "$RMI::DEBUG_INDENT N: $$ receiving\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
     Carp::confess() unless $hin;
     my $incoming_text = $hin->getline;
     if (not defined $incoming_text) {
         return;
     }
 
-    print "$RMI::DEBUG_INDENT N: $$ got $incoming_text" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
     print "\n" if $RMI::DEBUG and not defined $incoming_text;
     my $incoming_data = eval "no strict; no warnings; $incoming_text";
     if ($@) {
@@ -171,26 +171,26 @@ sub _process_query {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     
     no warnings;
-    print "$RMI::DEBUG_INDENT N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
     my ($m,$wantarray,@px) = @$incoming_data;
     my @p = $self->_deserialize(\@px);
     my $o = shift @p;
-    print "$RMI::DEBUG_INDENT N: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
     my @result;
     push @executing_nodes, $self;
     eval {
         if (defined $o) {
             #eval "use $o"; if not ref($o);
             if (not defined $wantarray) {
-                print "$RMI::DEBUG_INDENT N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
                 $o->$m(@p);
             }
             elsif ($wantarray) {
-                print "$RMI::DEBUG_INDENT N: $$ object call with true wantarray\n" if $RMI::DEBUG;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with true wantarray\n" if $RMI::DEBUG;
                 @result = $o->$m(@p);
             }
             else {
-                print "$RMI::DEBUG_INDENT N: $$ object call with false wantarray\n" if $RMI::DEBUG;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with false wantarray\n" if $RMI::DEBUG;
                 my $result = $o->$m(@p);
                 @result = ($result);
             }
@@ -198,15 +198,15 @@ sub _process_query {
         else {
             no strict 'refs';
            if (not defined $wantarray) {
-                print "$RMI::DEBUG_INDENT N: $$ function call with undef wantarray\n" if $RMI::DEBUG;                            
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ function call with undef wantarray\n" if $RMI::DEBUG;                            
                 $m->(@p);
             }
             elsif ($wantarray) {
-                print "$RMI::DEBUG_INDENT N: $$ function call with true wantarray\n" if $RMI::DEBUG;                
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ function call with true wantarray\n" if $RMI::DEBUG;                
                 @result = $m->(@p);
             }
             else {
-                print "$RMI::DEBUG_INDENT N: $$ function call with false wantarray\n" if $RMI::DEBUG;                
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ function call with false wantarray\n" if $RMI::DEBUG;                
                 my $result = $m->(@p);
                 @result = ($result);
             }
@@ -217,18 +217,18 @@ sub _process_query {
     $o = undef;
     @p = ();
     if ($@) {
-        print "$RMI::DEBUG_INDENT N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
         my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
-        print "$RMI::DEBUG_INDENT N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
         my $s = Data::Dumper->new([['exception', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
         @$received_and_destroyed_ids = ();
         $s =~ s/\n/ /gms;
         $hout->print($s,"\n");                
     }
     else {
-        print "$RMI::DEBUG_INDENT N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
         my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
-        print "$RMI::DEBUG_INDENT N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
         my $s = Data::Dumper->new([['result', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
         @$received_and_destroyed_ids = ();
         $s =~ s/\n/ /gms;
@@ -246,7 +246,7 @@ sub _serialize {
             if ($type eq "RMI::ProxyObject") {
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 $key ||= $$o;
-                print "$RMI::DEBUG_INDENT N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;
             }
@@ -254,7 +254,7 @@ sub _serialize {
                 # when a proxied reference has activity occur, the object is sent by its tied "object"
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 $key ||= $o->[2];
-                print "$RMI::DEBUG_INDENT N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;
             }            
@@ -289,7 +289,7 @@ sub _serialize {
         }
     }
     @$unserialized_values_arrayref = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
-    print "$RMI::DEBUG_INDENT N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     return (@serialized);
 }
 
@@ -304,7 +304,7 @@ sub _deserialize {
         my $value = shift @$serialized;
         if ($type == 0) {
             # primitive value
-            print "$RMI::DEBUG_INDENT N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
             push @unserialized, $value;
         }   
         elsif ($type == 1 or $type == 3) {
@@ -353,17 +353,17 @@ sub _deserialize {
             $RMI::Node::node_for_object{"$o"} = $self;
             $RMI::Node::remote_id_for_object{"$o"} = $value;
             
-            print "$RMI::DEBUG_INDENT N: $$ - made proxy for $value\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
         }
         elsif ($type == 2) {
             # was a proxy on the other side: get the real object
             my $o = $sent_objects->{$value};
-            print "$RMI::DEBUG_INDENT N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
             push @unserialized, $o;
-            print "$RMI::DEBUG_INDENT N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
         }
     }
-    print "$RMI::DEBUG_INDENT N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
     unless (@done == @$received_and_destroyed_ids) {
         print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";

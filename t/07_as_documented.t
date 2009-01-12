@@ -15,7 +15,7 @@ my $parent_pid = $$;
 my $child_pid = fork();
 unless ($child_pid) {
     # if $RMI::LOG is true, this will make the server logs indent relative to the client
-    do { no warnings; $RMI::DEBUG_INDENT = ' '; };
+    do { no warnings; $RMI::DEBUG_MSG_PREFIX = ' '; };
 
     # the child process runs a server we test with
     my $s = RMI::Server::Tcp->new(

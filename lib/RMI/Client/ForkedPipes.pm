@@ -34,7 +34,7 @@ sub new {
     unless ($child_pid) {
         $child_pid = $$;
         close $child_reader; close $child_writer;
-        $RMI::DEBUG_INDENT = '  ';
+        $RMI::DEBUG_MSG_PREFIX = '  ';
         my $server = RMI::Server->new(
             peer_pid => $parent_pid,
             writer => $parent_writer,
