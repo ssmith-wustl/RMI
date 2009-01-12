@@ -105,6 +105,19 @@ The RMI module has no public methods of its own.  See <RMI::Client> and <RMI::Se
 
 =back
 
+
+The environment variable RMI_DEBUG, has its value transferred to $RMI::DEBUG
+at compile time.  When set to 1, this will cause the RMI modules to emit detailed
+information to STDERR during its conversation.
+
+for example, using bash to run the first test case:
+RMI_DEBUG=1 perl -I lib t/01_*.t
+
+The package variable $RMI::DEBUG_INDENT will be printed at the beginning of each message.
+Changing this value allows the viewer to separate both halves of a conversation.
+The test suite sets this value to ' ' for the server side, causing server activity
+to be indented.
+
 =head1 BUGS
 
 =over 2
@@ -113,26 +126,18 @@ The RMI module has no public methods of its own.  See <RMI::Client> and <RMI::Se
 
  There is no way to override this, as far as I know.
 
-=item When unblessed references are passed, they are "tied" on the originating side.
-
-This will break if the reference is already tied.  The fix is to detect that it is tied, and retain the package name.
-That package name must be used when proxying back.
-
-This probably also introduces overhead, which could be handled by custom code instead.
- 
-=item Handles are not transferred correctly.
-
-Methods wilil work, but <$fh> will not.  
-
-=item Globs are not transferred correctly.
-
-As above.
-
 =item The serialization mechanism needs to be made more robust and efficient.
 
-The current implementation uses Data::Dumper, and removes newlines.  This must escape them to work robustly.
-Ideally, the text sent is the same text you could use in sprintf.  Storable/FreezeThaw are also options,
-but they will not work cross-language.
+ The current implementation uses Data::Dumper with options which should remove newlines.
+ Since we do not flatten arbitrary data structures, a simpler parser would be more efficient.
+
+ The message type is currently a text string.  This could be made smaller.
+
+ The data type before each paramter or return value is an integer, which could also
+ be abbreviated futher, or we could go the other way and be more clear. :)
+
+ We should switch to sysread and pass the message length instead of relying on buffers,
+ since the non-blocking IO might not have issues.
 
 =back
 
@@ -140,7 +145,7 @@ Report bugs to <software@genome.wustl.edu>.
 
 =head1 SEE ALSO
 
-B<IO::Socket>
+B<IO::Socket>, B<Tie::StdHandle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
 =head1 AUTHOR
 
