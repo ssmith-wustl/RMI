@@ -333,7 +333,7 @@ sub _deserialize {
                     };
                     # TODO: ensure this cleans up on the other side when it is destroyed
                 }
-                elsif ($value =~ /GLOB/) {
+                elsif ($value =~ /GLOB/ or $value =~ /IO/) {
                     $o = \do { local *HANDLE };
                     my $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
                 }
