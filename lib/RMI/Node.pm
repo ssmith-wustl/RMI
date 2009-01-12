@@ -1,11 +1,18 @@
 package RMI::Node;
+
+# note: if any of these get proxied, we'll have issues
 use strict;
 use warnings;
 use RMI;
-use Scalar::Util;
 use Tie::Array;
 use Tie::Hash;
 use Tie::Scalar;
+use Tie::StdHandle;
+use Data::Dumper;
+use Scalar::Util;
+use Carp;
+require 'Config_heavy.pl'; 
+
 
 # public API
 
@@ -17,32 +24,29 @@ sub new {
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
-        _tied_objects_for_tied_refs => {},
+        _tied_objects_for_tied_refs => {},        
         @_
     }, $class;
+    if (my $p = delete $self->{allow_packages}) {
+        $self->{allow_packages} = { map { $_ => 1 } @$p };
+    }
     for my $p (@RMI::Node::properties) {
         unless ($self->{$p}) {
             die "no $p on object!"
         }
-    }    
+    }
     return $self;
 }
 
 sub send_request_and_receive_response {
     my $self = shift;
-    $self->_send_request(@_);
-    my @result = $self->_receive_response; 
-    if (wantarray) {
-        return @result;        
-    }
-    else {
-        return $result[0];    
-    }
+    my $wantarray = wantarray;
+    $self->_send_request($wantarray,@_);
+    return $self->_receive_response($wantarray); 
 }
 
 sub _send_request {
-    my ($self, $o, $m, @p) = @_;
-
+    my ($self, $wantarray, $o, $m, @p) = @_;
     my $hout = $self->{writer};
     my $hin = $self->{reader};
     my $sent_objects = $self->{_sent_objects};
@@ -54,8 +58,10 @@ sub _send_request {
 
     # pacakge the call and params for transmission
     my @px = $self->_serialize($sent_objects,$received_objects,$received_and_destroyed_ids,[$o,@p]);
-    my $s = Data::Dumper::Dumper(['query',$m,@px]);
-    $s =~ s/\n/ /gms;
+    my $s = Data::Dumper->new([['query',$m,$wantarray,@px]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    if ($s =~ /\n/) {
+        die "found a newline in dumper output!\n$s<\n";
+    }
     print "$RMI::DEBUG_INDENT N: $$ sending $s\n" if $RMI::DEBUG;
     
     # send it
@@ -67,7 +73,7 @@ sub _send_request {
 }
 
 sub _receive_response {
-    my ($self) = @_;    
+    my ($self,$wantarray) = @_;    
     for (1) {
         # this will occur once, or more than once if we get a counter-request
         my ($type, $incoming_data) = $self->_read();
@@ -76,7 +82,13 @@ sub _receive_response {
         }
         if ($type eq 'result') {
             print "$RMI::DEBUG_INDENT N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
-            return $self->_deserialize($incoming_data);            
+            my @result = $self->_deserialize($incoming_data);
+            if ($wantarray) {
+                return @result;
+            }
+            else {
+                return $result[0];
+            }
         }
         elsif ($type eq 'exception') {
             my ($e) = $self->_deserialize($incoming_data);
@@ -160,7 +172,7 @@ sub _process_query {
     
     no warnings;
     print "$RMI::DEBUG_INDENT N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
-    my ($m,@px) = @$incoming_data;
+    my ($m,$wantarray,@px) = @$incoming_data;
     my @p = $self->_deserialize(\@px);
     my $o = shift @p;
     print "$RMI::DEBUG_INDENT N: $$ unserialized object $o and params: @p\n" if $RMI::DEBUG;
@@ -168,11 +180,36 @@ sub _process_query {
     push @executing_nodes, $self;
     eval {
         if (defined $o) {
-            @result = $o->$m(@p);
+            #eval "use $o"; if not ref($o);
+            if (not defined $wantarray) {
+                print "$RMI::DEBUG_INDENT N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
+                $o->$m(@p);
+            }
+            elsif ($wantarray) {
+                print "$RMI::DEBUG_INDENT N: $$ object call with true wantarray\n" if $RMI::DEBUG;
+                @result = $o->$m(@p);
+            }
+            else {
+                print "$RMI::DEBUG_INDENT N: $$ object call with false wantarray\n" if $RMI::DEBUG;
+                my $result = $o->$m(@p);
+                @result = ($result);
+            }
         }
         else {
             no strict 'refs';
-            @result = $m->(@p);
+           if (not defined $wantarray) {
+                print "$RMI::DEBUG_INDENT N: $$ function call with undef wantarray\n" if $RMI::DEBUG;                            
+                $m->(@p);
+            }
+            elsif ($wantarray) {
+                print "$RMI::DEBUG_INDENT N: $$ function call with true wantarray\n" if $RMI::DEBUG;                
+                @result = $m->(@p);
+            }
+            else {
+                print "$RMI::DEBUG_INDENT N: $$ function call with false wantarray\n" if $RMI::DEBUG;                
+                my $result = $m->(@p);
+                @result = ($result);
+            }
         }
     };
     pop @executing_nodes;
@@ -183,7 +220,7 @@ sub _process_query {
         print "$RMI::DEBUG_INDENT N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
         my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
         print "$RMI::DEBUG_INDENT N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
-        my $s = Data::Dumper::Dumper(['exception', @serialized]);
+        my $s = Data::Dumper->new([['exception', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
         @$received_and_destroyed_ids = ();
         $s =~ s/\n/ /gms;
         $hout->print($s,"\n");                
@@ -192,7 +229,7 @@ sub _process_query {
         print "$RMI::DEBUG_INDENT N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
         my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
         print "$RMI::DEBUG_INDENT N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
-        my $s = Data::Dumper::Dumper(['result', @serialized]);
+        my $s = Data::Dumper->new([['result', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
         @$received_and_destroyed_ids = ();
         $s =~ s/\n/ /gms;
         $hout->print($s,"\n");
@@ -221,49 +258,30 @@ sub _serialize {
                 push @serialized, 2, $key;
                 next;
             }            
-            elsif (my $t = $self->{_tied_objects_for_tied_refs}{$o}) {
-                # when a proxied reference is passed as a parameter or return value, the object sent by its tied "reference"
-                my $key = $t; #$RMI::Node::remote_id_for_object{$o};
-                print "$RMI::DEBUG_INDENT N: $$ tied proxy ref $o ($t) references remote $key (@$t):\n" if $RMI::DEBUG;
-                push @serialized, 2, $key;
-                next;                
-            }
             else {
                 # TODO: use something better than stringification since this can be overridden!!!
                 my $key = "$o";
                 
                 # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
-                #my $base_type = substr($key,index($key,'=')+1);
-                #$base_type = substr($base_type,0,index($base_type,'('));
-                #print "base type $base_type for $o\n";                
-                if ($type eq 'ARRAY') {
-                    my @values = @$o;
-                    my $t = tie @$o, 'Tie::Std' . ucfirst(lc($type));
-                    @$o = @values;
-                    push @serialized, 3, $key;
-                }
-                elsif ($type eq 'HASH') {
-                    my @values = %$o;
-                    my $t = tie %$o, 'Tie::Std' . ucfirst(lc($type));
-                    %$o = @values;
-                    push @serialized, 3, $key;                    
-                }
-                elsif ($type eq 'SCALAR') {
-                    my $value = $$o;
-                    my $t = tie $$o, 'Tie::Std' . ucfirst(lc($type));
-                    $$o = $value;
-                    push @serialized, 3, $key;                                        
-                }
-                elsif ($type eq 'CODE') {
-                    # this doesn't use a class, but gets custom handling
-                    push @serialized, 3, $key;
+                my $base_type = substr($key,index($key,'=')+1);
+                $base_type = substr($base_type,0,index($base_type,'('));
+                my $code;
+                if ($base_type ne $type) {
+                    # blessed reference
+                    $code = 1;
+                    if (my $allowed = $self->{allow_packages}) {
+                        unless ($allowed->{ref($o)}) {
+                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
+                        }
+                    }
                 }
                 else {
-                    # regular object
-                    push @serialized, 1, $key;
+                    # regular reference
+                    $code = 3;
                 }
                 
-                $sent_objects->{$key} = $o;               
+                push @serialized, $code, $key;
+                $sent_objects->{$key} = $o;
             }
         }
         else {
@@ -280,8 +298,7 @@ sub _deserialize {
     my $sent_objects = $self->{_sent_objects};
     my $received_objects = $self->{_received_objects};
     my $received_and_destroyed_ids = shift @$serialized;
-    my @unserialized;
-    #Carp::cluck(Data::Dumper::Dumper($serialized));
+    my @unserialized;    
     while (@$serialized) { 
         my $type = shift @$serialized;
         my $value = shift @$serialized;
@@ -293,42 +310,49 @@ sub _deserialize {
         elsif ($type == 1 or $type == 3) {
             # exists on the other side: make a proxy
             my $o;
-            if ($type == 1) {
-                $o = \$value;
-                bless $o, "RMI::ProxyObject";
-            }
-            elsif ($type == 3) {
-                $o = $received_objects->{$value};
-                unless ($o) {
-                    if ($value =~ /^ARRAY/) {
-                        $o = [];
-                        tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
-                    }
-                    elsif ($value =~ /^HASH/) {
-                        $o = {};
-                        tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
-                    }
-                    elsif ($value =~ /^SCALAR/) {
-                        my $anonymous_scalar;
-                        $o = \$anonymous_scalar;
-                        tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
-                    }
-                    elsif ($value =~ /^CODE/) {
-                        my $sub_id = $value;
-                        $o = sub {
-                            $self->send_request_and_receive_response(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
-                        };
-                        # TODO: ensure this cleans up on the other side when it is destroyed
-                    }
-                    else {
-                        die "unknown reference type for $value!!";
-                    }
+            
+            $o = $received_objects->{$value};
+            unless ($o) {
+                if ($value =~ /ARRAY/) {
+                    $o = [];
+                    tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
+                }
+                elsif ($value =~ /HASH/) {
+                    $o = {};
+                    tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
+                }
+                elsif ($value =~ /SCALAR/) {
+                    my $anonymous_scalar;
+                    $o = \$anonymous_scalar;
+                    tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
+                }
+                elsif ($value =~ /CODE/) {
+                    my $sub_id = $value;
+                    $o = sub {
+                        $self->send_request_and_receive_response(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
+                    };
+                    # TODO: ensure this cleans up on the other side when it is destroyed
+                }
+                elsif ($value =~ /GLOB/) {
+                    $o = \do { local *HANDLE };
+                    my $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
+                }
+                else {
+                    die "unknown reference type for $value!!";
                 }
             }
+            
+            if ($type == 1) {
+                # todo: if we're proxying the entire class use the real class name
+                bless $o, "RMI::ProxyObject";
+            }
+        
             $received_objects->{$value} = $o;
             Scalar::Util::weaken($received_objects->{$value});
             push @unserialized, $o;
             $RMI::Node::node_for_object{"$o"} = $self;
+            $RMI::Node::remote_id_for_object{"$o"} = $value;
+            
             print "$RMI::DEBUG_INDENT N: $$ - made proxy for $value\n" if $RMI::DEBUG;
         }
         elsif ($type == 2) {
@@ -353,9 +377,16 @@ sub _deserialize {
 
 sub _eval {
     my $src = $_[0];
-    my @result = eval $src;
-    die $@ if $@;
-    return @result;
+    if (wantarray) {
+        my @result = eval $src;
+        die $@ if $@;
+        return @result;        
+    }
+    else {
+        my $result = eval $src;
+        die $@ if $@;
+        return $result;
+    }
 }
 
 # this is used when a CODE ref is proxied, since you can't tie CODE refs..
@@ -388,6 +419,7 @@ our %proxied_classes;
 
 sub _implement_class_locally_to_proxy {
     my ($self,$class,$module) = @_;
+    $DB::single = 1;
     no strict 'refs';
     if ($class and not $module) {
         $module = $class;
@@ -418,6 +450,7 @@ sub _implement_class_locally_to_proxy {
 sub virtual_lib {
     my $self = shift;
     my $virtual_lib = sub {
+        $DB::single = 1;
         my $module = pop;
         $self->_implement_class_locally_to_proxy(undef,$module);
         my $sym = Symbol::gensym();
@@ -447,101 +480,6 @@ sub _remote_has_sent {
     my ($self,$obj) = @_;
     my $id = "$obj";
     my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
-}
-
-# TODO: mine this logic out and improve the basic way RMI::Node works
-# process a message on the indicated socket.  If socket is undef,
-# then process a single message out of the many that may be ready
-# to read
-sub XXXprocess_message_from_client {
-    my($self, $socket) = @_;
-
-    # FIXME this always picks the first in the list; it's not fair
-    $socket ||= ($self->sockets_select->can_read())[0];
-    return unless $socket;
-
-    my($string,$cmd) = UR::DataSource::RemoteCache::_read_message(undef, $socket);
-    if ($cmd == -1) {  # The other end closed the socket
-        $self->close_connection($socket);
-        return 1;
-    }
-
-    # We only support get() for now - cmd == 1
-    my($return_command_value, @results);
-
-    if ($cmd == 1)  {
-        my $rule = (FreezeThaw::thaw($string))[0]->[0];
-        my $class = $rule->subject_class_name();
-        @results = $class->get($rule);
-
-        $return_command_value = $cmd | 128;  # High bit set means a result code
-    } else {
-        $self->error_message("Unknown command request ID $cmd");
-        $return_command_value = 255;
-    }
-        
-    my $encoded = '';
-    if (@results) {
-        $encoded = FreezeThaw::freeze(\@results);
-    }
-    $socket->print(pack("LL", length($encoded), $return_command_value), $encoded);
-
-    return 1;
-}
-
-1;
-
-__END__
-
-use FreezeThaw;
-
-sub _remote_get_with_rule {
-    my $self = shift;
-
-    my $socket = $self->socket;
-
-    my $string = FreezeThaw::freeze(\@_);
-    $socket->print(pack("LL", length($string),1),$string);
-
-    # First word is message length, second is command - 1 is "get" 
-    my $cmd;
-    ($string,$cmd) = $self->_read_message($socket);
-
-    unless ($cmd == 129)  {
-        $self->error_message("Got back unexpected command code.  Expected 129 got $cmd\n");
-        return;
-    }
-      
-    return unless ($string);  # An empty response
-    
-    my($result) = FreezeThaw::thaw($string);
-
-    return @$result;
-}
-    
-    
-# This should be refactored into a messaging module later
-sub _read_message {
-    my $self = shift;
-    my $socket = shift;
-
-    my $buffer = "";
-    my $read = $socket->sysread($buffer,8);
-    if ($read == 0) {
-        # The handle must be closed, or someone set it to non-blocking
-        # and there's nothing to read
-        return (undef, -1);
-    }
-
-    unless ($read == 8) {
-        die "short read getting message length";
-    }
-
-    my($length,$cmd) = unpack("LL",$buffer);
-    my $string = "";
-    $read = $socket->sysread($string,$length);
-
-    return($string,$cmd);
 }
 
 1;

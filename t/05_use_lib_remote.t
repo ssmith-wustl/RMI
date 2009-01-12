@@ -24,7 +24,7 @@ $c->use_lib_remote;
 #eval "use lib \$c->virtual_lib";
 ok(!$@, 'added a virtual lib to the @INC list which will make all attempts to use modules auto-proxy.');
 
-use_ok("RMI::TestClass1");
+use_ok("RMI::TestClass1", "used RMI:TestClass1");
 
 my $remote2 = RMI::TestClass1->new(name => 'remote2');
 ok($remote2, "created a remote object using regular/local syntax");

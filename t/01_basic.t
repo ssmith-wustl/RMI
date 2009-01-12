@@ -64,6 +64,8 @@ my $remote1 = $c->call_class_method('RMI::TestClass1', 'new', name => 'remote1')
 ok($remote1, "got an object");
 ok($remote1->isa('RMI::TestClass1'), "isa() works") or diag(Data::Dumper::Dumper($remote1));
 ok($remote1->UNIVERSAL::isa('RMI::ProxyObject'), "real class is the proxy (from UNIVERSAL::isa)") or diag(Data::Dumper::Dumper($remote1));
+my @data = %$remote1;
+diag("@data");
 expect_counts(0,1);
 
 diag("call methods on the remote object");

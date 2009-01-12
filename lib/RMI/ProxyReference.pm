@@ -9,6 +9,7 @@ use warnings;
 *TIEARRAY   = \&TIE;
 *TIEHASH    = \&TIE;
 *TIESCALAR  = \&TIE;
+*TIEHANDLE  = \&TIE;
 
 # CODE references are handled specially, using an anonymous sub on the proxy side, without tie, since tie does not support them
 # GLOBs are not supported at this point
@@ -20,6 +21,7 @@ sub TIE {
 
 sub AUTOLOAD {
     no strict 'refs';
+    $DB::single = 1;
     my $method = $RMI::ProxyReference::AUTOLOAD;
     $method =~ s/^.*:://g;
     my $o = $_[0];

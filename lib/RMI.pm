@@ -33,52 +33,61 @@ RMI - mostly transparet Remote Method Invocation
 
 =head1 SYNOPSIS
 
-process 1: the server on host "foo"
 
- $s = RMI::Server::Tcp->new(
-    port => 1234,
-    allow_eval => 1,
-    allow_packages => ['IO::File','Sys::Hostname', qr/Bio::.*/];
- );
- $s->run;
- 
-process 2: the client on another host
+#process 1: the server
 
- $c = RMI::Client::Tcp->new(
-    host => "foo",
-    port => 1234,
- );
+    use RMI::Server;
+    my $s = RMI::Server::Tcp->new(
+        port => 1234,
+        allow_eval => 1,
+        allow_packages => ['IO::File','Sys::Hostname', qr/Bio::.*/],
+    );
+    $s->run;
 
- # do the whole class remotely...
- $c->use_remote("IO::FILE");
- $o = IO::File->new("/etc/passwd");
- print $o->getlines;
 
- # or do individual remote operations...
- $o = $c->call_class_method("IO::File","new","/etc/passwd");
- $server_hostname = $c->call_function("Sys::Hostname::hostname");
- $otherpid = $c->remote_eval('$$'); 
- 
- # changes to perl refs are visible from both sides 
- $a = $c->remote_eval('@main::x = [11,22,33]; return \@x;');
- push @$a, 44, 55;
- $n1 = $c->remote_eval('scalar(@main::x));
- # 5!
+#process 2: the client on another host
 
- # references from either side can be used on either side
- $local_fh = IO::File->new("/etc/passwd");
- $remote_fh = $c->call_class_method('IO::File','new',"/etc/passwd");
- $remote_coderef = $c->remote_eval("sub { my $f1 = shift; my $f2 = shift; @lines = ($f1->getlines, $f2->getlines); return scalar(@lines) }");
- $total_line_count = $remote_coderef->($local_fh, $remote_fh);
+    my $c = RMI::Client::Tcp->new(
+       host => 'myserverhost',
+       port => 1234,
+    ); 
+    
+    my $server_hostname = $c->call_function("Sys::Hostname::hostname");
+    
+    my $otherpid = $c->remote_eval('$$'); 
+    
+    my $o = $c->call_class_method("IO::File","new","/etc/passwd");
+    $o->isa("IO::File");
+    $o->can("getline");
+    ref($o) == 'RMI::ProxyObject'; #!
+    @lines = $o->getlines;
 
- # very transparent...
- $o->isa('IO::File');
- $o->can("getline");
-
- # ...but not completely (this works if you bring in the whole class with use_remote)
- ref($o); # RMI::ObjectProxy
-  
- 
+    my $a = $c->remote_eval('@main::x = (11,22,33); return \@main::x;');
+    push @$a, 44, 55;
+    
+    scalar(@$a) == $c->remote_eval('scalar(@main::x)')
+    #!!!
+    
+    my $local_fh;
+    open($local_fh, "/etc/passwd");
+    my $remote_fh = $c->call_class_method('IO::File','new',"/etc/passwd");
+    my $remote_coderef = $c->remote_eval('sub { my $f1 = shift; my $f2 = shift; my @lines = ($f1->getlines, $f2->getlines); return scalar(@lines) }');
+    my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
+    
+    # do a whole class remotely
+    
+    $c->use_remote("IO::File");
+    $o = IO::File->new("/etc/passwd");
+    my @lines = $o->getlines;
+    ok(scalar(@lines) > 1, "got " . scalar(@lines) . " lines");
+    
+    # make remoting default
+    use A;
+    use B;
+    BEGIN { $c->use_remote_lib; }; # do everything remotely from now on...
+    use C; #remote!
+    use D; #remote!
+    
 =head1 DESCRIPTION
 
 The RMI allow individual objects, individual data structures, and entire classes to exist in a remote process,

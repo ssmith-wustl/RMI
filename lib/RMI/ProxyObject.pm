@@ -41,7 +41,7 @@ sub isa {
 sub DESTROY {
     my $self = $_[0];
     my $id = "$self";
-    my $remote_id = $$self;
+    my $remote_id = delete $RMI::Node::remote_id_for_object{$id};
     my $node = delete $RMI::Node::node_for_object{$id};
     print "$RMI::DEBUG_INDENT O: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
     my $other_ref = delete $node->{_received_objects}{$remote_id};
