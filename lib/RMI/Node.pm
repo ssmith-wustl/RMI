@@ -7,7 +7,7 @@ use RMI;
 use Tie::Array;
 use Tie::Hash;
 use Tie::Scalar;
-use Tie::StdHandle;
+use Tie::Handle;
 use Data::Dumper;
 use Scalar::Util;
 use Carp;
