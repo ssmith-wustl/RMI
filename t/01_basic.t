@@ -30,45 +30,45 @@ sub expect_counts {
 my @result;
 my $result;
 
-diag("basic remote function attempt 1");
+note("basic remote function attempt 1");
 @result = $c->call_function('main::f1', 2, 3); 
 is($result[0], $c->peer_pid, "retval indicates the method was called in the child/server process");
 is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
 expect_counts(0,0);
 
-diag("basic remote function attempt 2");
+note("basic remote function attempt 2");
 @result = $c->call_function('main::f1', 6, 7);
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  
 expect_counts(0,0);
 
-diag("remote eval");
+note("remote eval");
 my $rpid = $c->remote_eval('$$');
 ok($rpid > $$, "got pid for other process: $rpid, which is > $$");
 expect_counts(0,0);
 
-diag("local object call");
+note("local object call");
 my $local1 = RMI::TestClass1->new(name => 'local1');
 ok($local1, "made a local object");
 $result = $local1->m1();
 is($result, $$, "result value $result matches pid $$");  
 expect_counts(0,0);
 
-diag("request that remote server do a method call on a local object, which just comes right back");
+note("request that remote server do a method call on a local object, which just comes right back");
 $result = $c->call_object_method($local1, 'm1');
 ok(scalar($result), "called method remotely");
 is($result, $$, "result value $result matches pid $$");  
 expect_counts(0,0);
 
-diag("make a remote object");
+note("make a remote object");
 my $remote1 = $c->call_class_method('RMI::TestClass1', 'new', name => 'remote1');
 ok($remote1, "got an object");
 ok($remote1->isa('RMI::TestClass1'), "isa() works") or diag(Data::Dumper::Dumper($remote1));
 ok($remote1->UNIVERSAL::isa('RMI::ProxyObject'), "real class is the proxy (from UNIVERSAL::isa)") or diag(Data::Dumper::Dumper($remote1));
 my @data = %$remote1;
-diag("@data");
+note("@data");
 expect_counts(0,1);
 
-diag("call methods on the remote object");
+note("call methods on the remote object");
 
 $result = $remote1->m2(8);
 is($result, 16, "return values is as expected for remote object with primitive params");
@@ -89,7 +89,7 @@ is($result, "$rpid.$$.$$", "result $result has other process id, and this proces
 expect_counts(0,2);
 
 
-diag("dereference local objects and ensure we pass along this to the other side");
+note("dereference local objects and ensure we pass along this to the other side");
 
 is(scalar(@{$c->{_received_and_destroyed_ids}}), 0, "zero objects in queue to be be derefed on the other side");
 expect_counts(0,2); # 2 objects from the remote end
@@ -104,7 +104,7 @@ is(scalar(@{$c->{_received_and_destroyed_ids}}), 0, "zero objects in queue to be
 expect_counts(0,1); # 1 object from the remote end 
 
 
-diag("test holding references");
+note("test holding references");
 
 ok(!$c->_remote_has_ref($local1), "local object is not referenced on the other side before we pass it");
 $remote1->dummy_accessor($local1);
@@ -112,7 +112,7 @@ ok($c->_remote_has_ref($local1), "local object is now referenced on the otehr si
 $remote1->dummy_accessor(undef);
 ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the remote object to undef it");
 
-diag("can()");
+note("can()");
 my $ref = $remote1->can('m2');
 ok($ref, "can() works with the remote object");
 $result = $ref->($remote1,8);
@@ -122,9 +122,9 @@ $ref = undef;
 $remote1->m1(8);
 expect_counts(0,2);
 
-diag("closing connection");
+note("closing connection");
 $c->close;
-diag("exiting");
+note("exiting");
 exit;
 
 # these may be called from the client or server

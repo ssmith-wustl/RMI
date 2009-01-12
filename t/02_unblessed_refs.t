@@ -12,13 +12,13 @@ use_ok("RMI::Client::ForkedPipes");
 my $c = RMI::Client::ForkedPipes->new();
 ok($c, "created an RMI::Client::ForkedPipes using the default constructor (fored process with a pair of pipes connected to it)");
 
-diag("make a remote object");
+note("make a remote object");
 my $remote1 = $c->call_class_method('RMI::TestClass2', 'new', name => 'remote1');
 ok($remote1, "got an object");
 
 ###################
 
-diag("test returned non-object references: ARRAY");
+note("test returned non-object references: ARRAY");
 
 my $a = $remote1->create_and_return_arrayref(one => 111, two => 222);
 isa_ok($a,"ARRAY", "object $a is an ARRAY");
@@ -47,7 +47,7 @@ is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the re
 
 ###################
 
-diag("test returned non-object references: HASH");
+note("test returned non-object references: HASH");
 
 my $h = $remote1->create_and_return_hashref(one => 111, two => 222);
 isa_ok($h,"HASH", "object $h is a HASH");
@@ -71,7 +71,7 @@ is($remote1->last_hashref_as_string(), "three:333:two:2222", " contents on the r
 
 ###################
 
-diag("test returned non-object references: SCALAR");
+note("test returned non-object references: SCALAR");
 
 my $s = $remote1->create_and_return_scalarref("hello");
 isa_ok($s,"SCALAR", "object $h is a SCALAR");
@@ -83,7 +83,7 @@ is($v4,"goodbye","value of scalar on remote side is correct");
 
 ###################
 
-diag("test returned non-object references: CODE");
+note("test returned non-object references: CODE");
 
 my $x = $remote1->create_and_return_coderef('sub { $r = $$; return join(":",$r,@_); }');
 isa_ok($x,"CODE", "object $h is a CODE reference");
@@ -93,7 +93,7 @@ my $v6 = $x->('a','b','c');
 is($v6, $c->peer_pid . ":a:b:c", "value returned from second call is as expected");
 $x = undef;
 
-diag("Test passing code refs");
+note("Test passing code refs");
 my @a1 = (11,22,33);
 my $sub1 = sub {
     for (@a1) {
@@ -105,7 +105,7 @@ is_deeply(\@a1,[22,44,66], "remote server called back local sub and modified clo
 
 ###################
 
-diag("closing connection");
+note("closing connection");
 $c->close;
-diag("exiting");
+note("exiting");
 exit;
