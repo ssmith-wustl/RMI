@@ -32,10 +32,5 @@ sub new {
     return $self;
 }
 
-sub _init_created_socket {
-    # override in sub-classes
-    1;
-}
-
 1;
 

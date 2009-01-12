@@ -49,6 +49,7 @@ sub _create_listen_socket {
 # Override in the base class to delegate to whichever socket returns a value next.
 # Note, that this only receives queries, since the delegate will receive all responses
 # to our own counter queries.
+
 sub receive_request_and_send_response {
     my ($self,$timeout) = @_;
     my $select = $self->all_select;
