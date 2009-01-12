@@ -63,4 +63,19 @@ sub call_my_sub {
     return $sub->(@_);
 }
 
+sub increment_array {
+    my $self = shift;
+    return map { $_+1 }@_;
+}
+
+sub remember_wantarray {
+    my $self = shift;
+    $self->{last_wantarray} = wantarray;
+    return 1;
+}
+sub return_last_wantarray {
+    my $self = shift;
+    return $self->{last_wantarray};
+}
+
 1;
