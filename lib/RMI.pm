@@ -201,19 +201,15 @@ to be indented.
  
 =back
 
-Report bugs to <software@genome.wustl.edu>.
-
 =head1 SEE ALSO
 
 B<IO::Socket>, B<Tie::StdHandle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
 =head1 AUTHOR
 
-Scott Smith <ssmith@genome.wustl.edu>
-Anthony Brummett <abrummet@genome.wustl.edu>
+Scott Smith <sakoht@cpan.org>                    
 
 =cut
-
 
 1;
 
