@@ -1,19 +1,15 @@
-#!/usr/bin/env perl
-
 package RMI::Client::ForkedPipes;
 
 use strict;
 use warnings;
+use version;
+our $VERSION = qv('0.1');
+
 use base 'RMI::Client';
-use IO::Handle;     # thousands of lines just for autoflush :(
 
-my @p = qw/peer_pid/;
-for my $p (@p) {
-    my $pname = $p;
-    no strict 'refs';
-    *$p = sub { $_[0]->{$pname} };
-}
+use IO::Handle;     # "thousands of lines just for autoflush":(
 
+RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
 sub new {
     my $class = $_[0];

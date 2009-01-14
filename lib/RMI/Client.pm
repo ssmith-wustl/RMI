@@ -3,6 +3,9 @@ package RMI::Client;
 
 use strict;
 use warnings;
+use version;
+our $VERSION = qv('0.1');
+
 use base 'RMI::Node';
 
 *call_sub = \&call_function;
@@ -39,7 +42,7 @@ sub remote_use {
 sub use_remote {
     my $self = shift;
     for my $class (@_) {
-        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
+        $self->remote_use($class);
         $self->_implement_class_locally_to_proxy($class);
     }
     return scalar(@_);

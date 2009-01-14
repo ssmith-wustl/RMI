@@ -1,7 +1,11 @@
-
 package RMI::ProxyObject;
+
 use strict;
 use warnings;
+use version;
+our $VERSION = qv('0.1');
+
+use RMI;
 
 sub AUTOLOAD {
     no strict;

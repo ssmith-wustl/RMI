@@ -1,8 +1,13 @@
 package RMI::Node;
 
-# note: if any of these get proxied, we'll have issues
 use strict;
 use warnings;
+use version;
+our $VERSION = qv('0.1');
+
+# Note: if any of these get proxied as full classes, we'd have issues.
+# Since it's impossible to proxy a class which has already been "used",
+# we use them at compile time...
 use RMI;
 use Tie::Array;
 use Tie::Hash;
@@ -405,8 +410,6 @@ sub _exec_coderef_for_id {
 }
 
 # basic accessors
-
-*mk_ro_accessors = \&_mk_ro_accessors;
 
 sub _mk_ro_accessors {
     no strict 'refs';
