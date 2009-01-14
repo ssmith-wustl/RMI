@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 19;
+use Test::More tests => 20;
 
 # THIS IS THE CODE IN THE POD
 # UPDATE THEM IN TANDEM!
@@ -107,6 +107,7 @@ $c->use_remote("IO::File");
 $o = IO::File->new("/etc/passwd");
 my @lines = <$o>; #->getlines;
 ok(scalar(@lines) > 1, "got " . scalar(@lines) . " lines");
+is(ref($o),'IO::File', "ref() returns IO::File instead of RMI::ProxyObject because we've fully proxied the entire package in this process");
 
 # kill the server in the child process
 kill $child_pid;

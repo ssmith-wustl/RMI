@@ -13,7 +13,6 @@ use Scalar::Util;
 use Carp;
 require 'Config_heavy.pl'; 
 
-
 # public API
 
 _mk_ro_accessors(qw/reader writer/);
@@ -155,11 +154,16 @@ sub close {
     $self->{writer}->close;
 }
 
-# the real work is done by 4 methods and 4 tracked data structures
+# the real work is done by 4 methods, 4 object-level tracked data structures, and 2 global data structures...
 
+# object-level data structurs
 _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
 
-our @executing_nodes; # required for the implementation of proxied CODE references
+# required for the implementation of proxied CODE references
+our @executing_nodes; 
+
+# tracks classes which have been fully proxied in the process of the client.
+our %proxied_classes;
 
 sub _process_query {
     my ($self,$incoming_data) = @_;
@@ -243,7 +247,7 @@ sub _serialize {
     my $type;
     for my $o (@$unserialized_values_arrayref) {
         if ($type = ref($o)) {
-            if ($type eq "RMI::ProxyObject") {
+            if ($type eq "RMI::ProxyObject" or $proxied_classes{$type}) {
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 $key ||= $$o;
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
@@ -309,50 +313,52 @@ sub _deserialize {
         }   
         elsif ($type == 1 or $type == 3) {
             # exists on the other side: make a proxy
-            my $o;
-            
-            $o = $received_objects->{$value};
+            my $o = $received_objects->{$value};
             unless ($o) {
-                if ($value =~ /ARRAY/) {
+                my ($remote_class,$remote_shape) = ($value =~ /^(.*?=|)(.*?)\(/);
+                chop $remote_class;
+                if ($remote_shape eq 'ARRAY') {
                     $o = [];
                     tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
                 }
-                elsif ($value =~ /HASH/) {
+                elsif ($remote_shape eq 'HASH') {
                     $o = {};
                     tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
                 }
-                elsif ($value =~ /SCALAR/) {
+                elsif ($remote_shape eq 'SCALAR') {
                     my $anonymous_scalar;
                     $o = \$anonymous_scalar;
                     tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
                 }
-                elsif ($value =~ /CODE/) {
+                elsif ($remote_shape eq 'CODE') {
                     my $sub_id = $value;
                     $o = sub {
                         $self->send_request_and_receive_response(undef, 'RMI::Node::_exec_coderef_for_id', $sub_id, @_);
                     };
                     # TODO: ensure this cleans up on the other side when it is destroyed
                 }
-                elsif ($value =~ /GLOB/ or $value =~ /IO/) {
+                elsif ($remote_shape eq 'GLOB' or $remote_shape eq 'IO') {
                     $o = \do { local *HANDLE };
                     my $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
                 }
                 else {
-                    die "unknown reference type for $value!!";
+                    die "unknown reference type for $remote_shape for $value!!";
                 }
+                if ($type == 1) {
+                    if ($proxied_classes{$remote_class}) {
+                        bless $o, $remote_class;
+                    }
+                    else {
+                        bless $o, 'RMI::ProxyObject';    
+                    }
+                }
+                $received_objects->{$value} = $o;
+                Scalar::Util::weaken($received_objects->{$value});
+                $RMI::Node::node_for_object{"$o"} = $self;
+                $RMI::Node::remote_id_for_object{"$o"} = $value;
             }
             
-            if ($type == 1) {
-                # todo: if we're proxying the entire class use the real class name
-                bless $o, "RMI::ProxyObject";
-            }
-        
-            $received_objects->{$value} = $o;
-            Scalar::Util::weaken($received_objects->{$value});
             push @unserialized, $o;
-            $RMI::Node::node_for_object{"$o"} = $self;
-            $RMI::Node::remote_id_for_object{"$o"} = $value;
-            
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
         }
         elsif ($type == 2) {
@@ -415,8 +421,6 @@ sub _mk_ro_accessors {
 
 # this proxies an entire class instead of just a single object
 
-our %proxied_classes;
-
 sub _implement_class_locally_to_proxy {
     my ($self,$class,$module) = @_;
     $DB::single = 1;
@@ -431,12 +435,11 @@ sub _implement_class_locally_to_proxy {
         $class =~ s/\//::/g;
         $class =~ s/.pm$//; 
     }
-    if ($INC{$module}) {
-    #if (keys %{ $class . '::' }) {
-        die "namespace $class already has contents " . Data::Dumper::Dumper(\%{ $class . '::' });
-    }
     if (my $prior = $proxied_classes{$class}) {
         die "class $class has already been proxied by $prior!";
+    }    
+    if (my $path = $INC{$module}) {
+        die "module $module has already been used from path: $path";
     }
     my $path = $self->remote_eval("use $class; \$INC{'$module'}");
     for my $sub (qw/AUTOLOAD DESTROY can isa/) {
