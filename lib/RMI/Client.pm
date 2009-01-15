@@ -65,13 +65,14 @@ sub use_lib_remote {
 
 =head1 NAME
 
-RMI::Client - a connection to an RMI::Server
+RMI::Client - a connection for requesting remote objects and processing 
 
 =head1 SYNOPSIS
 
- $c = RMI::Client->new(reader => $fh1, writer => $fh2);
+
  $c = RMI::Client::Tcp->new(host => 'server1', port => 1234);
  $c = RMI::Client::ForkedPipes->new();
+ $c = RMI::Client->new(reader => $fh1, writer => $fh2); # generic
  
  $c->call_use('IO::File');
  $c->call_use('Sys::Hostname');
@@ -235,7 +236,6 @@ B<RMI::Server> B<RMI::Client>
 B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
 =cut
-
 
 1;
 

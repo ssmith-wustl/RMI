@@ -546,7 +546,7 @@ sub _remote_has_sent {
 
 =head1 NAME
 
-RMI::Node - transparent proxying through IO handles
+RMI::Node - base class for transparent proxying through IO handles
 
 =head1 SYNOPSIS
 
@@ -679,5 +679,5 @@ B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
 =cut
 
-
 1;
+

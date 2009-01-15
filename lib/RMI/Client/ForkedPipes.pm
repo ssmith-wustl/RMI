@@ -77,19 +77,24 @@ RMI::Client::ForkedPipes
     $c1 = RMI::Client::ForkedPipes->new();
     $remote_hash1 = $c1->call_eval('{}');
     $remote_hash1{key1} = 123;
-    
+
+    $c2 = RMI::Client::ForkedPipes->new('some_server',$arg1,$arg2);    
+
 =head1 DESCRIPTION
 
-This subclass of RMI::Client makes a TCP/IP socket connection to an
-B<RMI::Server::Tcp>.  See B<RMI::Server::Tcp> for details on server options.  
+This subclass of RMI::Client forks a child process, and starts an
+RMI::Server::ForkedPipes in that process.  It is useful for testing
+more complex RMI, and also to do things like use two versions of
+a module at once in the same program.
 
 =back
 
 =head1 METHODS
 
-This class overrides the constructor for a default RMI::Client to make a
-socket connection.  That socket is both the reader and writer handle for the
-client.
+=item peer_pid
+ 
+ Both the RMI::Client::ForkedPipes and RMI::Server::ForkedPipes have a method to 
+ return the process ID of their remote partner.
 
 =head1 BUGS AND CAVEATS
 
@@ -97,6 +102,7 @@ See general bugs in B<RMI> for general system limitations of proxied objects.
 
 =head1 SEE ALSO
 
-B<RMI>, B<RMI::Server::Tcp>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI::ProxyObject>
+B<RMI>, B<RMI::Server::ForkedPipes>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI::ProxyObject>
 
 =cut
+

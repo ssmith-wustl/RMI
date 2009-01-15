@@ -98,8 +98,6 @@ Note: CODE references are not tied, and do not use this class.  A
 proxy for a code reference is generated as an anonymous subrotine
 which makes a remote call via its RMI::Node upon execute.
 
-=back
-
 =head1 METHODS
 
 The RMI::ProxyReference implements TIEHASH TIEARRAY TIESCALAR and
@@ -114,9 +112,13 @@ before sending it.  These methods work just fine with the
 
 =head1 BUGS AND CAVEATS
 
+=over 4
+
 =item references tied by RMI::ProxyReference cannot be tied to other things
 
 See general bugs in B<RMI> for general system limitations
+
+=back
 
 =head1 SEE ALSO
 
@@ -125,3 +127,4 @@ B<RMI> B<RMI::ProxyObject>
 B<Tie::Scalar> B<Tie::Array> B<Tie::Hash> B<Tie::Handle>
 
 =cut
+

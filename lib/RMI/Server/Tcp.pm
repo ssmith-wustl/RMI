@@ -127,8 +127,6 @@ RMI::Server::Tcp - do RMI over a TCP/IP socket
 This subclass of RMI::Server makes a TCP/IP listening socket, and accepts
 multiple non-blocking IO connections.
 
-=back
-
 =head1 METHODS
 
 This class overrides the constructor for a default RMI::Server to make a

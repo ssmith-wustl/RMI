@@ -68,15 +68,13 @@ RMI::ProxyObject - used internally by RMI::Node to create proxy stubs
 
 The full explanation of how references, blessed and otherwise, are
 proxied across an RMI::Client/RMI::Server pair (or any RMI::Node pair)
-is in R<RMI::ProxyReference>.
+is in B<RMI::ProxyReference>.
 
 When the object to be proxied is blessed into a class, the proxy
 is blessed into the RMI::RemoteProxy class.
 
 Note that RMI::ProxyObjects are also "tied" to the package B<RMI::ProxyReference>,
 which handles attempts to use the reference as a plain Perl reference.
-
-=back
 
 =head1 METHODS
 
@@ -89,18 +87,23 @@ it represents.
 
 =head1 BUGS AND CAVEATS
 
+=over 
+
 =item the object is not 100% transparent
 
 Ways to detect that an object is an RMI::ProxyObject are:
-1. ref($obj) will return "RMI::ProxyObject" unless the entire class
+ 1. ref($obj) will return "RMI::ProxyObject" unless the entire class
 has been proxied (with $client->use_remote('SomeClass').
-2. "$obj" will stringify to "RMI::ProxyObject=SOMETYPE(...)", though
+ 2. "$obj" will stringify to "RMI::ProxyObject=SOMETYPE(...)", though
 this will probaby be changed at a future date.
 
 See general bugs in B<RMI> for general system limitations of proxied objects.
+
+=back
 
 =head1 SEE ALSO
 
 B<RMI>, B<RMI::ProxyReference>, B<RMI::Node>
 
 =cut
+

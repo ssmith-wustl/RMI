@@ -13,7 +13,7 @@ RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
 =head1 NAME
 
-RMI::Server::ForkedPipes - 
+RMI::Server::ForkedPipes - internal server for RMI::Client::ForkedPipes 
 
 =head1 SYNOPSIS
 
@@ -29,8 +29,6 @@ $server->peer_pid eq $server->remtoe_eval('$$');
 
 This subclass of RMI::Server is used by RMI::Client::ForkedPipes when it
 forks a private server for itself.
-
-=back
 
 =head1 SEE ALSO
 

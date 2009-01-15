@@ -71,6 +71,10 @@ RMI::Client::Tcp - do RMI over a TCP/IP socket
 This subclass of RMI::Client makes a TCP/IP socket connection to an
 B<RMI::Server::Tcp>.  See B<RMI::Server::Tcp> for details on server options.  
 
+See the general B<RMI> description for an overview of how RMI::Client and
+RMI::Servers interact, and examples.   Seee B<RMI::Client> for details
+on the general client API.
+
 =back
 
 =head1 METHODS
@@ -88,3 +92,4 @@ See general bugs in B<RMI> for general system limitations of proxied objects.
 B<RMI>, B<RMI::Server::Tcp>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI::ProxyObject>
 
 =cut
+
