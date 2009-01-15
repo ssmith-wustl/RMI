@@ -7,7 +7,8 @@ our $VERSION = qv('0.1');
 
 use base 'RMI::Client';
 
-use IO::Handle;     # "thousands of lines just for autoflush":(
+use RMI::Server::ForkedPipes;
+use IO::Handle;     # "thousands of lines just for autoflush" :(
 
 RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
@@ -39,7 +40,7 @@ sub new {
         
         # otherwise, we do the servicing in Perl
         $RMI::DEBUG_MSG_PREFIX = '  ';
-        my $server = RMI::Server->new(
+        my $server = RMI::Server::ForkedPipes->new(
             peer_pid => $parent_pid,
             writer => $parent_writer,
             reader => $parent_reader,
