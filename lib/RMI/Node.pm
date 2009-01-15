@@ -449,7 +449,32 @@ sub _mk_ro_accessors {
 
 # this proxies an entire class instead of just a single object
 
-sub _implement_class_locally_to_proxy {
+sub _bind_local_vars_to_remote {
+    my $self = shift;
+    my $caller = caller();
+    my $full_var;
+    for my $var (@_) {
+        my $type = substr($var,0,1);
+        if (index($var,'::')) {
+            $full_var = substr($var,1);
+        }
+        else {
+            $full_var = $caller . '::' . substr($var,1);
+        }
+        my $src = '\\' . $type . $full_var . ";\n";
+        #print $src;
+        my $r = $self->call_eval($src);
+        die $@ if $@;
+        #print "got $r\n";
+        $src = '*' . $full_var . ' = $r' . ";\n";
+        #print $src;
+        eval $src;
+        die $@ if $@;
+    }
+    return scalar(@_);
+}
+
+sub _bind_local_class_to_remote {
     my ($self,$class,$module) = @_;
     no strict 'refs';
     if ($class and not $module) {
@@ -463,7 +488,12 @@ sub _implement_class_locally_to_proxy {
         $class =~ s/.pm$//; 
     }
     if (my $prior = $proxied_classes{$class}) {
-        die "class $class has already been proxied by $prior!";
+        if ($prior == $self) {
+            die "class $class has already been proxied by this RMI client!";            
+        }
+        else {
+            die "class $class has already been proxied by another RMI client: $prior!";
+        }
     }    
     if (my $path = $INC{$module}) {
         die "module $module has already been used from path: $path";
@@ -482,7 +512,7 @@ sub virtual_lib {
     my $virtual_lib = sub {
         $DB::single = 1;
         my $module = pop;
-        $self->_implement_class_locally_to_proxy(undef,$module);
+        $self->_bind_local_class_to_remote(undef,$module);
         my $sym = Symbol::gensym();
         my $done = 0;
         return $sym, sub {
