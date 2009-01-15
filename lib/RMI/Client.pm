@@ -74,15 +74,16 @@ sub bind_variables {
             $full_var = $caller . '::' . substr($var,1);
         }
         my $src = '\\' . $type . $full_var . ";\n";
-        print $src;
+        #print $src;
         my $r = $self->call_eval($src);
         die $@ if $@;
-        print "got $r\n";
+        #print "got $r\n";
         $src = '*' . $full_var . ' = $r' . ";\n";
-        print $src;
+        #print $src;
         eval $src;
         die $@ if $@;
-    }    
+    }
+    return scalar(@_);
 }
 
 =pod
