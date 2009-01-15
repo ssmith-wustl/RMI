@@ -30,7 +30,6 @@ RMI - (mostly) transparet Remote Method Invocation
 
 =head1 SYNOPSIS
 
-
 #process 1: an example server on host "myserver"
 
     my $s = RMI::Server::Tcp->new(port => 1234);
@@ -44,37 +43,18 @@ RMI - (mostly) transparet Remote Method Invocation
        port => 1234,
     );
 
-    $c->call_use('Sys::Hostname');
-    my $server_hostname = $c->call_function('Sys::Hostname::hostname');
-
     $c->call_use('IO::File');
     $o = $c->call_class_method('IO::File','new','/etc/passwd');
-        
-    $line1 = $o->getline;  # works as an object
-    $line2 = <$o>;         # works as a file handle
-    @rest  = <$o>;         # detects scalar/list context correctly
     
-    $o->isa('IO::File');                        # transparent!
-    $o->can('getline');                         # transparent!
-    ref($o) eq 'RMI::ProxyObject';              # the only sign this isn't a real IO::File...
+    $line1 = $o->getline;           # works as an object
 
-    my $server_pid = $c->call_eval('$$');     # execute arbitrary code to get $$ (the process id)
-    
-    my $a = $c->call_eval('@x = (11,22,33); return \@main::x;');  # pass an arrayref back
-    push @$a, 44, 55;                                               # changed on the server
-    scalar(@$a) == $c->call_eval('scalar(@main::x)');             # ...true
-    
-    $c->use_remote('IO::File');         # like call_use, but makes ALL IO::File activity remote
-    require IO::File;                   # does nothing, since we've already "used" IO::File
-    $o = IO::File->new('/etc/passwd');  # makes a remote call...
-    ref($o) == 'IO::File';              # object seems local!
-    
-    use A;
-    use B; 
-    BEGIN { $c->use_remote_lib; }; # do everything remotely from now on if possible...
-    use C; #remote!
-    use D; #remote!
-    use E; #local, b/c not found on the remote side
+    $line2 = <$o>;                  # works as a file handle
+    @rest  = <$o>;                  # detects scalar/list context correctly 
+
+    $o->isa('IO::File');            # transparent in standard ways
+    $o->can('getline');             
+    ref($o) eq 'RMI::ProxyObject';  # the only sign this isn't a real IO::File...   
+                                    # (see use_remote() to fix this by full class proxying)    
     
 =head1 DESCRIPTION
 
@@ -106,31 +86,37 @@ its link to the item in question, and allow garbage collection if no other refer
 =head1 TYPES OF CLIENTS AND SERVERS
 
 All RMI client and server objects use a pair of handles for messaging.  Specific subclasses of RMI::Client
-and RMI::Server implement the handles in different ways.
-
-See:
+and RMI::Server implement the handles in different ways.  There are two implementations which are part
+of the default RMI package:
 
 =over 4
 
 =item RMI::Client::Tcp and RMI::Server::Tcp
 
-A single-threaded non-blocking TCP/IP socket server for cross-internet proxying.
+A TCP/IP socket server for cross-network proxies.  The current implementation supports multiple clients,
+and is a single-threaded non-blocking server.
 
-=item RMI::Client::ForkedPipes
+=item RMI::Client::ForkedPipes and RMI::Server::ForkedPipes
 
 Creates its own private server in a sub-process.  Useful if you want an out-of-process object b/c you
-plan to exceed Perl's memory limit on a 32-bit machine, or need to exec() to run a server using another language.
+plan to exceed Perl's memory limit on a 32-bit machine, or for testing w/o making a socket.
+
+(This is also used by custom server apps since the server will exec() whatever was passed to the
+client constructor after fork().  In particular, it was built to allow cross-langage RMI.)
 
 =back
-
 
 =head1 METHODS
 
 The RMI module has no public methods of its own.  See <RMI::Client> and <RMI::Server> for APIs for interaction.
 
+=head1 DEBUGGING RMI CODE
+
 The environment variable RMI_DEBUG, has its value transferred to $RMI::DEBUG
 at compile time.  When set to 1, this will cause the RMI modules to emit detailed
-information to STDERR during its conversation.
+information to STDERR during all "conversations" between itself and the remote
+side. This works for RMI::Client, RMI::Server, and anything else which
+inherits from RMI::Node.
 
 for example, using bash to run the first test case:
 RMI_DEBUG=1 perl -I lib t/01_*.t
@@ -140,40 +126,7 @@ Changing this value allows the viewer to separate both halves of a conversation.
 The test suite sets this value to ' ' for the server side, causing server activity
 to be indented.
 
-=head1 EXAMPLES
-
-These are esoteric examples which push the boundaries of the system:
-
-=item MAKING A REMOTE HASHREF
-
-This makes a hashref on the server, and makes a proxy on the client:
-    my $fake_hashref = $c->call_eval('{}');
-
-This seems to put a key in the hash, but actually sends a message to the server to modify the hash.
-    $fake_hashref->{key1} = 100;
-
-Lookups also result in a request to the server:
-    print $fake_hashref->{key1};
-
-When we do this, the hashref on the server is destroyed, as since the ref-count on both sides is now zero:
-    $fake_hashref = undef;
-
-=item MAKING A REMOTE SUBROUTINE REFERENCE, AND USING IT WITH A MIX OF LOCAL AND REMOTE OBJECTS
-
-    my $local_fh = IO::File->new('/etc/passwd');
-    my $remote_fh = $c->call_class_method('IO::File','new','/etc/passwd');
-    my $remote_coderef = $c->call_eval('
-                            sub {
-                                my $f1 = shift; my $f2 = shift;
-                                my @lines = (<$f1>, <$f2>);
-                                return scalar(@lines)
-                            }
-                        ');
-    my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
-    
-=item
-
-=head1 CAVEATS
+=head1 FUNCTIONALITY CAVEATS
 
 =over 2
 
