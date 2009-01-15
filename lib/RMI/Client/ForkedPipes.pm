@@ -74,7 +74,7 @@ RMI::Client::ForkedPipes
 =head1 SYNOPSIS
 
     $c1 = RMI::Client::ForkedPipes->new();
-    $remote_hash1 = $c1->remote_eval('{}');
+    $remote_hash1 = $c1->call_eval('{}');
     $remote_hash1{key1} = 123;
     
 =head1 DESCRIPTION

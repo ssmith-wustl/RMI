@@ -51,7 +51,7 @@ RMI::Client::Tcp - do RMI over a TCP/IP socket
         reader_path => '/my/server_to_client',
         writer_path => '/my/client_to_server',
     );
-    $c->remote_use('IO::File');
+    $c->call_use('IO::File');
     $remote_fh = $c->call_class_method('IO::File', 'new', '/my/file');
     print <$remote_fh>;
     

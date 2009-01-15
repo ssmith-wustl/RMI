@@ -21,8 +21,8 @@ sub expect_counts {
     my $actual_received = scalar(keys(%$received));
     is($actual_sent, $expected_sent, "  count of sent objects $actual_sent is $expected_sent, as expected");
     is($actual_received, $expected_received, "  count of received objects $actual_received is $expected_received, as expected");    
-    my ($remote_received) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_received_objects}}))');
-    my ($remote_sent) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_sent_objects}}))');
+    my ($remote_received) = $c->call_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_received_objects}}))');
+    my ($remote_sent) = $c->call_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_sent_objects}}))');
     is($remote_received,$actual_sent, "  count of remote received objects $remote_received matches actual sent count $actual_sent");
     is($remote_sent,$actual_received, "  count of remote received objects $remote_sent matches actual sent count $actual_received");
 }
@@ -42,7 +42,7 @@ is($result[1], 13, "result value $result[1] is as expected for 6 + 7");
 expect_counts(0,0);
 
 note("remote eval");
-my $rpid = $c->remote_eval('$$');
+my $rpid = $c->call_eval('$$');
 ok($rpid > $$, "got pid for other process: $rpid, which is > $$");
 expect_counts(0,0);
 

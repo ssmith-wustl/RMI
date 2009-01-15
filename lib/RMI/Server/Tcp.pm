@@ -133,7 +133,7 @@ multiple non-blocking IO connections.
 
 This class overrides the constructor for a default RMI::Server to make a
 listening socket.  Individual accepted connections get their own private
-subordinate RMI::Server of this class with which to interact.
+subordinate RMI::Server of this class.
 
 =head1 BUGS AND CAVEATS
 

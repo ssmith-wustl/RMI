@@ -29,7 +29,7 @@ unless ($child_pid) {
     unless (fork()) {
         sleep 2;
         my $c = RMI::Client::Tcp->new();
-        eval { $c->remote_eval('exit 1'); };
+        eval { $c->call_eval('exit 1'); };
         exit;
     }
     
@@ -67,31 +67,31 @@ my @remaining_lines = <$o>;
 is_deeply(\@remaining_lines,[@expect_lines[2..$#expect_lines]], 'got the rest of the lines from <$fh> in array context');
 
 # call remote subs/functions
-$c->remote_eval("use Sys::Hostname");
+$c->call_eval("use Sys::Hostname");
 my $server_hostname = $c->call_function("Sys::Hostname::hostname");
 ok($server_hostname, "call to Sys::Hostname::hostname function on the server side works");
 
 # execute arbitrary remote code 
-my $otherpid = $c->remote_eval('$$'); 
-is($otherpid,$child_pid, "got the other process' pid from remote_eval");
+my $otherpid = $c->call_eval('$$'); 
+is($otherpid,$child_pid, "got the other process' pid from call_eval");
 
 # changes to perl refs are visible from both sides 
-my $a = $c->remote_eval('@main::x = (11,22,33); return \@main::x;');
+my $a = $c->call_eval('@main::x = (11,22,33); return \@main::x;');
 push @$a, 44, 55;
 is(scalar(@$a), 5, 'got the correct count on the client side');
-is($c->remote_eval('scalar(@main::x)'),5, 'got the correct count on the server side');
+is($c->call_eval('scalar(@main::x)'),5, 'got the correct count on the server side');
 
 # references from either side can be used on either side
 my $local_fh;
 open($local_fh, "/etc/passwd");
 my $remote_fh = $c->call_class_method('IO::File','new',"/etc/passwd");
-my $remote_coderef = $c->remote_eval('sub { my $f1 = shift; my $f2 = shift; my @lines = (<$f1>, <$f2>); return scalar(@lines) }');
+my $remote_coderef = $c->call_eval('sub { my $f1 = shift; my $f2 = shift; my @lines = (<$f1>, <$f2>); return scalar(@lines) }');
 my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
 is($total_line_count, scalar(@expect_lines)*2, "used a remote CODE ref to read from a local file handle and remote file handle on the remote side");
 
 # this works with Perl primitive IO handles too, if you want to do the work to pass them around in the standard way
 open(LOCAL_IO, "/etc/passwd");
-my $remote_io = $c->remote_eval('open(SOME_FH,"/etc/passwd"); return *SOME_FH{IO}');
+my $remote_io = $c->call_eval('open(SOME_FH,"/etc/passwd"); return *SOME_FH{IO}');
 $total_line_count = $remote_coderef->(*LOCAL_IO{IO}, $remote_io);
 is($total_line_count, scalar(@expect_lines)*2, "used the same code ref on a local old-stype Perl IO hande and a reference to a remote old-style Perl IO handle reference");
 

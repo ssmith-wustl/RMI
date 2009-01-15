@@ -44,10 +44,10 @@ RMI - (mostly) transparet Remote Method Invocation
        port => 1234,
     );
 
-    $c->remote_use('Sys::Hostname');
+    $c->call_use('Sys::Hostname');
     my $server_hostname = $c->call_function('Sys::Hostname::hostname');
 
-    $c->remote_use('IO::File');
+    $c->call_use('IO::File');
     $o = $c->call_class_method('IO::File','new','/etc/passwd');
         
     $line1 = $o->getline;  # works as an object
@@ -58,13 +58,13 @@ RMI - (mostly) transparet Remote Method Invocation
     $o->can('getline');                         # transparent!
     ref($o) eq 'RMI::ProxyObject';              # the only sign this isn't a real IO::File...
 
-    my $server_pid = $c->remote_eval('$$');     # execute arbitrary code to get $$ (the process id)
+    my $server_pid = $c->call_eval('$$');     # execute arbitrary code to get $$ (the process id)
     
-    my $a = $c->remote_eval('@x = (11,22,33); return \@main::x;');  # pass an arrayref back
+    my $a = $c->call_eval('@x = (11,22,33); return \@main::x;');  # pass an arrayref back
     push @$a, 44, 55;                                               # changed on the server
-    scalar(@$a) == $c->remote_eval('scalar(@main::x)');             # ...true
+    scalar(@$a) == $c->call_eval('scalar(@main::x)');             # ...true
     
-    $c->use_remote('IO::File');         # like remote_use, but makes ALL IO::File activity remote
+    $c->use_remote('IO::File');         # like call_use, but makes ALL IO::File activity remote
     require IO::File;                   # does nothing, since we've already "used" IO::File
     $o = IO::File->new('/etc/passwd');  # makes a remote call...
     ref($o) == 'IO::File';              # object seems local!
@@ -87,7 +87,7 @@ to architectures such as CORBA, and the older DCOM.
 
 =head1 PROXY OBJECTS AND REFERENCES
 
-Parameters and results for remote method calls (and also plain subroutine calls, and remote_eval() calls) are passed
+Parameters and results for remote method calls (and also plain subroutine calls, and call_eval() calls) are passed
 as transparent proxies when they are references of any sort.  This includes objects, and also HASH refrences, ARRAY
 references, SCALAR references, GLOBs/IO-handles, and CODE references, including closures.  Proxy objects are also
 usable as their primitive Perl type, in addition to dispatching method calls.  
@@ -147,7 +147,7 @@ These are esoteric examples which push the boundaries of the system:
 =item MAKING A REMOTE HASHREF
 
 This makes a hashref on the server, and makes a proxy on the client:
-    my $fake_hashref = $c->remote_eval('{}');
+    my $fake_hashref = $c->call_eval('{}');
 
 This seems to put a key in the hash, but actually sends a message to the server to modify the hash.
     $fake_hashref->{key1} = 100;
@@ -162,7 +162,7 @@ When we do this, the hashref on the server is destroyed, as since the ref-count 
 
     my $local_fh = IO::File->new('/etc/passwd');
     my $remote_fh = $c->call_class_method('IO::File','new','/etc/passwd');
-    my $remote_coderef = $c->remote_eval('
+    my $remote_coderef = $c->call_eval('
                             sub {
                                 my $f1 = shift; my $f2 = shift;
                                 my @lines = (<$f1>, <$f2>);
@@ -189,7 +189,7 @@ When we do this, the hashref on the server is destroyed, as since the ref-count 
 
  Writing a wrapper for an RMI::Server which limits the calls it supports, and the data
  returnable would be easy, but it has not been done.  Specifically, turning off
- remote_eval() is wise in untrusted environments.
+ call_eval() is wise in untrusted environments.
 
 =item Calls to "use_remote" will proxy subroutine calls, but not package variable access automatically.
 
@@ -199,7 +199,7 @@ When we do this, the hashref on the server is destroyed, as since the ref-count 
   $c->use_remote("Some::Package");
   # $Some::Package::foo is NOT bound to the remote variable of the same name
   
-  *Some::Package::foo = $c->remote_eval('\\$Some::Package::foo');
+  *Some::Package::foo = $c->call_eval('\\$Some::Package::foo');
   # now it is...
 
 =back

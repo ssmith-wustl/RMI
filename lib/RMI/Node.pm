@@ -408,6 +408,22 @@ sub _eval {
     }
 }
 
+sub _use {
+    my $self = shift;
+    my $pkg = shift;
+    my @args = @_;
+    eval "use $pkg;";
+    die $@ if $@;
+}
+
+
+sub _use_lib {
+    my $self = shift;
+    my @args = @_;
+    eval "use lib \@args;";
+    die $@ if $@;
+}
+
 # this is used when a CODE ref is proxied, since you can't tie CODE refs..
 
 sub _exec_coderef_for_id {
@@ -416,6 +432,7 @@ sub _exec_coderef_for_id {
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
     goto $sub;
 }
+
 
 # basic accessors
 
@@ -451,7 +468,7 @@ sub _implement_class_locally_to_proxy {
     if (my $path = $INC{$module}) {
         die "module $module has already been used from path: $path";
     }
-    my $path = $self->remote_eval("use $class; \$INC{'$module'}");
+    my $path = $self->call_eval("use $class; \$INC{'$module'}");
     for my $sub (qw/AUTOLOAD DESTROY can isa/) {
         *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
     }

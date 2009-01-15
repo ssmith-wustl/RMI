@@ -26,12 +26,12 @@ sub call_object_method {
     return $self->send_request_and_receive_response($object, $method, @params);
 }
 
-sub remote_eval {
+sub call_eval {
     my ($self,$src) = @_;
     return $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', $src);
 }
 
-sub remote_use {
+sub call_use {
     my $self = shift;
     for my $class (@_) {
         $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
@@ -39,10 +39,18 @@ sub remote_use {
     return scalar(@_);    
 }
 
+sub call_use_lib {
+    my $self = shift;
+    for my $class (@_) {
+        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use lib '$class'");
+    }    
+    return scalar(@_);    
+}
+
 sub use_remote {
     my $self = shift;
     for my $class (@_) {
-        $self->remote_use($class);
+        $self->call_use($class);
         $self->_implement_class_locally_to_proxy($class);
     }
     return scalar(@_);
@@ -65,10 +73,9 @@ sub bind_variables {
         else {
             $full_var = $caller . '::' . substr($var,1);
         }
-        
         my $src = '\\' . $type . $full_var . ";\n";
         print $src;
-        my $r = $self->remote_eval($src);
+        my $r = $self->call_eval($src);
         die $@ if $@;
         print "got $r\n";
         $src = '*' . $full_var . ' = $r' . ";\n";
@@ -77,9 +84,6 @@ sub bind_variables {
         die $@ if $@;
     }    
 }
-
-
-
 
 =pod
 
@@ -93,16 +97,16 @@ RMI::Client - a connection to an RMI::Server
  $o = $c->call_class_method('IO::File','new','/tmp/myfile');
 
  $c1 = RMI::Client::Tcp->new(host => 'server1', port => 1234);
- $c1->remote_use('Sys::Hostname');
+ $c1->call_use('Sys::Hostname');
  $host = $c1->call_function('Sys::Hostname::hostname')
  $host eq 'server1'; #!
  
  $c2 = RMI::Client::ForkedPipes->new();
- $pid = $c2->remote_eval('$$');
+ $pid = $c2->call_eval('$$');
  $pid != $$;
  
- $h1 = $c1->remote_eval({ k1 => 111, k2 => 222, k3 => 333});
- @keys = $c2->remote_eval('sort keys %{ $_[0] }', $h1);
+ $h1 = $c1->call_eval({ k1 => 111, k2 => 222, k3 => 333});
+ @keys = $c2->call_eval('sort keys %{ $_[0] }', $h1);
  is_deeply(\@keys,['k1','k2','k3']);
  
 =head1 DESCRIPTION

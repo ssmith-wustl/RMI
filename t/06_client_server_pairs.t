@@ -10,7 +10,7 @@ use RMI::TestClass1;
 use_ok("RMI::Client::ForkedPipes");
 my $c1 = RMI::Client::ForkedPipes->new(); # auto-creates its own server
 ok($c1, "created an RMI::Client::ForkedPipes");
-is($c1->remote_eval("2+2"),4,"link works");
+is($c1->call_eval("2+2"),4,"link works");
 
 use_ok("RMI::Client::Tcp");
 use_ok("RMI::Server::Tcp");
@@ -21,7 +21,7 @@ if ($child_pid) {
     sleep 1;
     my $c2 = RMI::Client::Tcp->new();
     ok($c2, "created a client connected to the server");
-    is($c2->remote_eval("2+2"),4,"remote eval works");
+    is($c2->call_eval("2+2"),4,"remote eval works");
     kill $child_pid;
 }
 else {
@@ -61,7 +61,7 @@ print "fork parent\n";
 my $c2 = RMI::Client::NamedPipes->new(writer => "/tmp/serverin", reader => "/tmp/serverout");
 ok($c2, "created an RMI::Client::NamedPipes");
 print "about to query\n";
-is($c2->remote_eval("2+2"),4,"link works");
+is($c2->call_eval("2+2"),4,"link works");
 print "got result\n";
 
 __END__
@@ -74,8 +74,8 @@ sub expect_counts {
     my $actual_received = scalar(keys(%$received));
     is($actual_sent, $expected_sent, "  count of sent objects $actual_sent is $expected_sent, as expected");
     is($actual_received, $expected_received, "  count of received objects $actual_received is $expected_received, as expected");    
-    my ($remote_received) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_received_objects}}))');
-    my ($remote_sent) = $c->remote_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_sent_objects}}))');
+    my ($remote_received) = $c->call_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_received_objects}}))');
+    my ($remote_sent) = $c->call_eval('scalar(keys(%{$RMI::Node::executing_nodes[-1]->{_sent_objects}}))');
     is($remote_received,$actual_sent, "  count of remote received objects $remote_received matches actual sent count $actual_sent");
     is($remote_sent,$actual_received, "  count of remote received objects $remote_sent matches actual sent count $actual_received");
 }
@@ -95,7 +95,7 @@ is($result[1], 13, "result value $result[1] is as expected for 6 + 7");
 expect_counts(0,0);
 
 note("remote eval");
-my $rpid = $c->remote_eval('$$');
+my $rpid = $c->call_eval('$$');
 ok($rpid > $$, "got pid for other process: $rpid, which is > $$");
 expect_counts(0,0);
 

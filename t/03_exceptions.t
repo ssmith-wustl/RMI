@@ -20,7 +20,7 @@ eval { local_exception(1,2,3) };
 ok($@,'generated local exception');
 ok($@ =~ /local exception/, "exception is correct") or diag($@);
 
-eval { $c->remote_eval("die 'remote exception'"); };
+eval { $c->call_eval("die 'remote exception'"); };
 ok($@,'generated a remote exception!');
 ok($@ =~ /remote exception/, "exception is correct") or diag($@);
 

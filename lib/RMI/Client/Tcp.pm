@@ -62,7 +62,7 @@ RMI::Client::Tcp - do RMI over a TCP/IP socket
         host => 'myserver.com', # defaults to 'localhost'
         port => 1234            # defaults to 10293
     );
-    $c->remote_use('IO::File');
+    $c->call_use('IO::File');
     $remote_fh = $c->call_class_method('IO::File', 'new', '/my/file');
     print <$remote_fh>;
     
