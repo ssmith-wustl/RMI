@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 31;
+use Test::More tests => 32;
 use FindBin;
 use lib $FindBin::Bin;
 use RMI::TestClass2;
@@ -44,6 +44,11 @@ is($v2,'333',"pop works");
 my $v1 = pop @$a;
 is($v1,'three',"pop works again");
 is($remote1->last_arrayref_as_string(), "one:111:two:2222", " contents on the remote side match");
+
+eval { @$a = (11,22) };
+ok(!$@, "reset of the array contents works (preivously a bug b/c Tie::StdArray has no implementation of EXTEND.")
+    or diag($@);
+
 
 ###################
 

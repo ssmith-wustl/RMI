@@ -30,9 +30,15 @@ sub AUTOLOAD {
     my $o = $_[0];
     my ($c,$n,$v,$t,$delegate_class) = @$o;
     my $node = $RMI::Node::node_for_object{$t} || $n;
-    print "$RMI::DEBUG_MSG_PREFIX R: $$ array $method from $o ($n,$v,$t) redirecting to node $node with @_\n" if $RMI::DEBUG;
+    my @s = map { ref($_) . '~' . $_ } @_;
+    print "$RMI::DEBUG_MSG_PREFIX R: $$ reference calling $method in $delegate_class from $o ($n,$v,$t) through node $node with " . join(",", @s) . "\n" if $RMI::DEBUG;
     unless ($node) {
         die "no node for reference $o: method $method for @_ (@$o)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+    }
+    # inheritance doesn't work this one method
+    # TODO: make a custom sub-class for these instead of using Tie::StdX directly
+    if ($delegate_class eq 'Tie::StdArray' and $method eq 'EXTEND') {
+        $delegate_class = 'Tie::Array';
     }
     $node->send_request_and_receive_response(undef, $delegate_class . '::' . $method, @_);
 }
@@ -51,3 +57,71 @@ sub DESTROY {
 }
 
 1;
+
+=pod
+
+=head1 NAME
+
+RMI::ProxyReference - used internally by RMI::Node to tie references
+    
+=head1 DESCRIPTION
+
+When an refrerence is detected in the params or return value for an RMI
+call, the sending RMI::Node (client sending params or server sending
+results) captures a reference to the item internally, generates an "id"
+for that object, and sends the "id" across the handle instead.
+
+When the remote side recieves the "id", it also recieves an indication
+that this is the id of a proxied reference, an indication of what Perl
+base type it is (SCALAR,ARRAY,HASH,CODE,GLOB/IO), and what class it is
+blessed-into, if any.  The remote side constructs a reference of
+the appropriate type, and uses "tie" to bind it to this package.
+
+All subsequent attempst to use the reference fire AUTOLOAD,
+and result in a request across the "wire" to the other side.
+
+Note: if the reference is blessed, it also blesses the object as an
+B<RMI::ProxyObject>.  Because bless and tie are independent, a
+single reference can be blessed and tied to two independent
+classes, one for method call resolution, and one for usage of
+the reference as a HASH ref, ARRAY ref, CODE ref, etc.
+
+Details of Perl tie are somewhat esoteric, but it is worth mentioning
+that tying a reference $o results in an additional, separate object
+being created, which is the invocant above whenever activity on the
+reference occurs.  That second object is managed internally by Perl,
+though we are able to use it to store the identify of $o on the "real" side,
+along with information about the RMI::Node through which to proxy
+calls.
+
+Note: CODE references are not tied, and do not use this class.  A
+proxy for a code reference is generated as an anonymous subrotine
+which makes a remote call via its RMI::Node upon execute.
+
+=back
+
+=head1 METHODS
+
+The RMI::ProxyReference implements TIEHASH TIEARRAY TIESCALAR and
+TIEHANDLE with a single implementation.  All other methods are
+implemented by proxying back to the original side via AUTOLOAD.
+
+On the local side, attempts to access the real reference go through
+Tie::StdArray, Tie::StdHash, Tie::StdScalar and Tie::StdHandle.  Note
+that we do not _actually_ "tie" the real reference on the original side
+before sending it.  These methods work just fine with the 
+
+
+=head1 BUGS AND CAVEATS
+
+=item references tied by RMI::ProxyReference cannot be tied to other things
+
+See general bugs in B<RMI> for general system limitations
+
+=head1 SEE ALSO
+
+B<RMI> B<RMI::ProxyObject>
+
+B<Tie::Scalar> B<Tie::Array> B<Tie::Hash> B<Tie::Handle>
+
+=cut

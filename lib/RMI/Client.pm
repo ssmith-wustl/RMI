@@ -80,5 +80,55 @@ sub bind_variables {
 
 
 
+
+=pod
+
+=head1 NAME
+
+RMI::Client - a connection to an RMI::Server
+
+=head1 SYNOPSIS
+
+ $c = RMI::Client->new(reader => $fh1, writer => $fh2);
+ $o = $c->call_class_method('IO::File','new','/tmp/myfile');
+
+ $c1 = RMI::Client::Tcp->new(host => 'server1', port => 1234);
+ $c1->remote_use('Sys::Hostname');
+ $host = $c1->call_function('Sys::Hostname::hostname')
+ $host eq 'server1'; #!
+ 
+ $c2 = RMI::Client::ForkedPipes->new();
+ $pid = $c2->remote_eval('$$');
+ $pid != $$;
+ 
+ $h1 = $c1->remote_eval({ k1 => 111, k2 => 222, k3 => 333});
+ @keys = $c2->remote_eval('sort keys %{ $_[0] }', $h1);
+ is_deeply(\@keys,['k1','k2','k3']);
+ 
+=head1 DESCRIPTION
+
+This is the base class for a standard RMI connection to an RMI::Server.
+
+
+=head1 METHODS
+
+
+=head1 EXAMPLES
+
+
+
+=head1 BUGS AND CAVEATS
+
+See general bugs in B<RMI> for general system limitations
+
+=head1 SEE ALSO
+
+B<RMI::Server> B<RMI::Client>
+
+B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
+
+=cut
+
+
 1;
 

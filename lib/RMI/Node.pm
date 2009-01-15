@@ -206,7 +206,7 @@ sub _process_query {
         }
         else {
             no strict 'refs';
-           if (not defined $wantarray) {
+            if (not defined $wantarray) {
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ function call with undef wantarray\n" if $RMI::DEBUG;                            
                 $m->(@p);
             }
@@ -254,15 +254,15 @@ sub _serialize {
         if ($type = ref($o)) {
             if ($type eq "RMI::ProxyObject" or $proxied_classes{$type}) {
                 my $key = $RMI::Node::remote_id_for_object{$o};
-                $key ||= $$o;
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;
             }
             elsif ($type eq "RMI::ProxyReference") {
-                # when a proxied reference has activity occur, the object is sent by its tied "object"
+                # This only happens from inside of AUTOLOAD in RMI::ProxyReference.
+                # There is some other reference in the system which has been tied, and this object is its
+                # surrogate.  We need to make sure that reference is deserialized on the other side.
                 my $key = $RMI::Node::remote_id_for_object{$o};
-                $key ||= $o->[2];
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
                 next;
@@ -315,25 +315,26 @@ sub _deserialize {
             # primitive value
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
             push @unserialized, $value;
-        }   
+        }
         elsif ($type == 1 or $type == 3) {
             # exists on the other side: make a proxy
             my $o = $received_objects->{$value};
             unless ($o) {
                 my ($remote_class,$remote_shape) = ($value =~ /^(.*?=|)(.*?)\(/);
                 chop $remote_class;
+                my $t;
                 if ($remote_shape eq 'ARRAY') {
                     $o = [];
-                    tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
+                    $t = tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
                 }
                 elsif ($remote_shape eq 'HASH') {
                     $o = {};
-                    tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
+                    $t = tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
                 }
                 elsif ($remote_shape eq 'SCALAR') {
                     my $anonymous_scalar;
                     $o = \$anonymous_scalar;
-                    tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
+                    $t = tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
                 }
                 elsif ($remote_shape eq 'CODE') {
                     my $sub_id = $value;
@@ -344,7 +345,7 @@ sub _deserialize {
                 }
                 elsif ($remote_shape eq 'GLOB' or $remote_shape eq 'IO') {
                     $o = \do { local *HANDLE };
-                    my $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
+                    $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
                 }
                 else {
                     die "unknown reference type for $remote_shape for $value!!";
@@ -359,15 +360,23 @@ sub _deserialize {
                 }
                 $received_objects->{$value} = $o;
                 Scalar::Util::weaken($received_objects->{$value});
-                $RMI::Node::node_for_object{"$o"} = $self;
-                $RMI::Node::remote_id_for_object{"$o"} = $value;
+                my $o_id = "$o";
+                my $t_id = "$t";
+                $RMI::Node::node_for_object{$o_id} = $self;
+                $RMI::Node::remote_id_for_object{$o_id} = $value;
+                if ($t) {
+                    # ensure calls to work with the "tie-buddy" to the reference
+                    # result in using the orinigla reference on the "real" side
+                    $RMI::Node::node_for_object{$t_id} = $self;
+                    $RMI::Node::remote_id_for_object{$t_id} = $value;
+                }
             }
             
             push @unserialized, $o;
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
         }
         elsif ($type == 2) {
-            # was a proxy on the other side: get the real object
+            # exists on this side, and was a proxy on the other side: get the real reference by id
             my $o = $sent_objects->{$value};
             print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
             push @unserialized, $o;
@@ -378,7 +387,6 @@ sub _deserialize {
     my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
     unless (@done == @$received_and_destroyed_ids) {
         print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
-        
     }
     return @unserialized;    
 }
@@ -426,7 +434,6 @@ sub _mk_ro_accessors {
 
 sub _implement_class_locally_to_proxy {
     my ($self,$class,$module) = @_;
-    $DB::single = 1;
     no strict 'refs';
     if ($class and not $module) {
         $module = $class;
@@ -487,5 +494,143 @@ sub _remote_has_sent {
     my $id = "$obj";
     my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
+
+=pod
+
+=head1 NAME
+
+RMI::Node - transparent proxying through IO handles
+
+=head1 SYNOPSIS
+
+    # make generic connected pipes for the sake of example
+    pipe($client_reader, $server_writer);  
+    pipe($server_reader,  $client_writer);     
+    $server_writer->autoflush(1);
+    $client_writer->autoflush(1);
+    
+    # make 2 nodes, one to act as a server, one as a client
+    $c = RMI::Node->new(
+        reader => $client_reader,
+        writer => $client_writer,
+    );
+    $s = RMI::Node->new(
+        writer => $server_reader,
+        reader => $server_writer,
+    );
+    
+    sub main::add { return $_[0] + $_[1] }
+    
+    if (fork()) {
+        # service one request and exit
+        $s->receive_request_and_send_response();
+        exit;
+    }
+    
+    # send one request and get the result
+    $sum = $c->send_request_and_receive_response('main', 'add', 5, 6);
+    
+    
+=head1 DESCRIPTION
+
+This is the base class for RMI::Client and RMI::Server.  RMI::Client and RMI::Server
+both implement a wrapper around the RMI::Node interface, with convenience methods
+around initiating the sending or receiving of messages.
+
+An RMI::Node object embeds the core methods for bi-directional communication.
+Because the server often has to make counter requests of the client, the pair
+will often switch functional roles several times in the process of servicing a
+particular call. This class is not technically abstract, and is fully functional in
+either the client or server role without subclassing.  Most direct coding against
+this API, however, should be done by implementors of new types of clients/servers.
+
+See B<RMI> for an overview of how clients and servers interact.  The documentation
+in this module will describe the general piping system between clients and servers.
+
+An RMI::Node requires that the reader/writer handles be explicitly specified at
+construction time.  It also requires and that the code which uses it is be wise
+about calling methods to send and recieve data which do not cause it to block
+indefinitely. :)
+
+=back
+
+=head1 METHODS
+
+=item ($result|@result) = send_request_and_recieve_response($wantarray,$object,$method,@params)
+
+This is the primary method used by nodes acting in a client-like capacity.
+
+ $wantarray:    1, '' or undef: the wantarray() value of the original calling code
+ $object:       the object or class on which the method is being called, may be undef for subroutine calls
+ $method:       the method to call on $object (even if $object is a class name), or the fully-qualified sub name
+ @params:       the values which should be passed to $method
+ 
+ $result|@result: the return value will be either a scalar or list, depending on the value of $wantarray
+
+ This method sends a method call request through the writer, and waits on a response from the reader.
+ It will handle a response with the answer, exception messages, and also handle counter-requests
+ from the server, which may occur b/c the server calls methods on objects passed as parameters.
+
+=item receive_request_and_send_response()
+
+ This method waits for a single request to be received from its reader handle, services
+ the request, and sends the results through the writer handle.
+ 
+ It is possible that, while servicing the request, it will make counter requests, and those
+ counter requests, may yield counter-counter-requests which call this method recursively.
+
+=item virtual_lib
+
+ This method returns an anonymous subroutine which can be used in a "use lib $mysub"
+ call, to cause subsequent "use" statements to go through this node to its partner.
+ 
+ e.x.:
+    use lib RMI::Client::Tcp-new(host=>'myserver',port=>1234)->virtual_lib;
+ 
+ 
+=head1 EXAMPLES
+
+=item make generic connected pipes for the sake of example
+    
+    # you should really make RMI::Client and RMI::Server subclasses, but..
+    
+    pipe($client_reader, $server_writer);  
+    pipe($server_reader,  $client_writer);     
+    $server_writer->autoflush(1);
+    $client_writer->autoflush(1);
+    
+    $c = RMI::Node->new(
+        reader => $client_reader,
+        writer => $client_writer,
+    );
+    
+    $s = RMI::Node->new(
+        writer => $server_reader,
+        reader => $server_writer,
+    );
+    
+    sub main::add { return $_[0] + $_[1] }
+    
+    if (fork()) {
+        # service one request and exit
+        $s->receive_request_and_send_response();
+        exit;
+    }
+    
+    # send one request and get the result
+    $sum = $c->send_request_and_receive_response('main', 'add', 5, 6);
+
+=head1 BUGS AND CAVEATS
+
+See general bugs in B<RMI> for general system limitations
+
+=head1 SEE ALSO
+
+B<RMI>, B<RMI::Server>, B<RMI::Client>
+
+B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
+
+=cut
+
 
 1;

@@ -106,3 +106,42 @@ sub _close_connection {
 }
 
 1;
+
+
+=pod
+
+=head1 NAME
+
+RMI::Server::Tcp - do RMI over a TCP/IP socket
+
+
+=head1 SYNOPSIS
+
+    $s = RMI::Server::Tcp->new(
+        port => 1234            # defaults to 10293
+    );
+    $s->run;
+    
+=head1 DESCRIPTION
+
+This subclass of RMI::Server makes a TCP/IP listening socket, and accepts
+multiple non-blocking IO connections.
+
+=back
+
+=head1 METHODS
+
+This class overrides the constructor for a default RMI::Server to make a
+listening socket.  Individual accepted connections get their own private
+subordinate RMI::Server of this class with which to interact.
+
+=head1 BUGS AND CAVEATS
+
+See general bugs in B<RMI> for general system limitations of proxied objects.
+
+=head1 SEE ALSO
+
+B<RMI>, B<RMI::Client::Tcp>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI::ProxyObject>
+
+=cut
+

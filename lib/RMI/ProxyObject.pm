@@ -58,3 +58,49 @@ sub DESTROY {
 
 1;
 
+=pod
+
+=head1 NAME
+
+RMI::ProxyObject - used internally by RMI::Node to create proxy stubs
+    
+=head1 DESCRIPTION
+
+The full explanation of how references, blessed and otherwise, are
+proxied across an RMI::Client/RMI::Server pair (or any RMI::Node pair)
+is in R<RMI::ProxyReference>.
+
+When the object to be proxied is blessed into a class, the proxy
+is blessed into the RMI::RemoteProxy class.
+
+Note that RMI::ProxyObjects are also "tied" to the package B<RMI::ProxyReference>,
+which handles attempts to use the reference as a plain Perl reference.
+
+=back
+
+=head1 METHODS
+
+This class implements
+AUTOLOAD, and directs all method calls across the connection which
+created it to the remote side for actual execution.
+
+It also overrides isa() and can() to simulate the class
+it represents.
+
+=head1 BUGS AND CAVEATS
+
+=item the object is not 100% transparent
+
+Ways to detect that an object is an RMI::ProxyObject are:
+1. ref($obj) will return "RMI::ProxyObject" unless the entire class
+has been proxied (with $client->use_remote('SomeClass').
+2. "$obj" will stringify to "RMI::ProxyObject=SOMETYPE(...)", though
+this will probaby be changed at a future date.
+
+See general bugs in B<RMI> for general system limitations of proxied objects.
+
+=head1 SEE ALSO
+
+B<RMI>, B<RMI::ProxyReference>, B<RMI::Node>
+
+=cut
