@@ -30,8 +30,7 @@ sub AUTOLOAD {
     my $o = $_[0];
     my ($c,$n,$v,$t,$delegate_class) = @$o;
     my $node = $RMI::Node::node_for_object{$t} || $n;
-    my @s = map { ref($_) . '~' . $_ } @_;
-    print "$RMI::DEBUG_MSG_PREFIX R: $$ reference calling $method in $delegate_class from $o ($n,$v,$t) through node $node with " . join(",", @s) . "\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX R: $$ reference calling $method in $delegate_class from $o ($n,$v,$t) through node $node with " . join(",", @_) . "\n" if $RMI::DEBUG;
     unless ($node) {
         die "no node for reference $o: method $method for @_ (@$o)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }

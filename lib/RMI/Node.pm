@@ -361,7 +361,7 @@ sub _deserialize {
                 $received_objects->{$value} = $o;
                 Scalar::Util::weaken($received_objects->{$value});
                 my $o_id = "$o";
-                my $t_id = "$t";
+                my $t_id = "$t" if defined $t;
                 $RMI::Node::node_for_object{$o_id} = $self;
                 $RMI::Node::remote_id_for_object{$o_id} = $value;
                 if ($t) {
