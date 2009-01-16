@@ -62,38 +62,67 @@ sub DESTROY {
 
 =head1 NAME
 
-RMI::ProxyObject - used internally by RMI::Node to create proxy stubs
+RMI::ProxyObject - a transparent proxy to a remote object
     
 =head1 DESCRIPTION
+
+Any time an RMI::Client or RMI::Server "passes" an object as a parameter 
+or a return value, an RMI::ProxyObject is created on the other side.  
+
+These are not constructed by directly calling methods of this class.  
+Construction of RMI::ProxyObjects is internal to RMI::Node operation.
+
+Note that RMI::ProxyObjects are also "tied" to the package 
+B<RMI::ProxyReference>, which handles attempts to use the reference 
+as a plain Perl reference.
 
 The full explanation of how references, blessed and otherwise, are
 proxied across an RMI::Client/RMI::Server pair (or any RMI::Node pair)
 is in B<RMI::ProxyReference>.
 
-When the object to be proxied is blessed into a class, the proxy
-is blessed into the RMI::RemoteProxy class.
-
-Note that RMI::ProxyObjects are also "tied" to the package B<RMI::ProxyReference>,
-which handles attempts to use the reference as a plain Perl reference.
-
 =head1 METHODS
 
-This class implements
-AUTOLOAD, and directs all method calls across the connection which
-created it to the remote side for actual execution.
+The goal of objects of this class is to simulate a specific object
+on the other side of a specific RMI::Node (RMI::Client or RMI::Server).
 
-It also overrides isa() and can() to simulate the class
-it represents.
+As such, it does not have its own API.  It overrides the four key
+methods in ways which are key to its ability to delegate:
+
+=over 4
+
+=item AUTOLOAD
+
+This class implements AUTOLOAD, and directs all method calls across the 
+connection which created it to the remote side for actual execution.
+
+=item isa
+
+Since calls to isa() will not fire AUTOLOAD, we override isa() explicitly
+to redirect through the RMI::Node which owns the object in question.
+
+=item can 
+
+Since calls to can() will also not fire AUTOLOAD, we override can() explicitly
+to redirect through the RMI::Node which owns the object in question.
+
+=item DESTROY
+
+The DESTROY handler manages ensuring that the remote side reduces its reference
+count and can do correct garbage collection.
+
+=back
 
 =head1 BUGS AND CAVEATS
 
 =over 
 
-=item the object is not 100% transparent
+=item the proxy object is not 100% transparent
 
 Ways to detect that an object is an RMI::ProxyObject are:
+
  1. ref($obj) will return "RMI::ProxyObject" unless the entire class
 has been proxied (with $client->use_remote('SomeClass').
+
  2. "$obj" will stringify to "RMI::ProxyObject=SOMETYPE(...)", though
 this will probaby be changed at a future date.
 
