@@ -27,8 +27,8 @@ sub call_object_method {
 }
 
 sub call_eval {
-    my ($self,$src) = @_;
-    return $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', $src);
+    my ($self,$src,@params) = @_;
+    return $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', $src, @params);
 }
 
 sub call_use {
@@ -50,15 +50,24 @@ sub call_use_lib {
 sub use_remote {
     my $self = shift;
     my $class = shift;
-    $self->call_use($class, @_);
-    $self->_bind_local_class_to_remote($class);
-    $self->_bind_local_vars_to_remote('@' . $class . '::ISA');
+    $self->_bind_local_class_to_remote($class, undef, @_);
+    $self->_bind_local_var_to_remote('@' . $class . '::ISA');
     return 1;
 }
 
 sub use_lib_remote {
     my $self = shift;
     unshift @INC, $self->virtual_lib;
+}
+
+sub bind {
+    my $self = shift;
+    if (substr($_[0],0,1) =~ /\w/) {
+        $self->_bind_local_class_to_remote(@_);
+    }
+    else {
+        $self->_bind_local_var_to_remote(@_);
+    }
 }
 
 =pod

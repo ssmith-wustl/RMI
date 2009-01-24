@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 16;
+use Test::More tests => 21;
 use FindBin;
 use lib $FindBin::Bin;
 use IO::File;
@@ -27,7 +27,8 @@ ok(!RMI::TestClass1->can("new"), "test class has not been used before we proxy i
 ok(!@matches, "the test class has never been used in this process");
           
 eval { $c->use_remote("RMI::TestClass1"); };
-ok(!$@, "*** test class now chas been proxied!! ***") or diag($@);
+ok(!$@, "*** test class now has been proxied!! ***") or diag($@);
+
 my $constructor = RMI::TestClass1->can("new");
 ok($constructor, "constructor is now available for the test class");
 my $path = $INC{"RMI/TestClass1.pm"};
@@ -45,6 +46,23 @@ isa_ok($remote1,"RMI::TestClass1", "isa returns true when used with the proxied 
 
 is($remote1->m1, $c->peer_pid, "object method returns a value indicating it ran in the other process");
 ok($remote1->m1 != $$, "object method returns a value indicating it did not run in this process");
+
+my($rv,$h);
+
+note("export does not happen when prevented");
+$rv = $c->use_remote('Sys::Hostname',[]);
+ok($rv, 'used Sys::Hostname set to export the hostname() function');
+$h = eval { hostname() };
+ok($@, "exception when calling hostname() unqualified as expected")
+    or diag("return value from hostname() call was: $h");
+    
+note("export works when not explicitly prevented");
+$rv = $c->use_remote('Sys::Hostname');
+ok($rv, 'used Sys::Hostname set to export the hostname() function');
+$h = eval { hostname() };
+ok(!$@, "no exception when calling hostname() unqualified: export worked!")
+    or diag("exception was: $@");
+ok(length($h) > 0, "got a hostname $h");
 
 ok($c->close, "closed the client connection");
 exit;

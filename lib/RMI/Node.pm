@@ -395,7 +395,7 @@ sub _deserialize {
 # it allows requests for remote eval to be re-written as a static method call
 
 sub _eval {
-    my $src = $_[0];
+    my $src = shift;
     if (wantarray) {
         my @result = eval $src;
         die $@ if $@;
@@ -449,33 +449,46 @@ sub _mk_ro_accessors {
 
 # this proxies an entire class instead of just a single object
 
-sub _bind_local_vars_to_remote {
+sub _bind_local_var_to_remote {
     my $self = shift;
-    my $caller = caller();
-    my $full_var;
-    for my $var (@_) {
-        my $type = substr($var,0,1);
-        if (index($var,'::')) {
-            $full_var = substr($var,1);
-        }
-        else {
-            $full_var = $caller . '::' . substr($var,1);
-        }
-        my $src = '\\' . $type . $full_var . ";\n";
-        #print $src;
-        my $r = $self->call_eval($src);
-        die $@ if $@;
-        #print "got $r\n";
-        $src = '*' . $full_var . ' = $r' . ";\n";
-        #print $src;
-        eval $src;
-        die $@ if $@;
+    my $local_var = shift;
+    my $remote_var = (@_ ? shift : $local_var);
+    
+    my $type = substr($local_var,0,1);
+    if (index($local_var,'::')) {
+        $local_var = substr($local_var,1);
     }
-    return scalar(@_);
+    else {
+        my $caller = caller();
+        $local_var = $caller . '::' . substr($local_var,1);
+    }
+
+    unless ($type eq substr($remote_var,0,1)) {
+        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
+    }
+    if (index($remote_var,'::')) {
+        $remote_var = substr($remote_var,1);
+    }
+    else {
+        my $caller = caller();
+        $remote_var = $caller . '::' . substr($remote_var,1);
+    }
+    
+    my $src = '\\' . $type . $remote_var . ";\n";
+    my $r = $self->call_eval($src);
+    die $@ if $@;
+    $src = '*' . $local_var . ' = $r' . ";\n";
+    eval $src;
+    die $@ if $@;
+    return 1;
 }
 
 sub _bind_local_class_to_remote {
-    my ($self,$class,$module) = @_;
+    my $self = shift;
+    my $class = shift;
+    my $module = shift;
+    my $use_args = shift;
+    
     no strict 'refs';
     if ($class and not $module) {
         $module = $class;
@@ -487,20 +500,57 @@ sub _bind_local_class_to_remote {
         $class =~ s/\//::/g;
         $class =~ s/.pm$//; 
     }
+    print "using $class/$module with args " . Data::Dumper::Dumper($use_args);
+    
     if (my $prior = $proxied_classes{$class}) {
-        if ($prior == $self) {
-            die "class $class has already been proxied by this RMI client!";            
-        }
-        else {
+        if ($prior != $self) {
             die "class $class has already been proxied by another RMI client: $prior!";
         }
-    }    
-    if (my $path = $INC{$module}) {
+        else {
+            # allow re-use b/c import params may vary
+        }
+    }
+    elsif (my $path = $INC{$module}) {
         die "module $module has already been used from path: $path";
     }
-    my $path = $self->call_eval("use $class; \$INC{'$module'}");
+    my $n = $self->call_eval('$RMI::Exported::count++');
+    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
+    my $src = "
+        package $tmp_package_to_catch_exports;
+        require $class;
+        my \@exports = ();
+        print qq{use params are: } . Data::Dumper::Dumper(\@_);
+        if (\$_[0]) {
+            if (\@{\$_[0]}) {
+                print qq/importing with \@{\$_[1]}\n/;
+                $class->import(\@{\$_[0]});
+                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+            }
+            else {
+                print qq/no import because of empty list!\n/;
+            }
+        }
+        else {
+            print qq/default import!\n/;
+            $class->import();
+            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+        }
+        return (\$INC{'$module'}, \@exports);
+    ";
+    print "eval with params!  count: " . scalar(@$use_args) . " values: @$use_args\n" if $use_args;
+    my ($path, @exported) = $self->call_eval($src,$use_args);
+    print "export of $class got keys @exported\n";
     for my $sub (qw/AUTOLOAD DESTROY can isa/) {
         *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    if (@exported) {
+        my $caller ||= caller(0);
+        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
+        for my $sub (@exported) {
+            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            print "bind pair $pair[0] to $pair[1]\n";
+            $self->_bind_local_var_to_remote(@pair);
+        }
     }
     $proxied_classes{$class} = $self;
     $INC{$module} = -1; #$path;
