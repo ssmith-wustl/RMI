@@ -17,7 +17,6 @@ sub call_function {
 
 sub call_class_method {
     my ($self,$class,$method,@params) = @_;
-    $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
     return $self->send_request_and_receive_response($class, $method, @params);
 }
 
@@ -32,11 +31,7 @@ sub call_eval {
 }
 
 sub call_use {
-    my $self = shift;
-    for my $class (@_) {
-        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
-    }    
-    return scalar(@_);    
+    shift->SUPER::_call_use(@_);
 }
 
 sub call_use_lib {
@@ -78,9 +73,13 @@ RMI::Client - a connection for requesting remote objects and processing
 
 =head1 SYNOPSIS
 
-
+ # typical
  $c = RMI::Client::Tcp->new(host => 'server1', port => 1234);
+ 
+ # simple
  $c = RMI::Client::ForkedPipes->new();
+ 
+ # roll-your-own...
  $c = RMI::Client->new(reader => $fh1, writer => $fh2); # generic
  
  $c->call_use('IO::File');
@@ -93,16 +92,16 @@ RMI::Client - a connection for requesting remote objects and processing
  $host = $c->call_function('Sys::Hostname::hostname')
  $host eq 'server1'; #!
  
- $h1 = $c->call_eval('$main::h = { k1 => 111, k2 => 222, k3 => 333}'); 
- $h1->{k4} = 444;
- print sort keys %$h1;
- print $c->call_eval('sort keys %$main::h');
+ $remote_hashref = $c->call_eval('$main::h = { k1 => 111, k2 => 222, k3 => 333}'); 
+ $remote_hashref->{k4} = 444;
+ print sort keys %$remote_hashref;
+ print $c->call_eval('sort keys %$main::h'); # includes changes!
 
- $c->use_remote('Sys::Hostname');
- $host = Sys::Hostname::hostname(); # lie!
+ $c->use_remote('Sys::Hostname');   # this whole package is on the other side
+ $host = Sys::Hostname::hostname(); # possibly not this hostname...
 
  BEGIN {$c->use_lib_remote;}
- use Some::Class; # remote!
+ use Some::Class;               # remote!
  
  # see the docs for B<RMI> for more examples...
  
