@@ -62,26 +62,41 @@ The RMI suite includes RMI::Client and RMI::Server classes.  An RMI::Client modu
 objects in a remote process which is running an RMI::Server, and use them via a "proxy".  The proxy object behaves
 as though it were the real object/reference, but redirects all interaction to the real object server.
 
-The proxying or objects via a remote stub goes by the term "RMI" in Java, "Remoting" in .NET, and is similar in functionalty
-to architectures such as CORBA, and the older DCOM.
+The proxying or objects via a remote stub goes by the term "RMI" in Java, "Drb" in Ruby, "PYRO" in Python,
+"Remoting" in .NET, and is similar in functionalty to architectures such as CORBA, and the older DCOM.
 
 =head1 PROXY OBJECTS AND REFERENCES
 
-Parameters and results for remote method calls (and also plain subroutine calls, and call_eval() calls) are passed
-as transparent proxies when they are references of any sort.  This includes objects, and also HASH refrences, ARRAY
-references, SCALAR references, GLOBs/IO-handles, and CODE references, including closures.  Proxy objects are also
-usable as their primitive Perl type, in addition to dispatching method calls.  
+A proxy object is an object on one "side" of an RMI connection which represents an object which really exists
+on the other side.  When an RMI::Client calls a method on its associated RMI::Server, and that method returns
+a reference of any kind, including an object, a proxy is made on the client side, rather than a copy.  The proxy
+object appears to be another reference to the real object, but internally it engages in messaging across the
+client to the server for all method calls, dereferencing, etc.  It contains no actual data, and implements no
+actual methods.
 
-As such there is NO "SERIALIZATION" of data structures.  When a method returns a hashref, the client gets something
-which looks and acts like a hashref, but access to it results in activity across the client-server connection.
+By the same token, when a client passes objects or other references to the server as parameters to a method call,
+the server generates a proxy for those objects, so that the remote method call may "call back" the client for
+detailed access to the objects it passed.
 
-Objects and references keep state in the process in which they originate.  Only parameters and return values which
-are non-reference values are passed to the other side by copy.
+The choice to proxy by default rather than generate a copy on the remote side by default is distinct from some
+remoting systems.  It is, of course, possible to explicitly ask the server to serialize a given object, but because
+a serialized object may not behave the same way when it has lost its environment, this is not the default behavior.
 
-When a parameter is a reference, the sender keeps a link to the object in question for the receiver, and sends
-the receiver an ID for the item.  The receiver produces a proxy reference, which calls back to the sender for
-all attempts to interact with it.  Upon destruction on the reciever side, a message is sent to the sender to expire
-its link to the item in question, and allow garbage collection if no other references exist.
+Proxied objects are only revealed as such by a call to ref(), which reveals the object is actually an RMI::ProxyObject.
+Calls to isa() and can() are proxied across the connection to the remote side, and will maintain the correct API.
+Remote objects which implement AUTOLOAD for their API will still work correctly.
+
+Plain proxied references, and also proxied object, are also tied so as to operate as the correct type of Perl primitive.
+SCALAR, ARRAY, HASH, CODE and GLOB/IO references, blessed or otherwise, will be proxied as the same type of reference
+on the other side.  The RMI system uses Perl's "tie" functionality to do this, and as a result proxied objects cannot
+be further tied on the destination side.
+
+=head1 GARBAGE COLLECTION
+
+Until a proxy is destroyed, the side which sent the reference will keep an additional reference to the real object,
+both to facilitate proxying, and to prevent garbage collection.  Upon destruction on the reciever side, a message
+is sent to the sender to expire its link to the item in question, and allow garbage collection if no other
+references exist.
 
 =head1 TYPES OF CLIENTS AND SERVERS
 
@@ -136,18 +151,18 @@ to be indented.
 
 =item Proxied objects/references reveal that they are proxies when ref($o) is called on them, unless the entire package is proxied with ->use_remote.
 
-  There is no way to override this, as far as I know.
+  There is no way to override ref(), as far as I know.
 
 =item No inherent security is built-in.
 
- Writing a wrapper for an RMI::Server which limits the calls it supports, and the data
- returnable would be easy, but it has not been done.  Specifically, turning off
- call_eval() is wise in untrusted environments.
+  Writing a wrapper for an RMI::Server which limits the calls it supports, and the data
+  returnable would be easy, but it has not been done.  Specifically, turning off
+  call_eval() is wise in untrusted environments.
 
 =item Calls to "use_remote" will proxy subroutine calls, but not package variable access automatically.
 
-
-  Also implementable, but this does not happen automatically.  Perhaps it should for @ISA?
+  Also implementable, but this does not happen automatically except for @ISA in the current
+  implementation.
   
   $c->use_remote("Some::Package");
   # $Some::Package::foo is NOT bound to the remote variable of the same name
@@ -155,6 +170,13 @@ to be indented.
   *Some::Package::foo = $c->call_eval('\\$Some::Package::foo');
   # now it is...
 
+=item Calls to "call_use" and "use_remote" will not "export" methods into the caller's namespace
+
+  This can be accomplised explicitly as needed.  A future release may do this automatically.
+  
+  $client->call_use("Sys::Hostname");
+  $client->bind('&hostname' => '&Sys::Hostname::hostname()');
+  
 =back
 
 =head1 BUGS
