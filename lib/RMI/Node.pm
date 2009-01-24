@@ -408,15 +408,6 @@ sub _eval {
     }
 }
 
-sub _use {
-    my $self = shift;
-    my $pkg = shift;
-    my @args = @_;
-    eval "use $pkg;";
-    die $@ if $@;
-}
-
-
 sub _use_lib {
     my $self = shift;
     my @args = @_;
@@ -485,10 +476,52 @@ sub _bind_local_var_to_remote {
 
 sub _bind_local_class_to_remote {
     my $self = shift;
+    my ($class,$module,$path,@exported) = $self->_call_use(@_);
+    my $re_bind = 0;
+    if (my $prior = $proxied_classes{$class}) {
+        if ($prior != $self) {
+            die "class $class has already been proxied by another RMI client: $prior!";
+        }
+        else {
+            # re-binding a class to the same remote side doesn't hurt,
+            # and allowing it allows the effect of export to occur
+            # in multiple places on the client side.
+        }
+    }
+    elsif (my $path = $INC{$module}) {
+        die "module $module has already been used locally from path: $path";
+    }
+    no strict 'refs';
+    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    if (@exported) {
+        my $caller ||= caller(0);
+        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
+        for my $sub (@exported) {
+            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            print "bind pair $pair[0] to $pair[1]\n";
+            $self->_bind_local_var_to_remote(@pair);
+        }
+    }
+    $proxied_classes{$class} = $self;
+    $INC{$module} = -1; #$path;
+    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
+sub _call_use {
+    my $self = shift;
     my $class = shift;
     my $module = shift;
     my $use_args = shift;
-    
+
+    my @exported;
+    my $path;
+    ($class,$module,$path, @exported) = $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_use', $class,$module, defined($use_args), @$use_args);
+    return ($class,$module,$path,@exported);
+
+=pod
+
     no strict 'refs';
     if ($class and not $module) {
         $module = $class;
@@ -502,17 +535,6 @@ sub _bind_local_class_to_remote {
     }
     print "using $class/$module with args " . Data::Dumper::Dumper($use_args);
     
-    if (my $prior = $proxied_classes{$class}) {
-        if ($prior != $self) {
-            die "class $class has already been proxied by another RMI client: $prior!";
-        }
-        else {
-            # allow re-use b/c import params may vary
-        }
-    }
-    elsif (my $path = $INC{$module}) {
-        die "module $module has already been used from path: $path";
-    }
     my $n = $self->call_eval('$RMI::Exported::count++');
     my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
     my $src = "
@@ -539,22 +561,55 @@ sub _bind_local_class_to_remote {
     ";
     print "eval with params!  count: " . scalar(@$use_args) . " values: @$use_args\n" if $use_args;
     my ($path, @exported) = $self->call_eval($src,$use_args);
-    print "export of $class got keys @exported\n";
-    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
-        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    return ($class,$module,$path,@exported);
+=cut
+
+}
+
+sub _receive_use {
+    my $self = $RMI::Node::executing_nodes[-1];
+    my ($class,$module,$has_args,@use_args) = @_;
+    
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
     }
-    if (@exported) {
-        my $caller ||= caller(0);
-        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
-        for my $sub (@exported) {
-            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "bind pair $pair[0] to $pair[1]\n";
-            $self->_bind_local_var_to_remote(@pair);
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+    #print "using $class/$module with args " . Data::Dumper::Dumper($has_args);
+    
+    my $n = $RMI::Exported::count++;
+    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
+    my $src = "
+        package $tmp_package_to_catch_exports;
+        require $class;
+        my \@exports = ();
+        if (\$has_args) {
+            if (\@use_args) {
+                $class->import(\@use_args);
+                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+            }
+            else {
+                # print qq/no import because of empty list!/;
+            }
         }
-    }
-    $proxied_classes{$class} = $self;
-    $INC{$module} = -1; #$path;
-    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+        else {
+            $class->import();
+            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+        }
+        return (\$INC{'$module'}, \@exports);
+    ";
+    #print "eval with params!  count: " . scalar(@use_args) . " values: @use_args\n" if $has_args;
+    #print $src;
+    my ($path, @exported) = eval($src);
+    die $@ if $@;
+    #print "got " . Data::Dumper::Dumper($path,\@exported);
+    return ($class,$module,$path,@exported);
 }
 
 sub virtual_lib {
