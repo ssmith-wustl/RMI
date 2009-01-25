@@ -192,7 +192,7 @@ sub _bind_local_class_to_remote {
 
 =head1 NAME
 
-RMI::Client - a connection for requesting remote objects and processing 
+RMI::Client - work with out-of-process objects and data transparently
 
 =head1 SYNOPSIS
 
@@ -320,6 +320,16 @@ side for a class.  If available, it will do use_remote() on that class.
  use C; #remote!
  use D; #remote!
  use E; #local, b/c not found on the remote side
+
+=item bind($varname)
+
+Create a local transparent proxy for a package variable on the remote side.
+
+  $c->bind('$Some::Package::somevar')
+  $Some::Package::somevar = 123; # changed remotely
+  
+  $c->bind('@main::foo');
+  push @main::foo, 11, 22 33; #changed remotely
 
 =back
 
