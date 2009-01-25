@@ -5,6 +5,8 @@ use warnings;
 use version;
 our $VERSION = qv('0.1');
 
+$SIG{__DIE__} = sub { goto \&Carp::confess };
+
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
 use RMI::Node;
@@ -12,6 +14,9 @@ use RMI::Client;
 use RMI::Server;
 use RMI::ProxyObject;
 use RMI::ProxyReference;
+
+our @executing_nodes; # required for some methods on the remote side to find the RMI node acting upon them
+our %proxied_classes; # tracks classes which have been fully proxied into this process by some client
 
 # turn on debug messages if an environment variable is set
 our $DEBUG;
