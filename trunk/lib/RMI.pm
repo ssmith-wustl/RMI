@@ -5,8 +5,6 @@ use warnings;
 use version;
 our $VERSION = qv('0.1');
 
-$SIG{__DIE__} = sub { goto \&Carp::confess };
-
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
 use RMI::Node;
