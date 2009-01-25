@@ -18,7 +18,7 @@ unless ($child_pid) {
     do { no warnings; $RMI::DEBUG_MSG_PREFIX = ' '; };
 
     # a grandchild kills the child after 3 seconds
-    if (1) {
+    if (0) {
         unless (fork()) {
             my $c = RMI::Client::Tcp->new();
             sleep 2;
