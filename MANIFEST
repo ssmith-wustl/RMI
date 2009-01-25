@@ -39,3 +39,4 @@ t/RMI
 t/RMI/TestClass.pm
 t/RMI/TestClass1.pm
 t/RMI/TestClass2.pm
+update-distfiles.sh

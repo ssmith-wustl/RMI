@@ -148,10 +148,6 @@ to be indented.
 
 =over 2
 
-=item Anything which relies on caller() to check the call stack may not work as intended.
-
-  This means that some modules which perform magic during import() may not work as intended.
-
 =item Proxied objects/references reveal that they are proxies when ref($o) is called on them, unless the entire package is proxied with ->use_remote.
 
   There is no way to override ref(), as far as I know.
@@ -172,13 +168,6 @@ to be indented.
   
   *Some::Package::foo = $c->call_eval('\\$Some::Package::foo');
   # now it is...
-
-=item Calls to "call_use" and "use_remote" will not "export" methods into the caller's namespace
-
-  This can be accomplised explicitly as needed.  A future release may do this automatically.
-  
-  $client->call_use("Sys::Hostname");
-  $client->bind('&hostname' => '&Sys::Hostname::hostname()');
   
 =back
 
@@ -214,6 +203,10 @@ to be indented.
   
   Packages which implement this surprise behavior include Compress::Zlib!  If this feature were added
   the overhead to Compress::Zlib would still make you want to wrap the call...
+
+=item Anything which relies on caller() to check the call stack may not work as intended.
+
+  This means that some modules which perform magic during import() may not work as intended.
 
 =item The serialization mechanism needs to be made more robust and efficient.
 
