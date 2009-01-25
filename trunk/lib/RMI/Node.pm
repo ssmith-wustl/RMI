@@ -49,6 +49,38 @@ sub send_request_and_receive_response {
     return $self->_receive_response($wantarray); 
 }
 
+sub receive_request_and_send_response {
+    my ($self) = @_;    
+    for (1) {
+        # this will occur once, or more than once if we get a counter-request
+        my ($type, $incoming_data) = $self->_receive();
+        unless (defined $type) {
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ shutting down\n" if $RMI::DEBUG;
+            $self->{is_closed} = 1;
+            return;
+        }
+        if ($type eq 'query') {
+            $self->_process_query($incoming_data);
+            redo;
+        }
+        else {
+            die "$RMI::DEBUG_MSG_PREFIX N: $$ recieved $type directly from client instead of query?!";
+        }
+    }
+    return;
+}
+
+# private API
+
+# manage what data has been passed through the connection either way
+_mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
+
+# required for some methods on the remote side to find the RMI node acting upon them
+our @executing_nodes; 
+
+# tracks classes which have been fully proxied in the process of the client.
+our %proxied_classes;
+
 sub _send_request {
     my ($self, $wantarray, $o, $m, @p) = @_;
     my $hout = $self->{writer};
@@ -80,7 +112,7 @@ sub _receive_response {
     my ($self,$wantarray) = @_;    
     for (1) {
         # this will occur once, or more than once if we get a counter-request
-        my ($type, $incoming_data) = $self->_read();
+        my ($type, $incoming_data) = $self->_receive();
         if (not defined $type) {
             die "$RMI::DEBUG_MSG_PREFIX N: $$ connection failure before result returned!";
         }
@@ -109,28 +141,8 @@ sub _receive_response {
     return;
 }
 
-sub receive_request_and_send_response {
-    my ($self) = @_;    
-    for (1) {
-        # this will occur once, or more than once if we get a counter-request
-        my ($type, $incoming_data) = $self->_read();
-        unless (defined $type) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ shutting down\n" if $RMI::DEBUG;
-            $self->{is_closed} = 1;
-            return;
-        }
-        if ($type eq 'query') {
-            $self->_process_query($incoming_data);
-            redo;
-        }
-        else {
-            die "$RMI::DEBUG_MSG_PREFIX N: $$ recieved $type directly from client instead of query?!";
-        }
-    }
-    return;
-}
 
-sub _read {
+sub _receive {
     my ($self) = @_;
     my $hin = $self->{reader};
     my $hout = $self->{writer};
@@ -161,14 +173,6 @@ sub close {
 
 # the real work is done by 4 methods, 4 object-level tracked data structures, and 2 global data structures...
 
-# object-level data structurs
-_mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
-
-# required for the implementation of proxied CODE references
-our @executing_nodes; 
-
-# tracks classes which have been fully proxied in the process of the client.
-our %proxied_classes;
 
 sub _process_query {
     my ($self,$incoming_data) = @_;
@@ -394,27 +398,6 @@ sub _deserialize {
 # this wraps Perl eval($src) in a method so that it can be called from the remote side
 # it allows requests for remote eval to be re-written as a static method call
 
-sub _eval {
-    my $src = shift;
-    if (wantarray) {
-        my @result = eval $src;
-        die $@ if $@;
-        return @result;        
-    }
-    else {
-        my $result = eval $src;
-        die $@ if $@;
-        return $result;
-    }
-}
-
-sub _use_lib {
-    my $self = shift;
-    my @args = @_;
-    eval "use lib \@args;";
-    die $@ if $@;
-}
-
 # this is used when a CODE ref is proxied, since you can't tie CODE refs..
 
 sub _exec_coderef_for_id {
@@ -438,75 +421,40 @@ sub _mk_ro_accessors {
     push @{ $class . '::properties'}, @_;
 }
 
-# this proxies an entire class instead of just a single object
+# methods used by the client and server
+# note that the explicit client and server can change roles in an exchange, so either
+# can actually call either of these pairs in some cases...
 
-sub _bind_local_var_to_remote {
-    my $self = shift;
-    my $local_var = shift;
-    my $remote_var = (@_ ? shift : $local_var);
-    
-    my $type = substr($local_var,0,1);
-    if (index($local_var,'::')) {
-        $local_var = substr($local_var,1);
-    }
-    else {
-        my $caller = caller();
-        $local_var = $caller . '::' . substr($local_var,1);
-    }
-
-    unless ($type eq substr($remote_var,0,1)) {
-        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
-    }
-    if (index($remote_var,'::')) {
-        $remote_var = substr($remote_var,1);
-    }
-    else {
-        my $caller = caller();
-        $remote_var = $caller . '::' . substr($remote_var,1);
-    }
-    
-    my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $self->call_eval($src);
-    die $@ if $@;
-    $src = '*' . $local_var . ' = $r' . ";\n";
-    eval $src;
-    die $@ if $@;
-    return 1;
+sub _call_eval {
+    my ($self,$src,@params) = @_;
+    return $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_eval', $src, @params);    
 }
 
-sub _bind_local_class_to_remote {
+sub _receive_eval {
+    my $src = shift;
+    if (wantarray) {
+        my @result = eval $src;
+        die $@ if $@;
+        return @result;        
+    }
+    else {
+        my $result = eval $src;
+        die $@ if $@;
+        return $result;
+    }
+}
+
+sub _call_use_lib {
     my $self = shift;
-    my ($class,$module,$path,@exported) = $self->_call_use(@_);
-    my $re_bind = 0;
-    if (my $prior = $proxied_classes{$class}) {
-        if ($prior != $self) {
-            die "class $class has already been proxied by another RMI client: $prior!";
-        }
-        else {
-            # re-binding a class to the same remote side doesn't hurt,
-            # and allowing it allows the effect of export to occur
-            # in multiple places on the client side.
-        }
-    }
-    elsif (my $path = $INC{$module}) {
-        die "module $module has already been used locally from path: $path";
-    }
-    no strict 'refs';
-    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
-        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
-    }
-    if (@exported) {
-        my $caller ||= caller(0);
-        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
-        for my $sub (@exported) {
-            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "bind pair $pair[0] to $pair[1]\n";
-            $self->_bind_local_var_to_remote(@pair);
-        }
-    }
-    $proxied_classes{$class} = $self;
-    $INC{$module} = -1; #$path;
-    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+    my $lib = shift;
+    return $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_use_lib', $lib);
+}
+
+sub _receive_use_lib {
+    my $self = $RMI::Node::executing_nodes[-1];
+    my $lib = shift;
+    require lib;
+    return lib->import($lib);
 }
 
 sub _call_use {
@@ -517,53 +465,9 @@ sub _call_use {
 
     my @exported;
     my $path;
+    
     ($class,$module,$path, @exported) = $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_use', $class,$module, defined($use_args), @$use_args);
     return ($class,$module,$path,@exported);
-
-=pod
-
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
-    }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
-    }
-    print "using $class/$module with args " . Data::Dumper::Dumper($use_args);
-    
-    my $n = $self->call_eval('$RMI::Exported::count++');
-    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
-    my $src = "
-        package $tmp_package_to_catch_exports;
-        require $class;
-        my \@exports = ();
-        print qq{use params are: } . Data::Dumper::Dumper(\@_);
-        if (\$_[0]) {
-            if (\@{\$_[0]}) {
-                print qq/importing with \@{\$_[1]}\n/;
-                $class->import(\@{\$_[0]});
-                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-            }
-            else {
-                print qq/no import because of empty list!\n/;
-            }
-        }
-        else {
-            print qq/default import!\n/;
-            $class->import();
-            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-        }
-        return (\$INC{'$module'}, \@exports);
-    ";
-    print "eval with params!  count: " . scalar(@$use_args) . " values: @$use_args\n" if $use_args;
-    my ($path, @exported) = $self->call_eval($src,$use_args);
-    return ($class,$module,$path,@exported);
-=cut
-
 }
 
 sub _receive_use {
@@ -612,6 +516,80 @@ sub _receive_use {
     return ($class,$module,$path,@exported);
 }
 
+
+# this proxies a single variable
+
+sub _bind_local_var_to_remote {
+    my $self = shift;
+    my $local_var = shift;
+    my $remote_var = (@_ ? shift : $local_var);
+    
+    my $type = substr($local_var,0,1);
+    if (index($local_var,'::')) {
+        $local_var = substr($local_var,1);
+    }
+    else {
+        my $caller = caller();
+        $local_var = $caller . '::' . substr($local_var,1);
+    }
+
+    unless ($type eq substr($remote_var,0,1)) {
+        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
+    }
+    if (index($remote_var,'::')) {
+        $remote_var = substr($remote_var,1);
+    }
+    else {
+        my $caller = caller();
+        $remote_var = $caller . '::' . substr($remote_var,1);
+    }
+    
+    my $src = '\\' . $type . $remote_var . ";\n";
+    my $r = $self->call_eval($src);
+    die $@ if $@;
+    $src = '*' . $local_var . ' = $r' . ";\n";
+    eval $src;
+    die $@ if $@;
+    return 1;
+}
+
+# this proxies an entire class instead of just a single object
+
+sub _bind_local_class_to_remote {
+    my $self = shift;
+    my ($class,$module,$path,@exported) = $self->_call_use(@_);
+    my $re_bind = 0;
+    if (my $prior = $proxied_classes{$class}) {
+        if ($prior != $self) {
+            die "class $class has already been proxied by another RMI client: $prior!";
+        }
+        else {
+            # re-binding a class to the same remote side doesn't hurt,
+            # and allowing it allows the effect of export to occur
+            # in multiple places on the client side.
+        }
+    }
+    elsif (my $path = $INC{$module}) {
+        die "module $module has already been used locally from path: $path";
+    }
+    no strict 'refs';
+    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    if (@exported) {
+        my $caller ||= caller(0);
+        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
+        for my $sub (@exported) {
+            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            print "bind pair $pair[0] to $pair[1]\n";
+            $self->_bind_local_var_to_remote(@pair);
+        }
+    }
+    $proxied_classes{$class} = $self;
+    $INC{$module} = -1; #$path;
+    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
 sub virtual_lib {
     my $self = shift;
     my $virtual_lib = sub {
@@ -638,13 +616,13 @@ sub virtual_lib {
 sub _remote_has_ref {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_receive_eval", 'exists $RMI::Node::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_receive_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
 
 =pod
