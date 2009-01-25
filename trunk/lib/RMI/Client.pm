@@ -340,15 +340,21 @@ Create a local transparent proxy for a package variable on the remote side.
 =item Making a remote hashref
 
 This makes a hashref on the server, and makes a proxy on the client:
+
     my $fake_hashref = $c->call_eval('{}');
 
-This seems to put a key in the hash, but actually sends a message to the server to modify the hash.
+This seems to put a key in the hash, but actually sends a message to the server
+to modify the hash.
+
     $fake_hashref->{key1} = 100;
 
 Lookups also result in a request to the server:
+
     print $fake_hashref->{key1};
 
-When we do this, the hashref on the server is destroyed, as since the ref-count on both sides is now zero:
+When we do this, the hashref on the server is destroyed, as since the ref-count
+on both sides is now zero:
+
     $fake_hashref = undef;
 
 =item Making a remote CODE ref, and using it with a mix of local and remote objects

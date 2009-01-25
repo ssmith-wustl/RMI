@@ -634,21 +634,21 @@ The serialization process has two stages:
 An array of message_data of length n to is converted to have a length of n*2.
 Each value is preceded by an integer which categorizes the value.
 
- - 0   a primitive, non-reference value
+  0    a primitive, non-reference value
        
        The value itself follows, and is passed by-copy.
        
- - 1   an object reference originating on the sender's side
+  1    an object reference originating on the sender's side
  
        A unique identifier for the object follows instead of the object.
        The remote side should construct a transparent proxy which uses that ID.
        
- - 2   a non-object (unblessed) reference originating on the sender's side
+  2    a non-object (unblessed) reference originating on the sender's side
        
        A unique identifier for the reference follows, instead of the reference.
        The remote side should construct a transparent proxy which uses that ID.
        
- - 3   passing-back a proxy: a reference which originated on the receiver's side
+  3    passing-back a proxy: a reference which originated on the receiver's side
        
        The following value is the identifier the remote side sent previously.
        The remote side should substitue the original object when deserializing
