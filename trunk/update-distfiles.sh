@@ -1,5 +1,5 @@
 echo updating MANIFEST...
-find * | grep -v svn >|MANIFEST
+find * -type f | grep -v svn >|MANIFEST
 echo updating README from POD in RMI.pm...
 /usr/bin/perldoc -t lib/RMI.pm >|README
 
