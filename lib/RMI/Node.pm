@@ -95,8 +95,8 @@ sub receive_request_and_send_response {
     my ($self) = @_;
     my ($message_type, $message_data) = $self->_receive();
     if ($message_type eq 'query') {
-        $self->_process_query($message_data);
-        return 1;
+        my ($response_type, $response_data) = $self->_process_query($message_data);
+        return ($message_type, $message_data, $response_type, $response_data);
     }
     elsif ($message_type eq 'close') {
         return;
@@ -113,6 +113,8 @@ _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids 
 sub _send {
     my ($self, $message_type, $message_data) = @_;
     my $s = $self->_serialize($message_type,$message_data);    
+    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG;
     return $self->{writer}->print($s,"\n");                
 }
 
@@ -120,17 +122,17 @@ sub _receive {
     my ($self) = @_;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
 
-    my $incoming_text = $self->{reader}->getline;
-    if (not defined $incoming_text) {
+    my $serialized_blob = $self->{reader}->getline;
+    if (not defined $serialized_blob) {
         # a failure to get data returns a message type of 'close', and undefined message_data
         print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
         $self->{is_closed} = 1;
         return ('close',undef);
     }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
-    print "\n" if $RMI::DEBUG and not defined $incoming_text;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got $serialized_blob" if $RMI::DEBUG;
+    print "\n" if $RMI::DEBUG and not defined $serialized_blob;
     
-    my ($message_type,$message_data) = $self->_deserialize($incoming_text);
+    my ($message_type,$message_data) = $self->_deserialize($serialized_blob);
     return ($message_type, $message_data);
 }
 
@@ -219,7 +221,7 @@ sub _serialize {
             if ($type eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
-                push @serialized, 2, $key;
+                push @serialized, 3, $key;
                 next;
             }
             elsif ($type eq "RMI::ProxyReference") {
@@ -228,7 +230,7 @@ sub _serialize {
                 # surrogate.  We need to make sure that reference is deserialized on the other side.
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
-                push @serialized, 2, $key;
+                push @serialized, 3, $key;
                 next;
             }            
             else {
@@ -250,7 +252,7 @@ sub _serialize {
                 }
                 else {
                     # regular reference
-                    $code = 3;
+                    $code = 2;
                 }
                 
                 push @serialized, $code, $key;
@@ -261,11 +263,13 @@ sub _serialize {
             push @serialized, 0, $o;
         }
     }
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @serialized\n" if $RMI::DEBUG;
+
     @$message_data = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;    
     
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as @serialized\n" if $RMI::DEBUG;
     my $serialized_blob = Data::Dumper->new([[$message_type, @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
     if ($serialized_blob =~ s/\n/ /gms) {
         die "newline found in message data!";
     }
@@ -306,7 +310,7 @@ sub _deserialize {
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
             push @message_data, $value;
         }
-        elsif ($type == 1 or $type == 3) {
+        elsif ($type == 1 or $type == 2) {
             # exists on the other side: make a proxy
             my $o = $received_objects->{$value};
             unless ($o) {
@@ -365,7 +369,7 @@ sub _deserialize {
             push @message_data, $o;
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
         }
-        elsif ($type == 2) {
+        elsif ($type == 3) {
             # exists on this side, and was a proxy on the other side: get the real reference by id
             my $o = $sent_objects->{$value};
             print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
@@ -383,7 +387,7 @@ sub _deserialize {
 }
 
 # This is used when a CODE ref is proxied, since you can't tie CODE refs.
-# it is in this class instead of the server, a coderef could be sent to the
+# It is in this class instead of the server, a coderef could be sent to the
 # server, causing the server to counter-query the client.
 
 sub _exec_coderef {
@@ -392,7 +396,6 @@ sub _exec_coderef {
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
     goto $sub;
 }
-
 
 # used for testing
 
@@ -421,119 +424,16 @@ sub _mk_ro_accessors {
     push @{ $class . '::properties'}, @_;
 }
 
-
 =pod
 
 =head1 NAME
 
-RMI::Node - base class for transparent proxying through IO handles
+RMI::Node - base class for RMI::Client and RMI::Server 
 
 =head1 SYNOPSIS
-
-    # make generic connected pipes for the sake of example
-    pipe($client_reader, $server_writer);  
-    pipe($server_reader,  $client_writer);     
-    $server_writer->autoflush(1);
-    $client_writer->autoflush(1);
     
-    # make 2 nodes, one to act as a server, one as a client
-    $c = RMI::Node->new(
-        reader => $client_reader,
-        writer => $client_writer,
-    );
-    $s = RMI::Node->new(
-        writer => $server_reader,
-        reader => $server_writer,
-    );
-    
-    sub main::add { return $_[0] + $_[1] }
-    
-    if (fork()) {
-        # service one request and exit
-        $s->receive_request_and_send_response();
-        exit;
-    }
-    
-    # send one request and get the result
-    $sum = $c->send_request_and_receive_response('main', 'add', 5, 6);
-    
-    
-=head1 DESCRIPTION
-
-This is the base class for RMI::Client and RMI::Server.  RMI::Client and RMI::Server
-both implement a wrapper around the RMI::Node interface, with convenience methods
-around initiating the sending or receiving of messages.
-
-An RMI::Node object embeds the core methods for bi-directional communication.
-Because the server often has to make counter requests of the client, the pair
-will often switch functional roles several times in the process of servicing a
-particular call. This class is not technically abstract, as it is fully functional in
-either the client or server role without subclassing.  Most direct coding against
-this API, however, should be done by implementors of new types of clients/servers.
-
-See L<RMI::Client> and L<RMI::Server> for the API against which application code
-should be written.  See B<RMI> for an overview of how clients and servers interact.
-The documentation in this module will describe the general piping system between
-clients and servers.
-
-An RMI::Node requires that the reader/writer handles be explicitly specified at
-construction time.  It also requires and that the code which uses it is be wise
-about calling methods to send and recieve data which do not cause it to block
-indefinitely. :)
-
-=back
-
-=head1 METHODS
-
-=item new(reader => $fh1, writer => $fh2)
-
- The constructor for RMI::Node objects requires that a reader and writer handle be provided.  They
- can be the same handle if the handle is bi-directional (as with TCP sockets, see L<RMI::Client::Tcp>).
-
-=item close()
-
- Closes handles, and does any additional required bookeeping.
- 
-=item ($result|@result) = send_request_and_recieve_response($call_type,$object,$method,$params,$opts)
-
-This is the primary method used by nodes acting in a client-like capacity.
-
- $call_type:    one of: call_object_method, call_class_method, or call_function, or one of several internal types
- $object:       the object or class on which the method is being called, may be undef for subroutine/function calls
- $method:       the method to call on $object (even if $object is a class name), or the fully-qualified sub name
- $params:       an optional arrayref of values which should be passed to $method
- $opts:         an optional hashref of values which can control/optimize message passing
- 
- $result|@result: the return value will be either a scalar or list, depending on the value of $wantarray
-
- This method sends a method call request through the writer, and waits on a response from the reader.
- It will handle a response with the answer, exception messages, and also handle counter-requests
- from the server, which may occur b/c the server calls methods on objects passed as parameters.
-
-=item receive_request_and_send_response()
-
- This method waits for a single request to be received from its reader handle, services
- the request, and sends the results through the writer handle.
- 
- It is possible that, while servicing the request, it will make counter requests, and those
- counter requests, may yield counter-counter-requests which call this method recursively.
-
-=item virtual_lib
-
- This method returns an anonymous subroutine which can be used in a "use lib $mysub"
- call, to cause subsequent "use" statements to go through this node to its partner.
- 
- e.x.:
-    use lib RMI::Client::Tcp-new(host=>'myserver',port=>1234)->virtual_lib;
- 
- If a client is constructed for other purposes in the application, the above
- can also be accomplished with: $client->use_lib_remote().  (See L<RMI::Client>)
- 
-=head1 EXAMPLES
-
-=item make generic connected pipes for the sake of example
-    
-    # you should really make RMI::Client and RMI::Server subclasses, but..
+    # applications should use B<RMI::Client> and B<RMI::Server>
+    # this example is for new client/server implementors
     
     pipe($client_reader, $server_writer);  
     pipe($server_reader,  $client_writer);     
@@ -568,6 +468,91 @@ This is the primary method used by nodes acting in a client-like capacity.
     # this only works on objects which are remote proxies:
     $txt = $c->send_request_and_receive_response('call_object_method', $robj, 'getline');
     
+=head1 DESCRIPTION
+
+This is the base class for RMI::Client and RMI::Server.  RMI::Client and RMI::Server
+both implement a wrapper around the RMI::Node interface, with convenience methods
+around initiating the sending or receiving of messages.
+
+An RMI::Node object embeds the core methods for bi-directional communication.
+Because the server often has to make counter requests of the client, the pair
+will often switch functional roles several times in the process of servicing a
+particular call. This class is not technically abstract, as it is fully functional in
+either the client or server role without subclassing.  Most direct coding against
+this API, however, should be done by implementors of new types of clients/servers.
+
+See B<RMI::Client> and B<RMI::Server> for the API against which application code
+should be written.  See B<RMI> for an overview of how clients and servers interact.
+The documentation in this module will describe the general piping system between
+clients and servers.
+
+An RMI::Node requires that the reader/writer handles be explicitly specified at
+construction time.  It also requires and that the code which uses it is be wise
+about calling methods to send and recieve data which do not cause it to block
+indefinitely. :)
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item new()
+  
+ $n = RMI::Node->new(reader => $fh1, writer => $fh2);
+
+The constructor for RMI::Node objects requires that a reader and writer handle be provided.  They
+can be the same handle if the handle is bi-directional (as with TCP sockets, see L<RMI::Client::Tcp>).
+
+=item close()
+
+ $n->close();
+
+Closes handles, and does any additional required bookeeping.
+ 
+=item send_request_and_recieve_response()
+
+ @result = $n->send_request_and_recieve_response($call_type,$object,$method,$params,$opts)
+
+ $fh = $n->send_request_and_receive_response('call_class_method', 'IO::File', 'new', ['/my/file'], {});
+
+This is the primary method used by nodes acting in a client-like capacity.
+
+ $call_type:    one of: call_object_method, call_class_method, or call_function, or one of several internal types
+ $object:       the object or class on which the method is being called, may be undef for subroutine/function calls
+ $method:       the method to call on $object (even if $object is a class name), or the fully-qualified sub name
+ $params:       an optional arrayref of values which should be passed to $method
+ $opts:         an optional hashref of values which can control/optimize message passing
+
+Return values:
+
+ $result|@result: the return value will be either a scalar or list, depending on the value of $wantarray
+
+This method sends a method call request through the writer, and waits on a response from the reader.
+It will handle a response with the answer, exception messages, and also handle counter-requests
+from the server, which may occur b/c the server calls methods on objects passed as parameters.
+
+=item receive_request_and_send_response()
+
+This method waits for a single request to be received from its reader handle, services
+the request, and sends the results through the writer handle.
+ 
+It is possible that, while servicing the request, it will make counter requests, and those
+counter requests, may yield counter-counter-requests which call this method recursively.
+
+=item virtual_lib()
+
+This method returns an anonymous subroutine which can be used in a "use lib $mysub"
+call, to cause subsequent "use" statements to go through this node to its partner.
+ 
+ e.x.:
+    use lib RMI::Client::Tcp-new(host=>'myserver',port=>1234)->virtual_lib;
+ 
+If a client is constructed for other purposes in the application, the above
+can also be accomplished with: $client->use_lib_remote().  (See L<RMI::Client>)
+
+=back
+    
 =head1 INTERNALS
 
 The RMI internals are built around sending a "message", which has a type, and an
@@ -576,48 +561,54 @@ type.
 
 The following message types are passed within the current implementation:
 
-=over 4
+=over 2
 
 =item query
 
-  A request that logic execute on the remote side on behalf of the sender.
-  This includes object method calls, class method calls, function calls,
-  remote calls to eval(), and requests that the remote side load modules,
-  add library paths, etc.
+A request that logic execute on the remote side on behalf of the sender.
+This includes object method calls, class method calls, function calls,
+remote calls to eval(), and requests that the remote side load modules,
+add library paths, etc.
   
-  This is the type for standard remote method invocatons.
+This is the type for standard remote method invocatons.
   
-  The message data contains, in order:
-  - method_name   This is the name of the method to call.
-                  This is a fully-qualified function name for plain function calls.
-  - wantarray     1, '', or undef, depending on the requestor's calling context.
-                  This is passed to the remote side, and also used on the
-                  local side to control how results are returned.
-  - object        A class name, or an object which is a proxy for something on the remote side.
-                  This value is undef for plain function calls.
-  - param1        The first parameter to the function/method call
-  - param2        The second parameter to the function/method call
-  - ...
-  
+The message data contains, in order:
+
+
+ - method_name  This is the name of the method to call.
+                This is a fully-qualified function name for plain function calls.
+
+ - wantarray    1, '', or undef, depending on the requestor's calling context.
+                This is passed to the remote side, and also used on the
+                local side to control how results are returned.
+
+ - object       A class name, or an object which is a proxy for something on the remote side.
+                This value is undef for plain function calls.
+
+ - param1       The first parameter to the function/method call
+
+ - ...          The next parameter to the function/method call
+
+
 =item result
 
-  The return value from a succesful "query" which does not result in an
-  exception being thrown on the remote side.
+The return value from a succesful "query" which does not result in an
+exception being thrown on the remote side.
   
-  The message data contains, the return value or vaues of that query.
+The message data contains, the return value or vaues of that query.
   
 =item exception
 
-  The response to a query which resulted in an exception on the remote side.
+The response to a query which resulted in an exception on the remote side.
   
-  The message data contains the value thrown via die() on the remote side.
+The message data contains the value thrown via die() on the remote side.
   
 =item close
 
-  Indicatees that the remote side has closed the connection.  This is actually
-  constructed on the receiver end when it fails to read from the input stream.
+Indicatees that the remote side has closed the connection.  This is actually
+constructed on the receiver end when it fails to read from the input stream.
   
-  The message data is undefined in this case.
+The message data is undefined in this case.
   
 =back
 
@@ -640,23 +631,27 @@ The serialization process has two stages:
 
 =item replacing references with identifiers used for remoting
 
-An array of message_data of length n to a length of n*2.  Each value is preceded
-by an integer which categorizes the following value.
+An array of message_data of length n to is converted to have a length of n*2.
+Each value is preceded by an integer which categorizes the value.
 
  - 0   a primitive, non-reference value
-       the value itself follows, and is passed by-copy
+       
+       The value itself follows, and is passed by-copy.
        
  - 1   an object reference originating on the sender's side
-       a unique identifier for the object follows, and the remote side
-       should construct a transparent proxy which uses it
+ 
+       A unique identifier for the object follows instead of the object.
+       The remote side should construct a transparent proxy which uses that ID.
        
  - 2   a non-object (unblessed) reference originating on the sender's side
-       a unique identifier for the reference follows, and the remote side
-       should construct a transparent proxy which uses it
        
- - 3   a reference which originated on the receiver's side
-       the following value is the identifier the remote side sent previously,
-       and it should replace that value with the real object when deserializing
+       A unique identifier for the reference follows, instead of the reference.
+       The remote side should construct a transparent proxy which uses that ID.
+       
+ - 3   passing-back a proxy: a reference which originated on the receiver's side
+       
+       The following value is the identifier the remote side sent previously.
+       The remote side should substitue the original object when deserializing
 
 Note that all references are turned into primitives by the above process.
 
@@ -669,6 +664,8 @@ objects of arbitrary depth, and is parsable without tremendous complexity.
 
 =back
 
+Details on how proxy objects and references function, and pose as the real item
+in question, are in B<RMI>, and B<RMI::ProxyObject> and B<RMI::ProxyReference>
 
 =head1 BUGS AND CAVEATS
 
@@ -676,7 +673,7 @@ See general bugs in B<RMI> for general system limitations
 
 =head1 SEE ALSO
 
-B<RMI>, B<RMI::Server>, B<RMI::Client>
+B<RMI>, B<RMI::Server>, B<RMI::Client>, B<RMI::ProxyObject>, B<RMI::ProxyReference>
 
 B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 

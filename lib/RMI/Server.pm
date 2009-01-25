@@ -120,7 +120,7 @@ RMI::Server - service remote RMI requests
 =head1 DESCRIPTION
 
 This is the base class for RMI::Servers, which accept requests
-for on an IO handle of some sort, execute code on behalf of the
+via an IO handle of some sort, execute code on behalf of the
 request, and send the return value back to the client.
 
 When the RMI::Server responds to a request which returns objects or references,
@@ -128,24 +128,43 @@ the items in question are not serialized back to the client.  Instead the client
 recieves an identifier, and creates a proxy object which uses the client
 to delegate method calls to its counterpart on the server.
 
-When objects or refrences are sent to an RMI server as parameters, the server
+When objects or references are sent to an RMI server as parameters, the server
 creates a proxy to represent them, and the client in effect becomes the
 server for those proxy objects.  The real reference stays on the client,
 and all interaction with the item in question during the invocation
 result in counter-requests being sent back to the client for method
 resolution on that end.
 
-See the detailed explanation of remote proxy references in the B<RMI> module.
-
-=back
+See the detailed explanation of remote proxy references in the B<RMI> general
+documentation.
 
 =head1 METHODS
 
-=item new(reader => $fh1, writer => $fh2)
+=over 4
+
+=item new()
+
+ $s = RMI::Server->new(reader => $fh1, writer => $fh2)
 
 This is typically overriden in a specific subclass of RMI::Server to construct
 the reader and writer according to a particular strategy.  It is possible for
-the reader and the writer to be the same handle, particularly for RMI::Server::Tcp.
+the reader and the writer to be the same handle, particularly for B<RMI::Server::Tcp>.
+
+=item receive_request_and_send_response()
+
+ $bool = $
+
+Implemented in the base class for all RMI::Node objects, this handles processing
+a single request from the reader handle.
+
+=item run()
+
+ $s->run();
+ 
+Enter a loop processing RMI requests.  This will continue as long as the
+connection is open.
+
+=back
 
 =head1 BUGS AND CAVEATS
 
