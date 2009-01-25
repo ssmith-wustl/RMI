@@ -42,11 +42,16 @@ sub new {
     return $self;
 }
 
+sub close {
+    my $self = $_[0];
+    $self->{reader}->close;
+    $self->{writer}->close;
+}
+
 sub send_request_and_receive_response {
-    my $self = shift;
+    my ($self, $o, $m, @p) = @_;
     my $wantarray = wantarray;
 
-    my ($o, $m, @p) = @_;
     my $hout = $self->{writer};
     my $hin = $self->{reader};
     my $sent_objects = $self->{_sent_objects};
@@ -54,6 +59,8 @@ sub send_request_and_receive_response {
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $os = $o || '<none>';
 
+    ## SEND
+    
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
 
     # pacakge the call and params for transmission
@@ -70,59 +77,80 @@ sub send_request_and_receive_response {
         die "failed to send! $!";
     }
 
-    for (1) {
-        # this will occur once, or more than once if we get a counter-request
-        my ($type, $incoming_data) = $self->_receive();
-        if (not defined $type) {
-            die "$RMI::DEBUG_MSG_PREFIX N: $$ connection failure before result returned!";
-        }
-        if ($type eq 'result') {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
-            my @result = $self->_deserialize($incoming_data);
-            if ($wantarray) {
-                return @result;
-            }
-            else {
-                return $result[0];
-            }
-        }
-        elsif ($type eq 'exception') {
-            my ($e) = $self->_deserialize($incoming_data);
-            die $e;
-        }
-        elsif ($type eq 'query') {
-            $self->_process_query($incoming_data);
-            redo;
-        }
-        else {
-            die "unexpected type $type";
-        }
+    ## RECEIVE
+    my @result = $self->_process_incoming_message();    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @result\n" if $RMI::DEBUG;
+    if ($wantarray) {
+        return @result;
     }
-    return;
+    else {
+        return $result[0];
+    }
 }
 
 sub receive_request_and_send_response {
-    my ($self) = @_;    
-    for (1) {
-        # this will occur once, or more than once if we get a counter-request
-        my ($type, $incoming_data) = $self->_receive();
-        unless (defined $type) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ shutting down\n" if $RMI::DEBUG;
-            $self->{is_closed} = 1;
-            return;
-        }
-        if ($type eq 'query') {
-            $self->_process_query($incoming_data);
-            redo;
-        }
-        else {
-            die "$RMI::DEBUG_MSG_PREFIX N: $$ recieved $type directly from client instead of query?!";
-        }
-    }
-    return;
+    my ($self) = @_;
+    eval { $self->_process_incoming_message(); };
+    if ($@) {
+       if ($@ =~ 'connection closed') {
+           $@ = undef;
+           return 1;
+       }
+       else {
+           die $@;
+       }        
+    }   
 }
 
 # private API
+
+# read either a query, a response, a counter query, or an exception
+sub _process_incoming_message {
+    my ($self) = @_;
+    my $hin = $self->{reader};
+    my $hout = $self->{writer};
+
+    for (1) {    
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
+        Carp::confess() unless $hin;
+        my $incoming_text = $hin->getline;
+        if (not defined $incoming_text) {
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
+            $self->{is_closed} = 1;
+            Carp::confess("connection closed");
+        }
+        else {
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
+            print "\n" if $RMI::DEBUG and not defined $incoming_text;
+            my $incoming_data = eval "no strict; no warnings; $incoming_text";
+            if ($@) {
+                die "Exception de-serializing message: $@";
+            }        
+    
+            my $type = shift @$incoming_data;
+    
+            if (! defined $type) {
+                die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($incoming_data);
+            }
+            elsif ($type eq 'query') {
+                $self->_process_query($incoming_data);
+                redo;
+            }
+            elsif ($type eq 'result') {
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
+                my @result = $self->_deserialize($incoming_data);
+                return @result;
+            }
+            elsif ($type eq 'exception') {
+                my ($e) = $self->_deserialize($incoming_data);
+                die $e;
+            }
+            else {
+                die "unexpected type $type";
+            }
+        }
+    }
+}
 
 # manage what data has been passed through the connection either way
 _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
@@ -133,41 +161,8 @@ our @executing_nodes;
 # tracks classes which have been fully proxied in the process of the client.
 our %proxied_classes;
 
-
-
-
-sub _receive {
-    my ($self) = @_;
-    my $hin = $self->{reader};
-    my $hout = $self->{writer};
-    
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
-    Carp::confess() unless $hin;
-    my $incoming_text = $hin->getline;
-    if (not defined $incoming_text) {
-        return;
-    }
-
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
-    print "\n" if $RMI::DEBUG and not defined $incoming_text;
-    my $incoming_data = eval "no strict; no warnings; $incoming_text";
-    if ($@) {
-        die "Exception: $@";
-    }        
-    my $type = shift @$incoming_data;
-
-    return ($type, $incoming_data);    
-}
-
-sub close {
-    my $self = $_[0];
-    $self->{reader}->close;
-    $self->{writer}->close;
-}
-
-# the real work is done by 4 methods, 4 object-level tracked data structures, and 2 global data structures...
-
-
+# this is called for messages which are queries in _process_incoming_message()
+# it is broken-out into its own method just for visual clarity
 sub _process_query {
     my ($self,$incoming_data) = @_;
 
@@ -243,6 +238,7 @@ sub _process_query {
     }    
 }
 
+# serialize params when sending a query, or results when sending a response
 sub _serialize {
     my ($self,$sent_objects,$received_objects,$received_and_destroyed_ids,$unserialized_values_arrayref) = @_;    
     my @serialized = ([@$received_and_destroyed_ids]);
@@ -299,6 +295,8 @@ sub _serialize {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     return (@serialized);
 }
+
+# deserialize params when receiving a query, or results when receiving a response
 
 sub _deserialize {
     my ($self, $serialized) = @_;
@@ -402,7 +400,7 @@ sub _exec_coderef_for_id {
 }
 
 
-# basic accessors
+# generate basic accessors w/o using any other Perl modules which might have proxy effects
 
 sub _mk_ro_accessors {
     no strict 'refs';
