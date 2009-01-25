@@ -45,8 +45,60 @@ sub new {
 sub send_request_and_receive_response {
     my $self = shift;
     my $wantarray = wantarray;
-    $self->_send_request($wantarray,@_);
-    return $self->_receive_response($wantarray); 
+
+    my ($o, $m, @p) = @_;
+    my $hout = $self->{writer};
+    my $hin = $self->{reader};
+    my $sent_objects = $self->{_sent_objects};
+    my $received_objects = $self->{_received_objects};
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    my $os = $o || '<none>';
+
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
+
+    # pacakge the call and params for transmission
+    my @px = $self->_serialize($sent_objects,$received_objects,$received_and_destroyed_ids,[$o,@p]);
+    my $s = Data::Dumper->new([['query',$m,$wantarray,@px]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    if ($s =~ /\n/) {
+        die "found a newline in dumper output!\n$s<\n";
+    }
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending $s\n" if $RMI::DEBUG;
+    
+    # send it
+    my $r = $hout->print($s,"\n");
+    unless ($r) {
+        die "failed to send! $!";
+    }
+
+    for (1) {
+        # this will occur once, or more than once if we get a counter-request
+        my ($type, $incoming_data) = $self->_receive();
+        if (not defined $type) {
+            die "$RMI::DEBUG_MSG_PREFIX N: $$ connection failure before result returned!";
+        }
+        if ($type eq 'result') {
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
+            my @result = $self->_deserialize($incoming_data);
+            if ($wantarray) {
+                return @result;
+            }
+            else {
+                return $result[0];
+            }
+        }
+        elsif ($type eq 'exception') {
+            my ($e) = $self->_deserialize($incoming_data);
+            die $e;
+        }
+        elsif ($type eq 'query') {
+            $self->_process_query($incoming_data);
+            redo;
+        }
+        else {
+            die "unexpected type $type";
+        }
+    }
+    return;
 }
 
 sub receive_request_and_send_response {
@@ -81,65 +133,7 @@ our @executing_nodes;
 # tracks classes which have been fully proxied in the process of the client.
 our %proxied_classes;
 
-sub _send_request {
-    my ($self, $wantarray, $o, $m, @p) = @_;
-    my $hout = $self->{writer};
-    my $hin = $self->{reader};
-    my $sent_objects = $self->{_sent_objects};
-    my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $os = $o || '<none>';
 
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
-
-    # pacakge the call and params for transmission
-    my @px = $self->_serialize($sent_objects,$received_objects,$received_and_destroyed_ids,[$o,@p]);
-    my $s = Data::Dumper->new([['query',$m,$wantarray,@px]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    if ($s =~ /\n/) {
-        die "found a newline in dumper output!\n$s<\n";
-    }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending $s\n" if $RMI::DEBUG;
-    
-    # send it
-    my $r = $hout->print($s,"\n");
-    unless ($r) {
-        die "failed to send! $!";
-    }
-    return $r;    
-}
-
-sub _receive_response {
-    my ($self,$wantarray) = @_;    
-    for (1) {
-        # this will occur once, or more than once if we get a counter-request
-        my ($type, $incoming_data) = $self->_receive();
-        if (not defined $type) {
-            die "$RMI::DEBUG_MSG_PREFIX N: $$ connection failure before result returned!";
-        }
-        if ($type eq 'result') {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
-            my @result = $self->_deserialize($incoming_data);
-            if ($wantarray) {
-                return @result;
-            }
-            else {
-                return $result[0];
-            }
-        }
-        elsif ($type eq 'exception') {
-            my ($e) = $self->_deserialize($incoming_data);
-            die $e;
-        }
-        elsif ($type eq 'query') {
-            $self->_process_query($incoming_data);
-            redo;
-        }
-        else {
-            die "unexpected type $type";
-        }
-    }
-    return;
-}
 
 
 sub _receive {
