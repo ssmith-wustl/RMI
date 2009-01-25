@@ -19,8 +19,6 @@ use Scalar::Util;
 use Carp;
 require 'Config_heavy.pl'; 
 
-our @executing_nodes; # required for some methods on the remote side to find the RMI node acting upon them
-our %proxied_classes; # tracks classes which have been fully proxied in the process of the client.
 
 # public API
 
@@ -29,6 +27,8 @@ _mk_ro_accessors(qw/reader writer/);
 sub new {
     my $class = shift;
     my $self = bless {
+        reader => undef,
+        writer => undef,
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
@@ -53,50 +53,71 @@ sub close {
 }
 
 sub send_request_and_receive_response {
-    my ($self, $object, $method, @params) = @_;
+    my ($self, $call_type, $object, $method, $params, $opts) = @_;
     my $wantarray = wantarray;
 
     if ($RMI::DEBUG) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $object: $method with @params\n";
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $object: $method with @$params\n";
     }
     
-    unless ($self->_send('query',[$object,@params],[$method,$wantarray])) {
-        die "failed to send! $!";
-    }
-
-    my ($type, @result);
-    while(1) {
-        ($type, @result) = $self->_receive();
-        last if ($type eq 'result');
-        return if ($type eq 'close');
-        if ($type eq 'query') {
-            $self->_send(@result);
+    $self->_send('query',[$method,$wantarray,$object,($params ? @$params : ())])
+        or die "failed to send! $!";
+    
+    for (1) {
+        my ($message_type, @message_data) = $self->_receive();
+        
+        if ($message_type eq 'result') {
+            if ($wantarray) {
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @message_data\n" if $RMI::DEBUG;
+                return @message_data;
+            }
+            else {
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $message_data[0]\n" if $RMI::DEBUG;
+                return $message_data[0];
+            }
+        }
+        elsif ($message_type eq 'close') {
+            return;
+        }
+        elsif ($message_type eq 'query') {
+            my ($return_type, $return_value_arrayref) = $self->_process_query(@message_data);
+            
+            # we MUST undef these in case they are the only references to remote objects which need to be destroyed
+            # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
+            @message_data = ();
+            
+            $self->_send($return_type, $return_value_arrayref);
             redo;
         }
-    }
-    
-    if ($wantarray) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @result\n" if $RMI::DEBUG;
-        return @result;
-    }
-    else {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $result[0]\n" if $RMI::DEBUG;
-        return $result[0];
-    }
+        elsif ($message_type eq 'exception') {
+            die $message_data[0];
+        }
+        else {
+            die "unexpected message type from RMI message: $message_type";
+        }
+    }    
 }
 
 sub receive_request_and_send_response {
     my ($self) = @_;
-    my ($type, @data) = $self->_receive();
-    if ($type eq 'close') {
-        return;
-    }
-    elsif ($type eq 'query') {
-        $self->_send(@data);
+    my ($message_type, @message_data) = $self->_receive();
+    
+    if ($message_type eq 'query') {
+        my ($return_type, $return_value_arrayref) = $self->_process_query(@message_data);
+        
+        # We MUST undef these before sending results.  The send procedure will tally all objects we no longer
+        # reference and update the remote side.  Without cutting our references here, actual garbage collection
+        # will lag behind on the remote side until the NEXT call (see test case 01).
+        @message_data = ();
+        
+        $self->_send($return_type, $return_value_arrayref);
         return 1;
     }
+    elsif ($message_type eq 'close') {
+        return;
+    }
     else {
-        die "Unexpected message type $type!  Data was:" . Data::Dumper::Dumper(\@data);
+        die "Unexpected message type $message_type!  message_data was:" . message_data::Dumper::Dumper(\@message_data);
     }        
 }
 
@@ -105,75 +126,38 @@ sub receive_request_and_send_response {
 _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
 
 sub _send {
-    my ($self, $type, $proxyables, $primitives) = @_;
-    my $s = $self->_serialize($type,$proxyables,$primitives);    
+    my ($self, $message_type, $proxyables) = @_;
+    die if @_ > 3;
+    my $s = $self->_serialize($message_type,$proxyables);    
     return $self->{writer}->print($s,"\n");                
 }
 
 sub _receive {
     my ($self) = @_;
-
     print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
+
     my $incoming_text = $self->{reader}->getline;
-    
     if (not defined $incoming_text) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
         $self->{is_closed} = 1;
         return ('close');
     }
-    
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
     print "\n" if $RMI::DEBUG and not defined $incoming_text;
     
-    my $incoming_data = eval "no strict; no warnings; $incoming_text";
-    if ($@) {
-        die "Exception de-serializing message: $@";
-    }        
-
-    my $type = shift @$incoming_data;
-    if (! defined $type) {
-        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($incoming_data);
-    }    
-
-    do {
-        no warnings;    
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (serialized): @$incoming_data\n" if $RMI::DEBUG;
-    };
-    
-    my @deserialized = $self->_deserialize($type,$incoming_data);
-    
-    if ($type eq 'query') {
-        my ($method,$wantarray,$object,@params) = @deserialized;
-        my ($return_type, $return_value_arrayref) = $self->_process_query($object,$method,\@params,$wantarray);
-        
-        # we MUST undef these in case they are the only references to remote objects which need to be destroyed
-        # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
-        $object = undef;
-        @params = ();
-        
-        return ('query', $return_type, $return_value_arrayref);
-    }
-    elsif ($type eq 'result') {
-        return ('result', @deserialized);
-    }
-    elsif ($type eq 'exception') {
-        die $deserialized[0];
-    }
-    else {
-        die "unexpected message type from RMI message: $type";
-    }
-    
+    return $self->_deserialize($incoming_text);
 }
 
 sub _process_query {
-    my ($self,$object,$method,$params,$wantarray) = @_;
-
+    my ($self,$method,$wantarray,$object,@params) = @_;
+    my $params = \@params;
+    
     do {    
         no warnings;
         print "$RMI::DEBUG_MSG_PREFIX N: $$ unserialized object $object and params: @$params\n" if $RMI::DEBUG;
     };
     
-    push @executing_nodes, $self;
+    push @RMI::executing_nodes, $self;
     
     my @result;
     eval {
@@ -211,7 +195,7 @@ sub _process_query {
         }
     };
     
-    pop @executing_nodes;
+    pop @RMI::executing_nodes;
     
     if ($@) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
@@ -225,7 +209,7 @@ sub _process_query {
 
 # serialize params when sending a query, or results when sending a response
 sub _serialize {
-    my ($self,$mtype,$proxyables,$primitives) = @_;    
+    my ($self,$mtype,$proxyables) = @_;    
     
     my $sent_objects = $self->{_sent_objects};
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
@@ -233,9 +217,10 @@ sub _serialize {
     my @serialized = ([@$received_and_destroyed_ids]);
     @$received_and_destroyed_ids = ();
     
+    Carp::confess() unless ref($proxyables);
     for my $o (@$proxyables) {
         if (my $type = ref($o)) {
-            if ($type eq "RMI::ProxyObject" or $proxied_classes{$type}) {
+            if ($type eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 2, $key;
@@ -284,7 +269,7 @@ sub _serialize {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $mtype serialized as @serialized\n" if $RMI::DEBUG;
-    my $s = Data::Dumper->new([[$mtype, ($mtype eq 'query' ? @$primitives : ()), @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    my $s = Data::Dumper->new([[$mtype, @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     if ($s =~ s/\n/ /gms) {
         die "newline found in message data!";
     }
@@ -294,13 +279,24 @@ sub _serialize {
 
 # deserialize params when receiving a query, or results when receiving a response
 sub _deserialize {
-    my ($self,$mtype,$serialized) = @_;
+    my ($self, $incoming_text) = @_;
+    
+    my $serialized = eval "no strict; no warnings; $incoming_text";
+    if ($@) {
+        die "Exception de-serializing message: $@";
+    }        
 
+    my $mtype = shift @$serialized;
+    if (! defined $mtype) {
+        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($serialized);
+    }    
+
+    do {
+        no warnings;    
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (serialized): @$serialized\n" if $RMI::DEBUG;
+    };
+    
     my @unserialized;
-    if ($mtype eq 'query') {
-        push @unserialized, shift @$serialized; # method
-        push @unserialized, shift @$serialized; # wantarray
-    }   
 
     my $sent_objects = $self->{_sent_objects};
     my $received_objects = $self->{_received_objects};
@@ -337,7 +333,7 @@ sub _deserialize {
                 elsif ($remote_shape eq 'CODE') {
                     my $sub_id = $value;
                     $o = sub {
-                        $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_exec_codref', $sub_id, @_);
+                        $self->send_request_and_receive_response('call_coderef', undef, 'RMI::Node::_exec_coderef', [$sub_id, @_]);
                     };
                     # TODO: ensure this cleans up on the other side when it is destroyed
                 }
@@ -349,7 +345,7 @@ sub _deserialize {
                     die "unknown reference type for $remote_shape for $value!!";
                 }
                 if ($type == 1) {
-                    if ($proxied_classes{$remote_class}) {
+                    if ($RMI::proxied_classes{$remote_class}) {
                         bless $o, $remote_class;
                     }
                     else {
@@ -386,225 +382,34 @@ sub _deserialize {
     unless (@done == @$received_and_destroyed_ids) {
         print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
     }
-    return @unserialized;    
+
+    return ($mtype,@unserialized);
 }
 
-# MESSAGING METHODS
+# This is used when a CODE ref is proxied, since you can't tie CODE refs.
+# it is in this class instead of the server, a coderef could be sent to the
+# server, causing the server to counter-query the client.
 
-# this wraps Perl eval($src) in a method so that it can be called from the remote side
-# it allows requests for remote eval to be re-written as a static method call
-
-sub _call_eval {
-    my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_eval', $src, @params);    
-}
-
-sub _receive_eval {
-    my $src = shift;
-    if (wantarray) {
-        my @result = eval $src;
-        die $@ if $@;
-        return @result;        
-    }
-    else {
-        my $result = eval $src;
-        die $@ if $@;
-        return $result;
-    }
-}
-
-# this is used when a CODE ref is proxied, since you can't tie CODE refs..
-
-sub _receive_exec_codref {
+sub _exec_coderef {
     my $sub_id = shift;
-    my $sub = $RMI::Node::executing_nodes[-1]{_sent_objects}{$sub_id};
+    my $sub = $RMI::executing_nodes[-1]{_sent_objects}{$sub_id};
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
     goto $sub;
 }
 
-# attempts to do 'use lib' remotely
-
-sub _call_use_lib {
-    my $self = shift;
-    my $lib = shift;
-    return $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_use_lib', $lib);
-}
-
-sub _receive_use_lib {
-    my $self = $RMI::Node::executing_nodes[-1];
-    my $lib = shift;
-    require lib;
-    return lib->import($lib);
-}
-
-# attempts to use/require modules remotely
-
-sub _call_use {
-    my $self = shift;
-    my $class = shift;
-    my $module = shift;
-    my $use_args = shift;
-
-    my @exported;
-    my $path;
-    
-    ($class,$module,$path, @exported) = $self->send_request_and_receive_response(undef, 'RMI::Node::_receive_use', $class,$module, defined($use_args), @$use_args);
-    return ($class,$module,$path,@exported);
-}
-
-sub _receive_use {
-    my $self = $RMI::Node::executing_nodes[-1];
-    my ($class,$module,$has_args,@use_args) = @_;
-    
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
-    }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
-    }
-    #print "using $class/$module with args " . Data::Dumper::Dumper($has_args);
-    
-    my $n = $RMI::Exported::count++;
-    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
-    my $src = "
-        package $tmp_package_to_catch_exports;
-        require $class;
-        my \@exports = ();
-        if (\$has_args) {
-            if (\@use_args) {
-                $class->import(\@use_args);
-                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-            }
-            else {
-                # print qq/no import because of empty list!/;
-            }
-        }
-        else {
-            $class->import();
-            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-        }
-        return (\$INC{'$module'}, \@exports);
-    ";
-    #print "eval with params!  count: " . scalar(@use_args) . " values: @use_args\n" if $has_args;
-    #print $src;
-    my ($path, @exported) = eval($src);
-    die $@ if $@;
-    #print "got " . Data::Dumper::Dumper($path,\@exported);
-    return ($class,$module,$path,@exported);
-}
-
-
-# this proxies a single variable
-
-sub _bind_local_var_to_remote {
-    my $self = shift;
-    my $local_var = shift;
-    my $remote_var = (@_ ? shift : $local_var);
-    
-    my $type = substr($local_var,0,1);
-    if (index($local_var,'::')) {
-        $local_var = substr($local_var,1);
-    }
-    else {
-        my $caller = caller();
-        $local_var = $caller . '::' . substr($local_var,1);
-    }
-
-    unless ($type eq substr($remote_var,0,1)) {
-        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
-    }
-    if (index($remote_var,'::')) {
-        $remote_var = substr($remote_var,1);
-    }
-    else {
-        my $caller = caller();
-        $remote_var = $caller . '::' . substr($remote_var,1);
-    }
-    
-    my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $self->call_eval($src);
-    die $@ if $@;
-    $src = '*' . $local_var . ' = $r' . ";\n";
-    eval $src;
-    die $@ if $@;
-    return 1;
-}
-
-# this proxies an entire class instead of just a single object
-
-sub _bind_local_class_to_remote {
-    my $self = shift;
-    my ($class,$module,$path,@exported) = $self->_call_use(@_);
-    my $re_bind = 0;
-    if (my $prior = $proxied_classes{$class}) {
-        if ($prior != $self) {
-            die "class $class has already been proxied by another RMI client: $prior!";
-        }
-        else {
-            # re-binding a class to the same remote side doesn't hurt,
-            # and allowing it allows the effect of export to occur
-            # in multiple places on the client side.
-        }
-    }
-    elsif (my $path = $INC{$module}) {
-        die "module $module has already been used locally from path: $path";
-    }
-    no strict 'refs';
-    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
-        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
-    }
-    if (@exported) {
-        my $caller ||= caller(0);
-        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
-        for my $sub (@exported) {
-            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
-            $self->_bind_local_var_to_remote(@pair);
-        }
-    }
-    $proxied_classes{$class} = $self;
-    $INC{$module} = -1; #$path;
-    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
-}
-
-sub virtual_lib {
-    my $self = shift;
-    my $virtual_lib = sub {
-        $DB::single = 1;
-        my $module = pop;
-        $self->_bind_local_class_to_remote(undef,$module);
-        my $sym = Symbol::gensym();
-        my $done = 0;
-        return $sym, sub {
-            if (! $done) {
-                $_ = '1;';
-                $done++;
-                return 1;
-            }
-            else {
-                return 0;
-            }
-        };
-    }
-}
 
 # used for testing
 
 sub _remote_has_ref {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_receive_eval", 'exists $RMI::Node::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response('call_eval', undef, "RMI::Server::_receive_eval", ['exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}']);
 }
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response(undef, "RMI::Node::_receive_eval", 'exists $RMI::Node::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response('call_eval', undef, "RMI::Server::_receive_eval", ['exists $RMI::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}']);
 }
 
 # this generate basic accessors w/o using any other Perl modules which might have proxy effects

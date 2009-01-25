@@ -16,6 +16,81 @@ sub run {
     return 1;
 }
 
+# REMOTE CALLBACKS
+
+# While these are logically methods on the server, they are the 
+# by the client to prevent the client from directly addressing
+# server internals.  They are invoked by comparable call_* methods
+# in the client class.
+
+sub _receive_use {
+    my $self = $RMI::executing_nodes[-1];
+    my ($class,$module,$has_args,@use_args) = @_;
+    
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
+    }
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+    #print "using $class/$module with args " . Data::Dumper::Dumper($has_args);
+    
+    my $n = $RMI::Exported::count++;
+    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
+    my $src = "
+        package $tmp_package_to_catch_exports;
+        require $class;
+        my \@exports = ();
+        if (\$has_args) {
+            if (\@use_args) {
+                $class->import(\@use_args);
+                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+            }
+            else {
+                # print qq/no import because of empty list!/;
+            }
+        }
+        else {
+            $class->import();
+            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+        }
+        return (\$INC{'$module'}, \@exports);
+    ";
+    #print "eval with params!  count: " . scalar(@use_args) . " values: @use_args\n" if $has_args;
+    #print $src;
+    my ($path, @exported) = eval($src);
+    die $@ if $@;
+    #print "got " . Data::Dumper::Dumper($path,\@exported);
+    return ($class,$module,$path,@exported);
+}
+
+sub _receive_use_lib {
+    my $self = $RMI::executing_nodes[-1];
+    my $lib = shift;
+    require lib;
+    return lib->import($lib);
+}
+
+sub _receive_eval {
+    my $src = shift;
+    if (wantarray) {
+        my @result = eval $src;
+        die $@ if $@;
+        return @result;        
+    }
+    else {
+        my $result = eval $src;
+        die $@ if $@;
+        return $result;
+    }
+}
+
+
 1;
 
 =pod
