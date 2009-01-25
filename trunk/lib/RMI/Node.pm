@@ -44,67 +44,59 @@ sub new {
 
 sub close {
     my $self = $_[0];
+    $self->{writer}->close unless $self->{reader} == $self->{writer};
     $self->{reader}->close;
-    $self->{writer}->close;
 }
 
 sub send_request_and_receive_response {
-    my ($self, $o, $m, @p) = @_;
+    my ($self, $object_or_class, $function_or_method, @params) = @_;
     my $wantarray = wantarray;
 
-    my $hout = $self->{writer};
-    my $hin = $self->{reader};
-    my $sent_objects = $self->{_sent_objects};
-    my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $os = $o || '<none>';
-
-    ## SEND
-    
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $os: $m with @p\n" if $RMI::DEBUG;
-
-    # pacakge the call and params for transmission
-    my @px = $self->_serialize($sent_objects,$received_objects,$received_and_destroyed_ids,[$o,@p]);
-    my $s = Data::Dumper->new([['query',$m,$wantarray,@px]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    if ($s =~ /\n/) {
-        die "found a newline in dumper output!\n$s<\n";
+    if ($RMI::DEBUG) {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self on $object_or_class: $function_or_method with @params\n";
     }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending $s\n" if $RMI::DEBUG;
     
-    # send it
-    my $r = $hout->print($s,"\n");
-    unless ($r) {
+    unless ($self->_send('query',[$object_or_class,@params],$function_or_method,$wantarray)) {
         die "failed to send! $!";
     }
 
-    ## RECEIVE
-    my @result = $self->_process_incoming_message();    
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @result\n" if $RMI::DEBUG;
+    my ($type, @result);
+    for(1) {
+        ($type, @result) = $self->_process_incoming_message();
+        if ($type eq 'close') {
+            last;
+        }
+        redo unless $type eq 'result';
+    }
+    
     if ($wantarray) {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @result\n" if $RMI::DEBUG;
         return @result;
     }
     else {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $result[0]\n" if $RMI::DEBUG;
         return $result[0];
     }
 }
 
 sub receive_request_and_send_response {
     my ($self) = @_;
-    eval { $self->_process_incoming_message(); };
-    if ($@) {
-       if ($@ =~ 'connection closed') {
-           $@ = undef;
-           return 1;
-       }
-       else {
-           die $@;
-       }        
-    }   
+    my ($type) = $self->_process_incoming_message();
+    if ($type eq 'close') {
+        return;
+    }
+    elsif ($type eq 'query') {
+        return 1;
+    }
+    else {
+        die "Unexpected message type $type!";
+    }        
 }
 
 # private API
 
 # read either a query, a response, a counter query, or an exception
+# returns a type, and possible additional data
 sub _process_incoming_message {
     my ($self) = @_;
     my $hin = $self->{reader};
@@ -117,7 +109,7 @@ sub _process_incoming_message {
         if (not defined $incoming_text) {
             print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
             $self->{is_closed} = 1;
-            Carp::confess("connection closed");
+            return ('close');
         }
         else {
             print "$RMI::DEBUG_MSG_PREFIX N: $$ got $incoming_text" if $RMI::DEBUG;
@@ -133,13 +125,13 @@ sub _process_incoming_message {
                 die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($incoming_data);
             }
             elsif ($type eq 'query') {
-                $self->_process_query($incoming_data);
-                redo;
+                my $result = $self->_process_query($incoming_data);
+                return ($type, $result);
             }
             elsif ($type eq 'result') {
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ returning @$incoming_data\n" if $RMI::DEBUG;
                 my @result = $self->_deserialize($incoming_data);
-                return @result;
+                return ($type, @result);
             }
             elsif ($type eq 'exception') {
                 my ($e) = $self->_deserialize($incoming_data);
@@ -214,22 +206,20 @@ sub _process_query {
             }
         }
     };
+    
     pop @executing_nodes;
-    # we MUST undef these in case they are the only references to objects which need to be destroyed
+    
+    # we MUST undef these in case they are the only references to remote objects which need to be destroyed
+    # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
     $o = undef;
     @p = ();
     if ($@) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
-        $self->_send('exception',[$@],undef,undef);
+        return $self->_send('exception',[$@],undef,undef);
     }
     else {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
-        my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, \@result);
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ result serialized as @serialized\n" if $RMI::DEBUG;
-        my $s = Data::Dumper->new([['result', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-        @$received_and_destroyed_ids = ();
-        $s =~ s/\n/ /gms;
-        $hout->print($s,"\n");
+        return $self->_send('result',\@result, undef, undef);    
     }    
 }
 
@@ -244,10 +234,10 @@ sub _send {
     
     my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, $data);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $type serialized as @serialized\n" if $RMI::DEBUG;
-    my $s = Data::Dumper->new([['exception', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    my $s = Data::Dumper->new([[$type, ($type eq 'query' ? ($method,$wantarray) : ()), @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     @$received_and_destroyed_ids = ();
     $s =~ s/\n/ /gms;
-    $hout->print($s,"\n");                
+    return $hout->print($s,"\n");                
 }
 
 # serialize params when sending a query, or results when sending a response
@@ -585,7 +575,7 @@ sub _bind_local_class_to_remote {
         if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
         for my $sub (@exported) {
             my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "bind pair $pair[0] to $pair[1]\n";
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
             $self->_bind_local_var_to_remote(@pair);
         }
     }
