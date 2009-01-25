@@ -14,32 +14,32 @@ sub AUTOLOAD {
     my ($class,$subname) = ($method =~ /^(.*)::(.*?)$/);
     $method = $subname;
     no warnings;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$class};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
     unless ($node) {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response(($object||$class), $method, @_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, \@_);
 }
 
 sub can {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response($object, 'can', @_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'can', \@_);
 }
 
 sub isa {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::Node::proxied_classes{$object};
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$object};
     unless ($node) {
         die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response($object, 'isa', @_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'isa', \@_);
 }
 
 sub DESTROY {

@@ -39,7 +39,7 @@ sub AUTOLOAD {
     if ($delegate_class eq 'Tie::StdArray' and $method eq 'EXTEND') {
         $delegate_class = 'Tie::Array';
     }
-    $node->send_request_and_receive_response(undef, $delegate_class . '::' . $method, @_);
+    $node->send_request_and_receive_response('call_function', undef, $delegate_class . '::' . $method, \@_);
 }
 
 sub DESTROY {
@@ -81,8 +81,8 @@ and result in a request across the "wire" to the other side.
 
 Note: if the reference is blessed, it also blesses the object as an
 B<RMI::ProxyObject>.  Because bless and tie are independent, a
-single reference can be blessed and tied to two independent
-classes, one for method call resolution, and one for usage of
+single reference can (and will) be blessed and tied to two different
+packages, one for method call resolution, and one for usage of
 the reference as a HASH ref, ARRAY ref, CODE ref, etc.
 
 Details of Perl tie are somewhat esoteric, but it is worth mentioning
@@ -117,11 +117,22 @@ before sending it.  These methods work just fine with the
 
 See general bugs in B<RMI> for general system limitations
 
+=item this uses Tie::Std* modules in non-standard ways
+
+AUTOLOAD makes a remote function call for every operation to one of the Tie::Std*
+family of modules.  The code for these modules works by beautiful coincidence
+on the side which originated the reference, even though that reference is not
+actually tied to that package in that process (nor in the remote process, b/c
+there it is tied to _this_ package).
+
+It is not known yet whether this has unseen limitations, and we will eventually
+need custom packages to manage remote operations on references.
+
 =back
 
 =head1 SEE ALSO
 
-B<RMI> B<RMI::ProxyObject>
+B<RMI> B<RMI::ProxyObject> B<RMI::Node> B<RMI::Client> B<RMI::Server>
 
 B<Tie::Scalar> B<Tie::Array> B<Tie::Hash> B<Tie::Handle>
 

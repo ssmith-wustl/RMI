@@ -13,23 +13,28 @@ use Fcntl;
 
 RMI::Node::_mk_ro_accessors(__PACKAGE__, qw/host port listen_socket all_select sockets_select listen_queue_size/);
 
+our $DEFAULT_PORT = 4409;
+
 sub new {
     my $class = shift;
 
-    my $self = bless { port => 10293, @_ }, $class;
+    my $self = bless { port => $DEFAULT_PORT, @_ }, $class;
     return unless $self;
 
     unless ($self->listen_socket) {
-        my $listen = IO::Socket::INET->new(LocalHost => $self->host,
-                                           LocalPort => $self->port,
-                                           Listen    => $self->listen_queue_size,
-                                           ReuseAddr => 1);
+        my $listen = IO::Socket::INET->new(
+            LocalHost => $self->host,
+            LocalPort => $self->port,
+            ReuseAddr => 1,
+            Listen    => $self->listen_queue_size,
+        );
         unless ($listen) {
             die "Couldn't create socket: $!";
         }
         $self->{listen_socket} = $listen;
         $self->{all_select} = IO::Select->new($listen);
         $self->{sockets_select} = IO::Select->new();
+        $self->{data_ready} = [];
     }
 
     return $self;
@@ -41,23 +46,35 @@ sub new {
 
 sub receive_request_and_send_response {
     my ($self,$timeout) = @_;
+    
+    # the list of all sockets w/ data ready
+    my $data_ready = $self->{data_ready};
+    
+    # ck for new connections and also new sockets with data
     my $select = $self->all_select;
-    my @ready = $select->can_read($timeout);
-    for (my $i = 0; $i < @ready; $i++) {
-        if ($ready[$i] eq $self->listen_socket) {
-            $self->_accept_connection();
+    until (@$data_ready) {
+        my @new_readable = $select->can_read($timeout);
+        unless (@new_readable) {
             return;
         }
-        else {
-            # delegate to the right "server" object, which manages just this particular client
-            my $delegate_server = $self->{_server_for_socket}{$ready[$i]};
-            $delegate_server->receive_request_and_send_response;
-            if ($delegate_server->{is_closed}) {
-                $self->_close_connection($ready[$i]);
+        my @new_data;
+        for (my $i = 0; $i < @new_readable; $i++) {
+            if ($new_readable[$i] eq $self->listen_socket) {
+                $self->_accept_connection();;
+            }
+            else {
+                push @new_data, $new_readable[$i]
             }
         }
+        push @$data_ready, @new_data;
     }
-    return 1;
+    
+    # process the first socket with data
+    # delegate to the right "server" object, which manages just this particular client
+    my $ready = shift @$data_ready;
+    my $delegate_server = $self->{_server_for_socket}{$ready};
+    my $retval = $delegate_server->receive_request_and_send_response;    
+    return $retval;
 }
 
 # Add the given socket to the list of connected clients.
@@ -87,17 +104,21 @@ sub _accept_connection {
     
     $self->sockets_select->add($socket);
     $self->all_select->add($socket);
-
     return $socket;
 }
 
 sub _close_connection {
+    # This is no longer called, and somehow the select sockets get things removed?
     my $self = shift;
     my $socket = shift;
 
     unless ($self->sockets_select->exists($socket)) {
-        die "Passed-in socket is not on the list of connected clients";
+        warn ("Passed-in socket $socket is not on the list of connected clients");
     }
+    unless ($self->all_select->exists($socket)) {
+        warn ("Passed-in socket $socket is not on the list of all clients");
+    }
+    print "removed $socket\n";
 
     $self->sockets_select->remove($socket);
     $self->all_select->remove($socket);

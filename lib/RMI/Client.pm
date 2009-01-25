@@ -8,51 +8,69 @@ our $VERSION = qv('0.1');
 
 use base 'RMI::Node';
 
+#
+# PUBLIC API
+#
+
 *call_sub = \&call_function;
 
 sub call_function {
     my ($self,$fname,@params) = @_;
-    return $self->send_request_and_receive_response(undef, $fname, @params);
+    return $self->send_request_and_receive_response('call_function', undef, $fname, \@params);
 }
 
 sub call_class_method {
     my ($self,$class,$method,@params) = @_;
-    $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
-    return $self->send_request_and_receive_response($class, $method, @params);
+    return $self->send_request_and_receive_response('call_class_method', $class, $method, \@params);
 }
 
 sub call_object_method {
     my ($self,$object,$method,@params) = @_;
-    return $self->send_request_and_receive_response($object, $method, @params);
+    return $self->send_request_and_receive_response('call_object_method', $object, $method, \@params);
 }
 
 sub call_eval {
-    my ($self,$src) = @_;
-    return $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', $src);
+    my ($self,$src,@params) = @_;
+    return $self->send_request_and_receive_response('call_eval', undef, 'RMI::Server::_receive_eval', [$src, @params]);    
 }
 
 sub call_use {
     my $self = shift;
-    for my $class (@_) {
-        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use $class");
-    }    
-    return scalar(@_);    
+    my $class = shift;
+    my $module = shift;
+    my $use_args = shift;
+
+    my @exported;
+    my $path;
+    
+    ($class,$module,$path, @exported) = 
+        $self->send_request_and_receive_response(
+            'call_use',
+            undef,
+            'RMI::Server::_receive_use',
+            [
+                $class,
+                $module,
+                defined($use_args),
+                ($use_args ? @$use_args : ())
+            ]
+        );
+        
+    return ($class,$module,$path,@exported);
 }
 
 sub call_use_lib {
     my $self = shift;
-    for my $class (@_) {
-        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use lib '$class'");
-    }    
-    return scalar(@_);    
+    my $lib = shift;
+    return $self->send_request_and_receive_response('call_use_lib', undef, 'RMI::Server::_receive_use_lib', [$lib]);
 }
+
 
 sub use_remote {
     my $self = shift;
     my $class = shift;
-    $self->call_use($class, @_);
-    $self->_bind_local_class_to_remote($class);
-    $self->_bind_local_vars_to_remote('@' . $class . '::ISA');
+    $self->_bind_local_class_to_remote($class, undef, @_);
+    $self->_bind_local_var_to_remote('@' . $class . '::ISA');
     return 1;
 }
 
@@ -61,17 +79,130 @@ sub use_lib_remote {
     unshift @INC, $self->virtual_lib;
 }
 
+sub virtual_lib {
+    my $self = shift;
+    my $virtual_lib = sub {
+        $DB::single = 1;
+        my $module = pop;
+        $self->_bind_local_class_to_remote(undef,$module);
+        my $sym = Symbol::gensym();
+        my $done = 0;
+        return $sym, sub {
+            if (! $done) {
+                $_ = '1;';
+                $done++;
+                return 1;
+            }
+            else {
+                return 0;
+            }
+        };
+    }
+}
+
+sub bind {
+    my $self = shift;
+    if (substr($_[0],0,1) =~ /\w/) {
+        $self->_bind_local_class_to_remote(@_);
+    }
+    else {
+        $self->_bind_local_var_to_remote(@_);
+    }
+}
+
+
+#
+# PRIVATE API
+#
+
+# this proxies a single variable
+
+sub _bind_local_var_to_remote {
+    my $self = shift;
+    my $local_var = shift;
+    my $remote_var = (@_ ? shift : $local_var);
+    
+    my $type = substr($local_var,0,1);
+    if (index($local_var,'::')) {
+        $local_var = substr($local_var,1);
+    }
+    else {
+        my $caller = caller();
+        $local_var = $caller . '::' . substr($local_var,1);
+    }
+
+    unless ($type eq substr($remote_var,0,1)) {
+        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
+    }
+    if (index($remote_var,'::')) {
+        $remote_var = substr($remote_var,1);
+    }
+    else {
+        my $caller = caller();
+        $remote_var = $caller . '::' . substr($remote_var,1);
+    }
+    
+    my $src = '\\' . $type . $remote_var . ";\n";
+    my $r = $self->call_eval($src);
+    die $@ if $@;
+    $src = '*' . $local_var . ' = $r' . ";\n";
+    eval $src;
+    die $@ if $@;
+    return 1;
+}
+
+# this proxies an entire class instead of just a single object
+
+sub _bind_local_class_to_remote {
+    my $self = shift;
+    my ($class,$module,$path,@exported) = $self->call_use(@_);
+    my $re_bind = 0;
+    if (my $prior = $RMI::proxied_classes{$class}) {
+        if ($prior != $self) {
+            die "class $class has already been proxied by another RMI client: $prior!";
+        }
+        else {
+            # re-binding a class to the same remote side doesn't hurt,
+            # and allowing it allows the effect of export to occur
+            # in multiple places on the client side.
+        }
+    }
+    elsif (my $path = $INC{$module}) {
+        die "module $module has already been used locally from path: $path";
+    }
+    no strict 'refs';
+    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    if (@exported) {
+        my $caller ||= caller(0);
+        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
+        for my $sub (@exported) {
+            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
+            $self->_bind_local_var_to_remote(@pair);
+        }
+    }
+    $RMI::proxied_classes{$class} = $self;
+    $INC{$module} = -1; #$path;
+    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
 =pod
 
 =head1 NAME
 
-RMI::Client - a connection for requesting remote objects and processing 
+RMI::Client - work with out-of-process objects and data transparently
 
 =head1 SYNOPSIS
 
-
+ # typical
  $c = RMI::Client::Tcp->new(host => 'server1', port => 1234);
+ 
+ # simple
  $c = RMI::Client::ForkedPipes->new();
+ 
+ # roll-your-own...
  $c = RMI::Client->new(reader => $fh1, writer => $fh2); # generic
  
  $c->call_use('IO::File');
@@ -84,16 +215,16 @@ RMI::Client - a connection for requesting remote objects and processing
  $host = $c->call_function('Sys::Hostname::hostname')
  $host eq 'server1'; #!
  
- $h1 = $c->call_eval('$main::h = { k1 => 111, k2 => 222, k3 => 333}'); 
- $h1->{k4} = 444;
- print sort keys %$h1;
- print $c->call_eval('sort keys %$main::h');
+ $remote_hashref = $c->call_eval('$main::h = { k1 => 111, k2 => 222, k3 => 333}'); 
+ $remote_hashref->{k4} = 444;
+ print sort keys %$remote_hashref;
+ print $c->call_eval('sort keys %$main::h'); # includes changes!
 
- $c->use_remote('Sys::Hostname');
- $host = Sys::Hostname::hostname(); # lie!
+ $c->use_remote('Sys::Hostname');   # this whole package is on the other side
+ $host = Sys::Hostname::hostname(); # possibly not this hostname...
 
  BEGIN {$c->use_lib_remote;}
- use Some::Class; # remote!
+ use Some::Class;               # remote!
  
  # see the docs for B<RMI> for more examples...
  
@@ -190,6 +321,16 @@ side for a class.  If available, it will do use_remote() on that class.
  use D; #remote!
  use E; #local, b/c not found on the remote side
 
+=item bind($varname)
+
+Create a local transparent proxy for a package variable on the remote side.
+
+  $c->bind('$Some::Package::somevar')
+  $Some::Package::somevar = 123; # changed remotely
+  
+  $c->bind('@main::foo');
+  push @main::foo, 11, 22 33; #changed remotely
+
 =back
 
 =head1 EXAMPLES
@@ -199,15 +340,21 @@ side for a class.  If available, it will do use_remote() on that class.
 =item Making a remote hashref
 
 This makes a hashref on the server, and makes a proxy on the client:
+
     my $fake_hashref = $c->call_eval('{}');
 
-This seems to put a key in the hash, but actually sends a message to the server to modify the hash.
+This seems to put a key in the hash, but actually sends a message to the server
+to modify the hash.
+
     $fake_hashref->{key1} = 100;
 
 Lookups also result in a request to the server:
+
     print $fake_hashref->{key1};
 
-When we do this, the hashref on the server is destroyed, as since the ref-count on both sides is now zero:
+When we do this, the hashref on the server is destroyed, as since the ref-count
+on both sides is now zero:
+
     $fake_hashref = undef;
 
 =item Making a remote CODE ref, and using it with a mix of local and remote objects
