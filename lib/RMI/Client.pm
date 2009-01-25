@@ -26,20 +26,15 @@ sub call_object_method {
 }
 
 sub call_eval {
-    my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', $src, @params);
+    shift->_call_eval(@_);
 }
 
 sub call_use {
-    shift->SUPER::_call_use(@_);
+    shift->_call_use(@_);
 }
 
 sub call_use_lib {
-    my $self = shift;
-    for my $class (@_) {
-        $self->send_request_and_receive_response(undef, 'RMI::Node::_eval', "use lib '$class'");
-    }    
-    return scalar(@_);    
+    shift->_call_use_lib(@_);
 }
 
 sub use_remote {
