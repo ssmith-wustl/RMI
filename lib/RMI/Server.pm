@@ -11,7 +11,7 @@ sub run {
     my($self) = @_;
     while(1) {
         last if $self->{is_closed}; 
-        $self->receive_request_and_send_response();
+        last unless $self->receive_request_and_send_response();
     }
     return 1;
 }

@@ -17,6 +17,16 @@ unless ($child_pid) {
     # if $RMI::LOG is true, this will make the server logs indent relative to the client
     do { no warnings; $RMI::DEBUG_MSG_PREFIX = ' '; };
 
+    # a grandchild kills the child after 3 seconds
+    if (1) {
+        unless (fork()) {
+            my $c = RMI::Client::Tcp->new();
+            sleep 2;
+            eval { $c->call_eval('exit 1'); };
+            exit;
+        }
+    }
+
     # the child process runs a server we test with
     my $s = RMI::Server::Tcp->new(
         #port => 1234,
@@ -25,13 +35,6 @@ unless ($child_pid) {
         timeout => 3000,
     );
     
-    # a grandchild kills the child after 3 seconds
-    unless (fork()) {
-        sleep 2;
-        my $c = RMI::Client::Tcp->new();
-        eval { $c->call_eval('exit 1'); };
-        exit;
-    }
     
     require IO::File;
     $s->run;
