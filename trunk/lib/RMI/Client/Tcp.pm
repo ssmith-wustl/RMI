@@ -12,7 +12,7 @@ use IO::Socket;
 RMI::Node::_mk_ro_accessors(__PACKAGE__, qw/host port/);
 
 our $DEFAULT_HOST = "127.0.0.1";
-our $DEFAULT_PORT = 10293;
+our $DEFAULT_PORT = 4409;
 
 sub new {
     my $class = shift;
