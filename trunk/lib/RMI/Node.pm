@@ -220,12 +220,7 @@ sub _process_query {
     @p = ();
     if ($@) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
-        my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, [$@]);
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ EXCEPTION serialized as @serialized\n" if $RMI::DEBUG;
-        my $s = Data::Dumper->new([['exception', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-        @$received_and_destroyed_ids = ();
-        $s =~ s/\n/ /gms;
-        $hout->print($s,"\n");                
+        $self->_send('exception',[$@],undef,undef);
     }
     else {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
@@ -236,6 +231,23 @@ sub _process_query {
         $s =~ s/\n/ /gms;
         $hout->print($s,"\n");
     }    
+}
+
+sub _send {
+    my ($self, $type, $data, $method, $wantarray) = @_;
+
+    my $hin = $self->{reader};
+    my $hout = $self->{writer};
+    my $sent_objects = $self->{_sent_objects};
+    my $received_objects = $self->{_received_objects};
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    
+    my @serialized = $self->_serialize($sent_objects, $received_objects, $received_and_destroyed_ids, $data);
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $type serialized as @serialized\n" if $RMI::DEBUG;
+    my $s = Data::Dumper->new([['exception', @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    @$received_and_destroyed_ids = ();
+    $s =~ s/\n/ /gms;
+    $hout->print($s,"\n");                
 }
 
 # serialize params when sending a query, or results when sending a response
