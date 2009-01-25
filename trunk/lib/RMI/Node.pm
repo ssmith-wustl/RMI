@@ -151,10 +151,10 @@ sub _receive {
         $object = undef;
         @params = ();
         
-        return ($type, $return_type, $return_value_arrayref);
+        return ('query', $return_type, $return_value_arrayref);
     }
     elsif ($type eq 'result') {
-        return ($type, @deserialized);
+        return ('result', @deserialized);
     }
     elsif ($type eq 'exception') {
         die $deserialized[0];
