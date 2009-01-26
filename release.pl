@@ -5,6 +5,13 @@ use warnings;
 my $mod = shift;
 my $ver = shift;
 
+unless ($mod) {
+    die "expecte module name as first param!";
+}
+
+unless ($ver) {
+    die "expected version number as second param";
+}
 
 use version;
 my $qver = qv($ver);
