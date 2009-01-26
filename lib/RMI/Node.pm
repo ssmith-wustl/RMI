@@ -497,20 +497,20 @@ indefinitely. :)
 
 =over 4
 
-=item new()
+=head2 new()
   
  $n = RMI::Node->new(reader => $fh1, writer => $fh2);
 
 The constructor for RMI::Node objects requires that a reader and writer handle be provided.  They
 can be the same handle if the handle is bi-directional (as with TCP sockets, see L<RMI::Client::Tcp>).
 
-=item close()
+=head2 close()
 
  $n->close();
 
 Closes handles, and does any additional required bookeeping.
  
-=item send_request_and_recieve_response()
+=head2 send_request_and_recieve_response()
 
  @result = $n->send_request_and_recieve_response($call_type,$object,$method,$params,$opts)
 
@@ -532,7 +532,7 @@ This method sends a method call request through the writer, and waits on a respo
 It will handle a response with the answer, exception messages, and also handle counter-requests
 from the server, which may occur b/c the server calls methods on objects passed as parameters.
 
-=item receive_request_and_send_response()
+=head2 receive_request_and_send_response()
 
 This method waits for a single request to be received from its reader handle, services
 the request, and sends the results through the writer handle.
@@ -540,7 +540,7 @@ the request, and sends the results through the writer handle.
 It is possible that, while servicing the request, it will make counter requests, and those
 counter requests, may yield counter-counter-requests which call this method recursively.
 
-=item virtual_lib()
+=head2 virtual_lib()
 
 This method returns an anonymous subroutine which can be used in a "use lib $mysub"
 call, to cause subsequent "use" statements to go through this node to its partner.
@@ -563,7 +563,7 @@ The following message types are passed within the current implementation:
 
 =over 2
 
-=item query
+=head2 query
 
 A request that logic execute on the remote side on behalf of the sender.
 This includes object method calls, class method calls, function calls,
@@ -590,20 +590,20 @@ The message data contains, in order:
  - ...          The next parameter to the function/method call
 
 
-=item result
+=head2 result
 
 The return value from a succesful "query" which does not result in an
 exception being thrown on the remote side.
   
 The message data contains, the return value or vaues of that query.
   
-=item exception
+=head2 exception
 
 The response to a query which resulted in an exception on the remote side.
   
 The message data contains the value thrown via die() on the remote side.
   
-=item close
+=head2 close
 
 Indicatees that the remote side has closed the connection.  This is actually
 constructed on the receiver end when it fails to read from the input stream.
@@ -629,7 +629,7 @@ The serialization process has two stages:
 
 =over 4
 
-=item replacing references with identifiers used for remoting
+=head2 replacing references with identifiers used for remoting
 
 An array of message_data of length n to is converted to have a length of n*2.
 Each value is preceded by an integer which categorizes the value.
@@ -655,7 +655,7 @@ Each value is preceded by an integer which categorizes the value.
 
 Note that all references are turned into primitives by the above process.
 
-=item stringification
+=head2 stringification
 
 The "wire protocol" for sending and receiving messages is to pass an array via Data::Dumper
 in such a way that it does not contain newlines.  The receiving side uses eval to reconstruct
@@ -670,6 +670,22 @@ in question, are in B<RMI>, and B<RMI::ProxyObject> and B<RMI::ProxyReference>
 =head1 BUGS AND CAVEATS
 
 See general bugs in B<RMI> for general system limitations
+
+=head2 the serialization mechanism needs to be made more robust and efficient
+
+It's really just enough to "work".
+
+The current implementation uses Data::Dumper with options which should remove
+newlines.  Since we do not flatten arbitrary data structures, a simpler parser
+would be more efficient.
+
+The message type is currently a text string.  This could be made smaller.
+
+The data type before each paramter or return value is an integer, which could
+also be abbreviated futher, or we could go the other way and be more clear. :)
+
+This should switch to sysread and pass the message length instead of relying on
+buffers, since the non-blocking IO might not have issues.
 
 =head1 SEE ALSO
 
