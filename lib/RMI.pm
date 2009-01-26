@@ -3,7 +3,7 @@ package RMI;
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = qv('0.02');
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
