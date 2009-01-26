@@ -140,9 +140,7 @@ documentation.
 
 =head1 METHODS
 
-=over 4
-
-=item new()
+=head2 new()
 
  $s = RMI::Server->new(reader => $fh1, writer => $fh2)
 
@@ -150,21 +148,19 @@ This is typically overriden in a specific subclass of RMI::Server to construct
 the reader and writer according to a particular strategy.  It is possible for
 the reader and the writer to be the same handle, particularly for B<RMI::Server::Tcp>.
 
-=item receive_request_and_send_response()
+=head2 receive_request_and_send_response()
 
  $bool = $
 
 Implemented in the base class for all RMI::Node objects, this handles processing
 a single request from the reader handle.
 
-=item run()
+=head2 run()
 
  $s->run();
  
 Enter a loop processing RMI requests.  This will continue as long as the
 connection is open.
-
-=back
 
 =head1 BUGS AND CAVEATS
 
