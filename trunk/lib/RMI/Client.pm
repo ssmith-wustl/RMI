@@ -192,7 +192,7 @@ sub _bind_local_class_to_remote {
 
 =head1 NAME
 
-RMI::Client - work with out-of-process objects, references and code
+RMI::Client - connection to an RMI::Server
 
 =head1 SYNOPSIS
 

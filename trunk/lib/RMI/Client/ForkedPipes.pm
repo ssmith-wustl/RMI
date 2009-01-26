@@ -69,8 +69,7 @@ sub new {
 
 =head1 NAME
 
-RMI::Client::ForkedPipes
-
+RMI::Client::ForkedPipes - an RMI::Client implementation with a private out-of-process server
 
 =head1 SYNOPSIS
 

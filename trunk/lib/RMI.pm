@@ -64,16 +64,20 @@ RMI - Remote Method Invocation with transparent proxies
 
 =head1 DESCRIPTION
 
-RMI stands for Remote Method Invocation.  The RMI modules allow one Perl
-process to have virtual objects which are proxies for a real object
+RMI stands for Remote Method Invocation.  The RMI modules allow one process
+to have virtual object "stubs" which are proxies for real objects
 in another process.  When methods are invoked on the proxy, the method
 actually runs in the other process.  When results are returned, those
-values are also proxies for the real items in the other process.
+values may also be proxies for the real items in the other process.  Parameters
+from the client are also automatically proxied on the server side during method
+execution.
 
 In addition to invoking methods on proxy objects trasparently, an RMI::Client
 can invoke class methods, regular function calls, and other Perl functionaity 
 on the remote server.  Calls like these are typically the first step to obtain 
-a remote object in the first place.
+a remote object in the first place.  This is different than implementations
+in other languages, which typically require that a server have limited and
+specific objects it returns, with all further proxying happening through them.
 
 The procedure typically goes as follows:
 
@@ -135,54 +139,48 @@ object is actually an RMI::ProxyObject.  Calls to isa() and can() are proxied
 across the connection to the remote side, and will maintain the correct API.
 Remote objects which implement AUTOLOAD for their API will still work correctly.
 
-Plain proxied references, and also proxied object, are also tied so as to
+Plain proxied references, and as well as objects, are "tied" so as to
 operate as the correct type of Perl primitive.  SCALAR, ARRAY, HASH, CODE and
 GLOB/IO references, blessed or otherwise, will be proxied as the same type of
 reference on the other side.  The RMI system uses Perl's "tie" functionality to
-do this, and as a result proxied objects cannot be further tied on the
-destination side.
+do this.
 
 =head1 GARBAGE COLLECTION
 
-Until a proxy is destroyed, the side which sent the reference will keep an
-additional reference to the real object, both to facilitate proxying, and to
+Until a proxy is destroyed, the side which sent the item will keep an
+additional reference to the real item, both to facilitate proxying, and to
 prevent garbage collection.  Upon destruction on the reciever side, a message is
 sent to the sender to expire its link to the item in question, and allow garbage
 collection if no other references exist.
 
 =head1 DEBUGGING RMI CODE
 
-The environment variable RMI_DEBUG, has its value transferred to $RMI::DEBUG at
-compile time.  When set to 1, this will cause the RMI modules to emit detailed
-information to STDERR during all "conversations" between itself and the remote
-side. This works for RMI::Client, RMI::Server, and anything else which inherits
-from RMI::Node.
+When the RMI_DEBUG environment variable set to 1, the RMI modules will emit
+detailed information to STDERR during all "conversations" between itself and the
+remote side. This works for RMI::Client, RMI::Server, and anything else which
+inherits from RMI::Node.
 
-for example, using bash to run the first test case:
-
- RMI_DEBUG=1 perl -I lib t/01_*.t
+This value is available inside the application as $RMI::DEBUG.
 
 The package variable $RMI::DEBUG_MSG_PREFIX will be printed at the beginning of
 each message.  Changing this value allows the viewer to separate both halves of
-a conversation.  The test suite sets this value to ' ' for the server side,
-causing server activity to be indented.
+a conversation.  (The test suite for RMI sets this value to ' ' for the server
+side, causing server activity to be indented relative to client activity in
+the debug output.)
+
+ RMI_DEBUG=1 perl -I lib t/01_*.t
 
 =head1 SECURITY
-
-=over 2
 
 =head2 no inherent security is built-in
 
 If you require restrctions on what the server provides, a custom sub-class
-should be written around the server to restrict the types of calls it will receive.
+should be written around the server to restrict the types of calls it will
+receive.
 
 This is wise whenever the server is exposed to an untrusted network.
 
-=back
-
 =head1 LIMITS TO TRANSPARENCY 
-
-=over 2
 
 =head2 calls to ref($my_proxy) reveal the true class RMI::ProxyObject
 
@@ -193,7 +191,7 @@ Calls to ->isa() still operate as though the proxy were the object it
 represents.  Code which goes around the isa() override to UNIVERSAL::isa()
 will circumvent the illusion as well.
 
-=head2 use_remote() does not auto-proxy all package variables
+=head2 calls to use_remote() does not auto-proxy all package variables
 
 Calls to "use_remote" will proxy subroutine calls, but not package variable
 access automatically, besides @ISA.  If necessary, it must be done explicitly:
@@ -211,11 +209,12 @@ other side.  The effect of attempting to tie a proxy reference may destroy its
 ability to proxy.  (This is untested.)
 
 In most cases, code does not tie a variable created elsewhere, because it
-destroys its prior value, so this is unlikely to be an issue.
+destroys its prior value, so this is unlikely to be a problem for most
+applications.
 
 =head2 change to $_[$n] values will not affect the original variable
 
-Remote calls to subroutines/methods which modify $_[$n] directly to tamper
+Remote calls to subroutines/methods which modify aliases in @_ directly to tamper
 with the caller's variables will not work as it would with a local method
 call.
 
@@ -240,18 +239,18 @@ Packages which implement this surprise behavior include Compress::Zlib!  If
 this feature were added the overhead to Compress::Zlib would still make you
 want to wrap the call...
 
-=head2 anything which relies on caller() BESIDES EXPORT to will not work
+=head2 code which relies on caller() will probably fail
 
 This means that some modules which perform magic during import() may not work
-as intended. 
+as intended.
 
-=back
+This problem is prevented in one place automatically by the current RMI
+implementation: there is custom code to handle exporting of methods into the
+caller's namespace inside "use_remote".
 
 =head1 SEE ALSO
 
 B<RMI::Server>, B<RMI::Client>, B<RMI::Node>, B<RMI::ProxyObject>, B<RMI::ProxyReference>
-
-B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie::Hash>, B<Tie::Scalar>
 
 =head1 AUTHORS
 
