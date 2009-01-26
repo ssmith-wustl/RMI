@@ -73,7 +73,7 @@ sub DESTROY {
 
 =head1 NAME
 
-RMI::ProxyReference - used internally by RMI::Node to tie references
+RMI::ProxyReference - used internally by RMI to tie references
     
 =head1 DESCRIPTION
 

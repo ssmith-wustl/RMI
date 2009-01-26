@@ -133,13 +133,12 @@ sub _close_connection {
 
 =head1 NAME
 
-RMI::Server::Tcp - do RMI over a TCP/IP socket
-
+RMI::Server::Tcp - service RMI::Client::Tcp requests
 
 =head1 SYNOPSIS
 
     $s = RMI::Server::Tcp->new(
-        port => 1234            # defaults to 10293
+        port => 1234            # defaults to 4409
     );
     $s->run;
     

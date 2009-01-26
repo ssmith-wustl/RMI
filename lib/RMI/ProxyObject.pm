@@ -62,7 +62,7 @@ sub DESTROY {
 
 =head1 NAME
 
-RMI::ProxyObject - used internally by RMI for proxy objects
+RMI::ProxyObject - used internally by RMI for "stub" objects
     
 =head1 DESCRIPTION
 

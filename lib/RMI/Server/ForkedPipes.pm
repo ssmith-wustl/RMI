@@ -13,7 +13,7 @@ RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
 =head1 NAME
 
-RMI::Server::ForkedPipes - internal server for RMI::Client::ForkedPipes 
+RMI::Server::ForkedPipes - service RMI::Client::ForkedPipes requests
 
 =head1 SYNOPSIS
 
