@@ -1,4 +1,8 @@
 Revision history for RMI 
 
-0.01 Fri  16 Jan 200
-	Initial release.
+0.01 Sun 25 Jan 2009
+	    Initial release.
+
+0.02 Sun 25 Jan 2009
+            Replacement with updated Makefile.PL
+
