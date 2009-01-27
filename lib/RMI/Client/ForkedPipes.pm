@@ -86,11 +86,9 @@ RMI::Server::ForkedPipes in that process.  It is useful for testing
 more complex RMI, and also to do things like use two versions of
 a module at once in the same program.
 
-=back
-
 =head1 METHODS
 
-=item peer_pid
+=head2 peer_pid
  
  Both the RMI::Client::ForkedPipes and RMI::Server::ForkedPipes have a method to 
  return the process ID of their remote partner.
@@ -102,6 +100,22 @@ See general bugs in B<RMI> for general system limitations of proxied objects.
 =head1 SEE ALSO
 
 B<RMI>, B<RMI::Server::ForkedPipes>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI::ProxyObject>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
 
 =cut
 

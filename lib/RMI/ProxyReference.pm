@@ -130,5 +130,21 @@ B<RMI> B<RMI::ProxyObject> B<RMI::Node> B<RMI::Client> B<RMI::Server>
 
 B<Tie::Scalar> B<Tie::Array> B<Tie::Hash> B<Tie::Handle>
 
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
+
 =cut
 
