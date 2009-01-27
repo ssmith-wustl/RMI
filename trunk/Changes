@@ -1,8 +1,12 @@
-Revision history for RMI 
+Revision history for RMI:
+
+0.03 Mon 26 Jan 2009
+            Updated POD extensively.
+
+0.02 Sun 25 Jan 2009
+            Replacement with updated Makefile.PL to require a newer Test::More.
 
 0.01 Sun 25 Jan 2009
 	    Initial release.
 
-0.02 Sun 25 Jan 2009
-            Replacement with updated Makefile.PL
 
