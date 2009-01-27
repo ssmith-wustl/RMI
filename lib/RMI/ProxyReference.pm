@@ -7,6 +7,7 @@ our $VERSION = qv('0.1');
 
 use RMI;
 
+
 # When references are "passed" to a remote client/server, the proxy is tied using this package to proxy back all data access.
 # NOTE: if the reference is blessed, the proxy will also be blessed into RMI::ProxyObject, in addition to being _tied_ to this package.
 
@@ -55,13 +56,24 @@ sub DESTROY {
     push @{ $node->{_received_and_destroyed_ids} }, $remote_id;
 }
 
+# NOTE: this module uses Tie::Std* modules in non-standard ways
+#
+# AUTOLOAD makes a remote function call for every operation to one of the Tie::Std*
+# family of modules.  The code for these modules works by beautiful coincidence
+# on the side which originated the reference, even though that reference is not
+# actually tied to that package in that process (nor in the remote process, b/c
+# there it is tied to _this_ package).
+#
+# It is not known yet whether this has unseen limitations, and we will eventually
+# need custom packages to manage remote operations on references.
+
 1;
 
 =pod
 
 =head1 NAME
 
-RMI::ProxyReference - used internally by RMI::Node to tie references
+RMI::ProxyReference - used internally by RMI to tie references
     
 =head1 DESCRIPTION
 
@@ -103,38 +115,36 @@ The RMI::ProxyReference implements TIEHASH TIEARRAY TIESCALAR and
 TIEHANDLE with a single implementation.  All other methods are
 implemented by proxying back to the original side via AUTOLOAD.
 
-On the local side, attempts to access the real reference go through
+On the local side, all attempts to access the real reference go through
 Tie::StdArray, Tie::StdHash, Tie::StdScalar and Tie::StdHandle.  Note
 that we do not _actually_ "tie" the real reference on the original side
 before sending it.  These methods work just fine with the 
 
-
 =head1 BUGS AND CAVEATS
 
-=over 4
-
-=item references tied by RMI::ProxyReference cannot be tied to other things
-
 See general bugs in B<RMI> for general system limitations
-
-=item this uses Tie::Std* modules in non-standard ways
-
-AUTOLOAD makes a remote function call for every operation to one of the Tie::Std*
-family of modules.  The code for these modules works by beautiful coincidence
-on the side which originated the reference, even though that reference is not
-actually tied to that package in that process (nor in the remote process, b/c
-there it is tied to _this_ package).
-
-It is not known yet whether this has unseen limitations, and we will eventually
-need custom packages to manage remote operations on references.
-
-=back
 
 =head1 SEE ALSO
 
 B<RMI> B<RMI::ProxyObject> B<RMI::Node> B<RMI::Client> B<RMI::Server>
 
 B<Tie::Scalar> B<Tie::Array> B<Tie::Hash> B<Tie::Handle>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
 
 =cut
 

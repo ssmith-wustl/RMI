@@ -192,15 +192,15 @@ sub _bind_local_class_to_remote {
 
 =head1 NAME
 
-RMI::Client - work with out-of-process objects and data transparently
+RMI::Client - connection to an RMI::Server
 
 =head1 SYNOPSIS
 
+ # simple
+ $c = RMI::Client::ForkedPipes->new(); 
+
  # typical
  $c = RMI::Client::Tcp->new(host => 'server1', port => 1234);
- 
- # simple
- $c = RMI::Client::ForkedPipes->new();
  
  # roll-your-own...
  $c = RMI::Client->new(reader => $fh1, writer => $fh2); # generic
@@ -208,9 +208,9 @@ RMI::Client - work with out-of-process objects and data transparently
  $c->call_use('IO::File');
  $c->call_use('Sys::Hostname');
 
- $o = $c->call_class_method('IO::File','new','/tmp/myfile');
- print $o->getline;
- print <$o>;
+ $remote_obj = $c->call_class_method('IO::File','new','/tmp/myfile');
+ print $remote_obj->getline;
+ print <$remote_obj>;
 
  $host = $c->call_function('Sys::Hostname::hostname')
  $host eq 'server1'; #!
@@ -223,24 +223,24 @@ RMI::Client - work with out-of-process objects and data transparently
  $c->use_remote('Sys::Hostname');   # this whole package is on the other side
  $host = Sys::Hostname::hostname(); # possibly not this hostname...
 
- BEGIN {$c->use_lib_remote;}
+ our $c;
+ BEGIN {
+    $c = RMI::Client::Tcp->new(port => 1234);
+    $c->use_lib_remote;
+ }
  use Some::Class;               # remote!
- 
- # see the docs for B<RMI> for more examples...
- 
+  
 =head1 DESCRIPTION
 
 This is the base class for a standard RMI connection to an RMI::Server.
 
 In most cases, you will create a client of some subclass, typically
-RMI::Client::Tcp for a network socket, or RMI::Client::ForkedPipes
-for an out-of-process object server.
+B<RMI::Client::Tcp> for a network socket, or B<RMI::Client::ForkedPipes>
+for a private out-of-process object server.
 
 =head1 METHODS
-
-=over 4
  
-=item call_class_method($class, $method, @params)
+=head2 call_class_method($class, $method, @params)
 
 Does $class->$method(@params) on the remote side.
 
@@ -250,18 +250,18 @@ Calling remote constructors is the primary way to make a remote object.
  
  $possibly_another_remote_obj = $remote_obj->some_method(@p);
  
-=item call_function($fname, @params)
+=head2 call_function($fname, @params)
 
 A plain function call made by name to the remote side.  The function name must be fully qualified.
 
  $c->call_use('Sys::Hostname');
  my $server_hostname = $c->call_function('Sys::Hostname::hostname');
 
-=item call_sub($fname, @params)
+=head2 call_sub($fname, @params)
 
 An alias for call_function();
 
-=item call_eval($src,@args)
+=head2 call_eval($src,@args)
 
 Calls eval $src on the remote side.
 
@@ -271,20 +271,20 @@ Any additional arguments are set to @_ before eval on the remote side, after pro
     push @$a, 44, 55;                                                   # changed on the server
     scalar(@$a) == $c->call_eval('scalar(@main::x)');                   # ...true!
 
-=item call_use($class)
+=head2 call_use($class)
 
 Uses the Perl package specified on the remote side, making it available for later
 calls to call_class_method() and call_function().
 
  $c->call_use('Some::Package');
  
-=item call_use_lib($path);
+=head2 call_use_lib($path);
 
 Calls "use lib '$path'" on the remote side.
 
  $c->call_use_lib('/some/path/on/the/server');
  
-=item use_remote($class)
+=head2 use_remote($class)
 
 Creases the effect of "use $class", but all calls of any kind for that
 namespace are proxied through the client.  This is the most transparent way to
@@ -306,10 +306,15 @@ The @ISA array is also bound to the remote @ISA, but all other variables
 must be explicitly bound on the client to be accessible.  This may be changed in a
 future release.
 
-Also note that "export" does not currently work via the RMI client.  This
-may also change in a future release.
+Exporting does work.  To turn it off, use empty braces as you would empty parens.
 
-=item use_lib_remote($path)
+ $c->use_remote('Sys::Hostname',[]);
+
+To get this effect (and prevent export of the hostame() function).
+
+ use Sys::Hostname ();
+
+=head2 use_lib_remote($path)
 
 Installs a special handler into the local @INC which causes it to check the remote
 side for a class.  If available, it will do use_remote() on that class.
@@ -321,7 +326,7 @@ side for a class.  If available, it will do use_remote() on that class.
  use D; #remote!
  use E; #local, b/c not found on the remote side
 
-=item bind($varname)
+=head2 bind($varname)
 
 Create a local transparent proxy for a package variable on the remote side.
 
@@ -331,33 +336,29 @@ Create a local transparent proxy for a package variable on the remote side.
   $c->bind('@main::foo');
   push @main::foo, 11, 22 33; #changed remotely
 
-=back
-
 =head1 EXAMPLES
 
-=over
-    
-=item Making a remote hashref
+=head2 creating and using a remote hashref
 
 This makes a hashref on the server, and makes a proxy on the client:
 
-    my $fake_hashref = $c->call_eval('{}');
+    my $remote_hashref = $c->call_eval('{}');
 
 This seems to put a key in the hash, but actually sends a message to the server
 to modify the hash.
 
-    $fake_hashref->{key1} = 100;
+    $remote_hashref->{key1} = 100;
 
 Lookups also result in a request to the server:
 
-    print $fake_hashref->{key1};
+    print $remote_hashref->{key1};
 
 When we do this, the hashref on the server is destroyed, as since the ref-count
 on both sides is now zero:
 
-    $fake_hashref = undef;
+    $remote_hashref = undef;
 
-=item Making a remote CODE ref, and using it with a mix of local and remote objects
+=head2 making a remote CODE ref, and using it with local and remote objects
 
     my $local_fh = IO::File->new('/etc/passwd');
     my $remote_fh = $c->call_class_method('IO::File','new','/etc/passwd');
@@ -370,17 +371,32 @@ on both sides is now zero:
                         ');
     my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
 
-=back
-
 =head1 BUGS AND CAVEATS
 
 See general bugs in B<RMI> for general system limitations
 
 =head1 SEE ALSO
 
-B<RMI::Server> B<RMI::Client>
+B<RMI>, B<RMI::Client::Tcp>, B<RMI::Server>
 
 B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
+
 
 =cut
 
