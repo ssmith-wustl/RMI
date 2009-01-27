@@ -132,5 +132,21 @@ See general bugs in B<RMI> for general system limitations of proxied objects.
 
 B<RMI>, B<RMI::Client>, B<RMI::Server>,B<RMI::ProxyReference>, B<RMI::Node>
 
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
+
 =cut
 

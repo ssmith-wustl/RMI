@@ -491,11 +491,7 @@ construction time.  It also requires and that the code which uses it is be wise
 about calling methods to send and recieve data which do not cause it to block
 indefinitely. :)
 
-=back
-
 =head1 METHODS
-
-=over 4
 
 =head2 new()
   
@@ -551,8 +547,6 @@ call, to cause subsequent "use" statements to go through this node to its partne
 If a client is constructed for other purposes in the application, the above
 can also be accomplished with: $client->use_lib_remote().  (See L<RMI::Client>)
 
-=back
-    
 =head1 INTERNALS
 
 The RMI internals are built around sending a "message", which has a type, and an
@@ -560,8 +554,6 @@ array of data. The interpretation of the message data array is based on the mess
 type.
 
 The following message types are passed within the current implementation:
-
-=over 2
 
 =head2 query
 
@@ -610,8 +602,6 @@ constructed on the receiver end when it fails to read from the input stream.
   
 The message data is undefined in this case.
   
-=back
-
 The _send() and _receive() methods are symmetrical.  These two methods are used
 by the public API to encapsulate message transmission and reception.  The _send()
 method takes a message_type and a message_data arrayref, and transmits them to
@@ -626,8 +616,6 @@ suitable for transmission.  Conversely, the _deserialize method turns a string
 value in the same format into a message_type and message_data array.
 
 The serialization process has two stages:
-
-=over 4
 
 =head2 replacing references with identifiers used for remoting
 
@@ -662,8 +650,6 @@ in such a way that it does not contain newlines.  The receiving side uses eval t
 the original message.  This is terribly inefficient because the structure does not contain
 objects of arbitrary depth, and is parsable without tremendous complexity.
 
-=back
-
 Details on how proxy objects and references function, and pose as the real item
 in question, are in B<RMI>, and B<RMI::ProxyObject> and B<RMI::ProxyReference>
 
@@ -692,6 +678,22 @@ buffers, since the non-blocking IO might not have issues.
 B<RMI>, B<RMI::Server>, B<RMI::Client>, B<RMI::ProxyObject>, B<RMI::ProxyReference>
 
 B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
 
 =cut
 

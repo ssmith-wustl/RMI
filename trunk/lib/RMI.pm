@@ -36,6 +36,7 @@ RMI - Remote Method Invocation with transparent proxies
  #process 1: an example server on host "myserver"
 
     use RMI::Server::Tcp;
+    
     my $s = RMI::Server::Tcp->new(port => 1234); 
     $s->run;
 
@@ -43,6 +44,7 @@ RMI - Remote Method Invocation with transparent proxies
  #process 2: an example client
 
     use RMI::Client::Tcp;
+    
     my $c = RMI::Client::Tcp->new(
        host => 'myserver', 
        port => 1234,
@@ -60,7 +62,7 @@ RMI - Remote Method Invocation with transparent proxies
     $r->can('getline');
     
     ref($r) eq 'RMI::ProxyObject';  # the only sign this isn't a real IO::File...
-				     # (see use_remote() to fix this)
+				    # (see RMI::Client's use_remote() to fix this)
 
 =head1 DESCRIPTION
 
@@ -102,26 +104,15 @@ proxies.
 
 See B<RMI::Node> for internals and details on the wire protocol.
 
-=head1 IMPLEMENTATIONS IN OTHER LANGUAGES
-
-The use of transparent proxy objects goes by the term "RMI" in Java, "Drb"
-in Ruby, "PYRO" in Python, "Remoting" in .NET, and is similar in functionality
-to architectures such as CORBA, and the older DCOM.
-
-None of the above use the same protocols (except Java's RMI has an optional
-CORBA-related implementation).  This module is no exception, sadly.  Patches 
-are welcome.
-
 =head1 PROXY OBJECTS AND REFERENCES
 
 A proxy object is an object on one "side" of an RMI connection which represents
 an object which really exists on the other side.  When an RMI::Client calls a
 method on its associated RMI::Server, and that method returns a reference of any
-kind, including an object, a proxy is made on the client side, rather than a
-copy.  The proxy object appears to be another reference to the real object, but
-internally it engages in messaging across the client to the server for all
-method calls, dereferencing, etc.  It contains no actual data, and implements no
-actual methods.
+kind, a proxy is made on the client side, rather than a copy.  The proxy object
+appears to be a reference to the real object, but internally it engages in
+messaging across the client to the server for all method calls, dereferencing,
+etc.  It contains no actual data, and implements no actual methods calls.
 
 By the same token, when a client passes objects or other references to the
 server as parameters to a method call, the server generates a proxy for those
@@ -191,16 +182,16 @@ Calls to ->isa() still operate as though the proxy were the object it
 represents.  Code which goes around the isa() override to UNIVERSAL::isa()
 will circumvent the illusion as well.
 
+=head2 remote objects do not stringify to matche the original object
+
+Like ref(), this reveals the actual reference (and possibly class) of the proxy,
+not the object which is proxied.
+
 =head2 calls to use_remote() does not auto-proxy all package variables
 
 Calls to "use_remote" will proxy subroutine calls, but not package variable
-access automatically, besides @ISA.  If necessary, it must be done explicitly:
-
- $c->use_remote("Some::Package"); 
- # $Some::Package::foo is NOT bound to the remote variable of the same name
-
- *Some::Package::foo = $c->call_eval('\\$Some::Package::foo'); 
- # now it is...
+access automatically, besides @ISA.  If necessary, it must be done explicitly
+with a call to bind().
 
 =head2 the client may not be able to "tie" variables which are proxies
 
@@ -208,11 +199,11 @@ The RMI modules use "tie" on every proxy reference to channel access to the
 other side.  The effect of attempting to tie a proxy reference may destroy its
 ability to proxy.  (This is untested.)
 
-In most cases, code does not tie a variable created elsewhere, because it
-destroys its prior value, so this is unlikely to be a problem for most
-applications.
+In most cases, applications do not tie a variable created elsewhere because it
+destroys its prior value.  As such this is unlikely to be a problem, but is
+still technically a hole in transparency.
 
-=head2 change to $_[$n] values will not affect the original variable
+=head2 change to $_[N] values will not affect the original variable
 
 Remote calls to subroutines/methods which modify aliases in @_ directly to tamper
 with the caller's variables will not work as it would with a local method
@@ -248,9 +239,22 @@ This problem is prevented in one place automatically by the current RMI
 implementation: there is custom code to handle exporting of methods into the
 caller's namespace inside "use_remote".
 
+=head1 IMPLEMENTATIONS IN OTHER LANGUAGES
+
+The use of transparent proxy objects goes by the term "RMI" in Java, "Drb"
+in Ruby, "PYRO" in Python, "Remoting" in .NET.
+
+It is similar in functionality to architectures such as CORBA, SOAP, RPC and
+DCOM.
+
+None of the above use the same protocols (except Java's RMI has an optional
+CORBA-related implementation).  This module is no exception, sadly.  Patches 
+are welcome.
+
 =head1 SEE ALSO
 
-B<RMI::Server>, B<RMI::Client>, B<RMI::Node>, B<RMI::ProxyObject>, B<RMI::ProxyReference>
+B<RMI::Server>, B<RMI::Client>, B<RMI::Node>, B<RMI::ProxyObject>,
+B<RMI::ProxyReference>, B<SOAP>, B<RPC>
 
 =head1 AUTHORS
 
