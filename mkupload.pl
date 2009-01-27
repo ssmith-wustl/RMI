@@ -28,7 +28,7 @@ unless ($mod_ver->numify == $qver) {
 print "svn cp trunk releases/${mod}-${ver}\n";
 print "svn export releases/${mod}-${ver} uploads/${mod}-${ver}\n";
 print "cp -r uploads/${mod}-${ver} x\n";
-print "cd x; perl Makefile.PL; make; make test; cd ..\n";
-print "cd uploads; tar -cvf ${mod}-${ver}.tar ${mod}-${ver}; gzip --best ${mod}-${ver}.tar; cd ..\n";
+print "cd x; perl Makefile.PL; make; make test; cd ..; rm -rf x\n";
+print "cd uploads; tar -cvf ${mod}-${ver}.tar ${mod}-${ver}; gzip --best ${mod}-${ver}.tar; rm -rf ${mod}-${ver}; cd ..\n";
 
 
