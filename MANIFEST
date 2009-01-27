@@ -27,4 +27,3 @@ t/09_bind_variables.t
 t/RMI/TestClass.pm
 t/RMI/TestClass1.pm
 t/RMI/TestClass2.pm
-update-distfiles.sh
