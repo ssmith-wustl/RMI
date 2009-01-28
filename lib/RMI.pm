@@ -3,7 +3,7 @@ package RMI;
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = qv('0.04');
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
@@ -33,58 +33,86 @@ RMI - Remote Method Invocation with transparent proxies
 
 =head1 SYNOPSIS
 
-#process 1: an example server on host "myserver"
+ #process 1: an example server on host "myserver"
 
-    my $s = RMI::Server::Tcp->new(port => 1234); $s->run;
+    use RMI::Server::Tcp;
+    
+    my $s = RMI::Server::Tcp->new(port => 1234); 
+    $s->run;
 
 
-#process 2: an example client
+ #process 2: an example client
 
+    use RMI::Client::Tcp;
+    
     my $c = RMI::Client::Tcp->new(
-       host => 'myserver', port => 1234,
+       host => 'myserver', 
+       port => 1234,
     );
 
-    $c->call_use('IO::File'); $o =
-    $c->call_class_method('IO::File','new','/etc/passwd');
+    $c->call_use('IO::File'); 
+    $r = $c->call_class_method('IO::File','new','/etc/passwd');
 
-    $line1 = $o->getline;           # works as an object
+    $line1 = $r->getline;           # works as an object
 
-    $line2 = <$o>;                  # works as a file handle
-    @rest  = <$o>;                  # detects scalar/list context correctly
+    $line2 = <$r>;                  # works as a file handle
+    @rest  = <$r>;                  # detects scalar/list context correctly
 
-    $o->isa('IO::File');            # transparent in standard ways
-    $o->can('getline');
+    $r->isa('IO::File');            # transparent in standard ways
+    $r->can('getline');
     
-    ref($o) eq 'RMI::ProxyObject';  # the only sign this isn't a real IO::File...
-				    # (see use_remote() to fix this)
+    ref($r) eq 'RMI::ProxyObject';  # the only sign this isn't a real IO::File...
+				    # (see RMI::Client's use_remote() to fix this)
 
 =head1 DESCRIPTION
 
-The RMI suite includes RMI::Client and RMI::Server classes to support
-transparent object proxying.  An RMI::Client allows an application to invoke
-code in the related RMI::Server's process.  Returned data from the server is
-presented virtually to the client via a "proxy" object/reference.  The proxy
-object behaves as though it were the real item in question, but redirects all
-interaction to the real object in the other process.
+RMI stands for Remote Method Invocation.  The RMI modules allow one process
+to have virtual object "stubs" which are proxies for real objects
+in another process.  When methods are invoked on the proxy, the method
+actually runs in the other process.  When results are returned, those
+values may also be proxies for the real items in the other process.  Parameters
+from the client are also automatically proxied on the server side during method
+execution.
 
-The proxying or objects via a remote stub goes by the term "RMI" in Java, "Drb"
-in Ruby, "PYRO" in Python, "Remoting" in .NET, and is similar in functionality
-to architectures such as CORBA, and the older DCOM.
+In addition to invoking methods on proxy objects trasparently, an RMI::Client
+can invoke class methods, regular function calls, and other Perl functionaity 
+on the remote server.  Calls like these are typically the first step to obtain 
+a remote object in the first place.  This is different than implementations
+in other languages, which typically require that a server have limited and
+specific objects it returns, with all further proxying happening through them.
 
-None of the above use the same protocols (except Java's RMI has an optional
-CORBA implementation), and this module is no exception, sadly.  Patches are
-welcome.
+The procedure typically goes as follows:
+
+1. a server is started which has access to some objects or data which is of value
+ 
+2. a client connects to that server, and asks that it execute code on its behalf
+ 
+3. the results returned may contain objects or other references,
+which the client recieves as proxies which "seem like" the real thing
+
+4. further interaction with the returned proxy objects/refs automatically
+make calls through the client to the server internally
+
+=head1 METHODS
+
+The RMI module has no public methods of its own.
+
+See B<RMI::Client> and B<RMI::Server> for detailed API information and examples.
+
+See B<RMI::ProxyObject> and B<RMI::ProxyReference> for details on behavior of
+proxies.
+
+See B<RMI::Node> for internals and details on the wire protocol.
 
 =head1 PROXY OBJECTS AND REFERENCES
 
 A proxy object is an object on one "side" of an RMI connection which represents
 an object which really exists on the other side.  When an RMI::Client calls a
 method on its associated RMI::Server, and that method returns a reference of any
-kind, including an object, a proxy is made on the client side, rather than a
-copy.  The proxy object appears to be another reference to the real object, but
-internally it engages in messaging across the client to the server for all
-method calls, dereferencing, etc.  It contains no actual data, and implements no
-actual methods.
+kind, a proxy is made on the client side, rather than a copy.  The proxy object
+appears to be a reference to the real object, but internally it engages in
+messaging across the client to the server for all method calls, dereferencing,
+etc.  It contains no actual data, and implements no actual methods calls.
 
 By the same token, when a client passes objects or other references to the
 server as parameters to a method call, the server generates a proxy for those
@@ -102,171 +130,131 @@ object is actually an RMI::ProxyObject.  Calls to isa() and can() are proxied
 across the connection to the remote side, and will maintain the correct API.
 Remote objects which implement AUTOLOAD for their API will still work correctly.
 
-Plain proxied references, and also proxied object, are also tied so as to
+Plain proxied references, and as well as objects, are "tied" so as to
 operate as the correct type of Perl primitive.  SCALAR, ARRAY, HASH, CODE and
 GLOB/IO references, blessed or otherwise, will be proxied as the same type of
 reference on the other side.  The RMI system uses Perl's "tie" functionality to
-do this, and as a result proxied objects cannot be further tied on the
-destination side.
+do this.
 
 =head1 GARBAGE COLLECTION
 
-Until a proxy is destroyed, the side which sent the reference will keep an
-additional reference to the real object, both to facilitate proxying, and to
+Until a proxy is destroyed, the side which sent the item will keep an
+additional reference to the real item, both to facilitate proxying, and to
 prevent garbage collection.  Upon destruction on the reciever side, a message is
 sent to the sender to expire its link to the item in question, and allow garbage
 collection if no other references exist.
 
-=head1 TYPES OF CLIENTS AND SERVERS
-
-All RMI client and server objects use a pair of handles for messaging.  Specific
-subclasses of RMI::Client and RMI::Server implement the handles in different
-ways.  There are two implementations which are part of the default RMI package:
-
-=over 4
-
-=item RMI::Client::Tcp and RMI::Server::Tcp
-
-A TCP/IP socket server for cross-network proxies.  The current implementation
-supports multiple clients, and is a single-threaded non-blocking server.
-
-=item RMI::Client::ForkedPipes and RMI::Server::ForkedPipes
-
-Creates its own private server in a sub-process.  Useful if you want an
-out-of-process object b/c you plan to exceed Perl's memory limit on a 32-bit
-machine, or for testing w/o making a socket.
-
-(This is also used by custom server apps since the server will exec() whatever
-was passed to the client constructor after fork().  In particular, it was built
-to allow cross-langage RMI.)
-
-=back
-
-=head1 METHODS
-
-The RMI module has no public methods of its own.  See <RMI::Client> and
-<RMI::Server> for APIs for interaction.
-
 =head1 DEBUGGING RMI CODE
 
-The environment variable RMI_DEBUG, has its value transferred to $RMI::DEBUG at
-compile time.  When set to 1, this will cause the RMI modules to emit detailed
-information to STDERR during all "conversations" between itself and the remote
-side. This works for RMI::Client, RMI::Server, and anything else which inherits
-from RMI::Node.
+When the RMI_DEBUG environment variable set to 1, the RMI modules will emit
+detailed information to STDERR during all "conversations" between itself and the
+remote side. This works for RMI::Client, RMI::Server, and anything else which
+inherits from RMI::Node.
 
-for example, using bash to run the first test case:
-
- RMI_DEBUG=1 perl -I lib t/01_*.t
+This value is available inside the application as $RMI::DEBUG.
 
 The package variable $RMI::DEBUG_MSG_PREFIX will be printed at the beginning of
 each message.  Changing this value allows the viewer to separate both halves of
-a conversation.  The test suite sets this value to ' ' for the server side,
-causing server activity to be indented.
+a conversation.  (The test suite for RMI sets this value to ' ' for the server
+side, causing server activity to be indented relative to client activity in
+the debug output.)
 
-=head1 FUNCTIONALITY CAVEATS
+ RMI_DEBUG=1 perl -I lib t/01_*.t
 
-=over 2
+=head1 SECURITY
 
-=item Proxied objects/references reveal that they are proxies when ref($o) is
+=head2 no inherent security is built-in
+
+If you require restrctions on what the server provides, a custom sub-class
+should be written around the server to restrict the types of calls it will
+receive.
+
+This is wise whenever the server is exposed to an untrusted network.
+
+=head1 LIMITS TO TRANSPARENCY 
+
+=head2 calls to ref($my_proxy) reveal the true class RMI::ProxyObject
+
+Proxied objects/references reveal that they are proxies when ref($o) is
 called on them, unless the entire package is proxied with ->use_remote.
 
-  There is no way to override ref(), as far as I know.
+Calls to ->isa() still operate as though the proxy were the object it
+represents.  Code which goes around the isa() override to UNIVERSAL::isa()
+will circumvent the illusion as well.
 
-=item No inherent security is built-in.
+=head2 remote objects do not stringify to matche the original object
 
-  Writing a wrapper for an RMI::Server which limits the calls it supports, and
-  the data returnable would be easy, but it has not been done.  Specifically,
-  turning off call_eval() is wise in untrusted environments.
+Like ref(), this reveals the actual reference (and possibly class) of the proxy,
+not the object which is proxied.
 
-=item use_remote() does not proxy all package variables automatically
+=head2 calls to use_remote() does not auto-proxy all package variables
 
-  Calls to "use_remote" will proxy subroutine calls, but not package variable
-  access automatically.
+Calls to "use_remote" will proxy subroutine calls, but not package variable
+access automatically, besides @ISA.  If necessary, it must be done explicitly
+with a call to bind().
 
-  Also implementable, but this does not happen automatically except for @ISA in
-  the current implementation.
+=head2 the client may not be able to "tie" variables which are proxies
 
-  $c->use_remote("Some::Package"); # $Some::Package::foo is NOT bound to the
-  remote variable of the same name
+The RMI modules use "tie" on every proxy reference to channel access to the
+other side.  The effect of attempting to tie a proxy reference may destroy its
+ability to proxy.  (This is untested.)
 
-  *Some::Package::foo = $c->call_eval('\\$Some::Package::foo'); # now it is...
+In most cases, applications do not tie a variable created elsewhere because it
+destroys its prior value.  As such this is unlikely to be a problem, but is
+still technically a hole in transparency.
 
-=back
+=head2 change to $_[N] values will not affect the original variable
 
-=head1 BUGS
+Remote calls to subroutines/methods which modify aliases in @_ directly to tamper
+with the caller's variables will not work as it would with a local method
+call.
 
-=over 2
+This is supportable, but adds considerable overhead to support modules which
+create a side effect which is avoided because it is, mostly, a bad idea.
 
-=item The client may not be able to "tie" variables which are proxies.
+Perl technically passes an alias to even non-reference values, though the
+common "my ($v1,$v2) = @_;" makes a copy which safely allows the subroutine to
+behave as though the values were pass-by-copy.
 
-  The RMI modules use "tie" on every proxy reference to channel access to the
-  other side.  The effect of attempting to tie a proxy reference may destroy its
-  ability to proxy.  (This is untested.)
+ sub foo {
+     $_[0]++; # BAD!
+ } 
+ my $v = 1; 
+ foo($v); 
+ $v == 2; # SURPRISE!
 
-  In most cases, code does not tie a variable created elsewhere, because it
-  destroys its prior value, so this is unlikely to be an issue.
+If foo() were called via RMI, in the current implementation, $v would still
+have its original value.
 
-=item Direct change to $_[$n] values will fail to affect the original variable
+Packages which implement this surprise behavior include Compress::Zlib!  If
+this feature were added the overhead to Compress::Zlib would still make you
+want to wrap the call...
 
-  Remote calls to subroutines/methods which modify $_[$n] directly to tamper
-  with the caller's variables will not work as it would with a local method
-  call.
+=head2 code which relies on caller() will probably fail
 
-  This is supportable, but adds considerable overhead to support modules which
-  create a side effect which is avoided because it is, mostly, a bad idea.
+This means that some modules which perform magic during import() may not work
+as intended.
 
-  Perl technically passes an alias to even non-reference values, though the
-  common "my ($v1,$v2) = @_;" makes a copy which safely allows the subroutine to
-  behave as though the values were pass-by-copy.
+This problem is prevented in one place automatically by the current RMI
+implementation: there is custom code to handle exporting of methods into the
+caller's namespace inside "use_remote".
 
-  sub foo {
-    $_[0]++; # BAD!
-  } my $v = 1; foo($v); $v == 2; # SURPRISE!
+=head1 IMPLEMENTATIONS IN OTHER LANGUAGES
 
-  If foo() were called via RMI, in the current implementation, $v would still
-  have its original value.
+The use of transparent proxy objects goes by the term "RMI" in Java, "Drb"
+in Ruby, "PYRO" in Python, "Remoting" in .NET.
 
-  Packages which implement this surprise behavior include Compress::Zlib!  If
-  this feature were added the overhead to Compress::Zlib would still make you
-  want to wrap the call...
+It is similar in functionality to architectures such as CORBA, SOAP, RPC and
+DCOM.
 
-=item Anything which relies on caller() to check the call stack will not work.
-
-  This means that some modules which perform magic during import() may not work
-  as intended.  Exporting DOES work even so far as to require that the
-  application do this:
-    
-    $c->use_remote('Sys::Hostname',[]);
-    
-  To get this effect (and prevent export of the hostame() function).
-  
-    use Sys::Hostname ();
-
-=item The serialization mechanism needs to be made more robust and efficient.
-
- It's really just enough to "work".
-
- The current implementation uses Data::Dumper with options which should remove
- newlines.  Since we do not flatten arbitrary data structures, a simpler parser
- would be more efficient.
-
- The message type is currently a text string.  This could be made smaller.
-
- The data type before each paramter or return value is an integer, which could
- also be abbreviated futher, or we could go the other way and be more clear. :)
-
- This should switch to sysread and pass the message length instead of relying on
- buffers, since the non-blocking IO might not have issues.
-
-=back
+None of the above use the same protocols (except Java's RMI has an optional
+CORBA-related implementation).  This module is no exception, sadly.  Patches 
+are welcome.
 
 =head1 SEE ALSO
 
 B<RMI::Server>, B<RMI::Client>, B<RMI::Node>, B<RMI::ProxyObject>,
-B<RMI::ProxyReference>
-
-B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
+B<RMI::ProxyReference>, B<SOAP>, B<RPC>
 
 =head1 AUTHORS
 

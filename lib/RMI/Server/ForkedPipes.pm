@@ -13,13 +13,12 @@ RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
 =head1 NAME
 
-RMI::Server::ForkedPipes - internal server for RMI::Client::ForkedPipes 
+RMI::Server::ForkedPipes - service RMI::Client::ForkedPipes requests
 
 =head1 SYNOPSIS
 
-This is used internally by RMI::Client::ForkedPipes.  The only difference
-between this server and a generic RMI::Server is the peer_pid property
-is set, to make other IPC easier.
+This is used internally by RMI::Client::ForkedPipes.  When constructed
+the client makes a private server of this class in a forked process.  
 
 $client->peer_pid eq $client->remote_eval('$$');
 
@@ -33,5 +32,21 @@ forks a private server for itself.
 =head1 SEE ALSO
 
 B<RMI>, B<RMI::Client::ForkedPipes>, B<RMI::Server>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
 
 =cut

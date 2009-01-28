@@ -12,7 +12,7 @@ requires 'Carp';
 requires 'IO::Socket';
 
 # things the tests need
-build_requires 'Test::More' => '0.62';
+build_requires 'Test::More' => '0.86';
 
 #tests('t/*.t t/*/*.t');
 

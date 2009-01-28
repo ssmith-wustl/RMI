@@ -13,17 +13,21 @@ use Fcntl;
 
 RMI::Node::_mk_ro_accessors(__PACKAGE__, qw/host port listen_socket all_select sockets_select listen_queue_size/);
 
+our $DEFAULT_PORT = 4409;
+
 sub new {
     my $class = shift;
 
-    my $self = bless { port => 10293, @_ }, $class;
+    my $self = bless { port => $DEFAULT_PORT, @_ }, $class;
     return unless $self;
 
     unless ($self->listen_socket) {
-        my $listen = IO::Socket::INET->new(LocalHost => $self->host,
-                                           LocalPort => $self->port,
-                                           Listen    => $self->listen_queue_size,
-                                           ReuseAddr => 1);
+        my $listen = IO::Socket::INET->new(
+            LocalHost => $self->host,
+            LocalPort => $self->port,
+            ReuseAddr => 1,
+            Listen    => $self->listen_queue_size,
+        );
         unless ($listen) {
             die "Couldn't create socket: $!";
         }
@@ -129,13 +133,12 @@ sub _close_connection {
 
 =head1 NAME
 
-RMI::Server::Tcp - do RMI over a TCP/IP socket
-
+RMI::Server::Tcp - service RMI::Client::Tcp requests
 
 =head1 SYNOPSIS
 
     $s = RMI::Server::Tcp->new(
-        port => 1234            # defaults to 10293
+        port => 1234            # defaults to 4409
     );
     $s->run;
     
