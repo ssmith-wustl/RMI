@@ -1,0 +1,15 @@
+Revision history for RMI:
+
+0.04 Tue 27 Jan 2009
+            Fixed a bug causing segfault on Perl 5.10 when virtual libs are in use.
+
+0.03 Mon 26 Jan 2009
+            Updated POD extensively.
+
+0.02 Sun 25 Jan 2009
+            Replacement with updated Makefile.PL to require a newer Test::More.
+
+0.01 Sun 25 Jan 2009
+	    Initial release.
+
+
