@@ -184,7 +184,6 @@ sub _bind_local_class_to_remote {
         }
     }
     $RMI::proxied_classes{$class} = $self;
-    $INC{$module} = -1; #$path;
     print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
 }
 
