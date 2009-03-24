@@ -240,6 +240,19 @@ for a private out-of-process object server.
 
 =head1 METHODS
  
+=head2 call_use_lib($path);
+
+Calls "use lib '$path'" on the remote side.
+
+ $c->call_use_lib('/some/path/on/the/server');
+
+=head2 call_use($class)
+
+Uses the Perl package specified on the remote side, making it available for later
+calls to call_class_method() and call_function().
+
+ $c->call_use('Some::Package');
+
 =head2 call_class_method($class, $method, @params)
 
 Does $class->$method(@params) on the remote side.
@@ -257,7 +270,7 @@ A plain function call made by name to the remote side.  The function name must b
  $c->call_use('Sys::Hostname');
  my $server_hostname = $c->call_function('Sys::Hostname::hostname');
 
-=head2 call_sub($fname, @params)
+=head2 call_sub($subname, @params)
 
 An alias for call_function();
 
@@ -269,20 +282,7 @@ Any additional arguments are set to @_ before eval on the remote side, after pro
 
     my $a = $c->call_eval('@main::x = (11,22,33); return \@main::x;');  # pass an arrayref back
     push @$a, 44, 55;                                                   # changed on the server
-    scalar(@$a) == $c->call_eval('scalar(@main::x)');                   # ...true!
-
-=head2 call_use($class)
-
-Uses the Perl package specified on the remote side, making it available for later
-calls to call_class_method() and call_function().
-
- $c->call_use('Some::Package');
- 
-=head2 call_use_lib($path);
-
-Calls "use lib '$path'" on the remote side.
-
- $c->call_use_lib('/some/path/on/the/server');
+    scalar(@$a) == $c->call_eval('scalar(@main::x)');                   # ...true! 
  
 =head2 use_remote($class)
 
@@ -336,9 +336,9 @@ Create a local transparent proxy for a package variable on the remote side.
   $c->bind('@main::foo');
   push @main::foo, 11, 22 33; #changed remotely
 
-=head1 EXAMPLES
+=head1 ADDITIONAL EXAMPLES
 
-=head2 creating and using a remote hashref
+=head2 create and use a remote hashref
 
 This makes a hashref on the server, and makes a proxy on the client:
 
@@ -357,6 +357,19 @@ When we do this, the hashref on the server is destroyed, as since the ref-count
 on both sides is now zero:
 
     $remote_hashref = undef;
+
+=head2 put remote objects from one server in a remote hash on another
+
+$c1 = RMI::Client::Tcp->new(host => 'host1', port => 1234);
+$c2 = RMI::Client::Tcp->new(host => 'host2', port => 1234);
+$c3 = RMI::Client::Tcp->new(host => 'host3', port => 1234);
+
+$o1 = $c1->call_class_method('IO::File','new','/etc/passwd');
+$o2 = $c2->call_class_method('IO::File','new','/etc/passwd');
+
+$h  = $c3->call_eval('{ handle1 => $_[0] }', $o1);
+
+$h->{handle2} = $o2;
 
 =head2 making a remote CODE ref, and using it with local and remote objects
 
@@ -377,7 +390,7 @@ See general bugs in B<RMI> for general system limitations
 
 =head1 SEE ALSO
 
-B<RMI>, B<RMI::Client::Tcp>, B<RMI::Server>
+B<RMI>, B<RMI::Client::Tcp>, B<RMI::Client::ForkedPipes>, B<RMI::Server>
 
 B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
