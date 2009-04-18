@@ -1,4 +1,3 @@
-#!/Library/Frameworks/Python.framework/Versions/3.0/bin/python
 #!/usr/bin/env python
 
 import os
@@ -6,20 +5,44 @@ import posix
 import RMI
 import F1
 
+test_pass = 0
+test_fail = 0
+
 def ok(b,m=None):
     if b:
         if m:
-            print("ok\t" + m)
+            print("ok " + m)
         else:
-            print("ok\tgot" + str(b))
-        return(1)
+            print("ok got" + str(b))
+        #test_pass = test_pass + 1
+        return 1 
 
     else:
         if m:
-            print("NOK\t" + m)
+            print("NOK " + m)
         else:
-            print("NOK\tgot" + str(b))
-        return(0)
+            print("NOK got" + str(b))
+        #test_fail = test_fail + 1
+        return 0 
+
+def is_ok(a,b,m=None):
+    if not m:
+        m = 'comparing ' + str(a) + ' to expected ' + str(b)
+    try:
+        if ok(a==b,m):
+            return 1  
+        else:
+            print("#\tgot " + str(a) + " expected " + str(b))
+            return 0
+    except:
+        print("NOK " + m)
+        print("#\tuncomparable types for! " + str(a) + " expected " + str(b))
+        #test_fail = test_fail + 1
+        return 0
+
+def ok_show(b,m=''):
+    m = m + " (" + str(b) + ")"
+    return ok(b,m)
 
 (client_reader, server_writer) = os.pipe()
 ok(client_reader, 'made client to server pipe')
@@ -52,32 +75,47 @@ if os.fork():
     s.receive_request_and_send_response();
     s.receive_request_and_send_response();
     s.receive_request_and_send_response();
+    s.receive_request_and_send_response();
+    s.receive_request_and_send_response();
+    s.receive_request_and_send_response();
+    s.receive_request_and_send_response();
+    s.receive_request_and_send_response();
+    
 else:
+    RMI.DEBUG_FLAG = 1
     r = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['2+3']);
-    print('r: ' + str(r))
+    is_ok(r,5,'result of remote eval of 2+3 is 5')
 
-    sum = c.send_request_and_receive_response('call_function', None, '__main__.addo', [7,8])
-    print('sum: ' + str(sum))
+    sum1 = c.send_request_and_receive_response('call_function', None, '__main__.addo', [7,8])
+    is_ok(sum1,15,'result of remote function call __main__.addo(7,8) works')    
 
-    f1a = F1.x1()
-    print('f1a: ' + str(f1a))
+    sum2 = c.send_request_and_receive_response('call_function', None, 'F1.add', [4,5]);
+    ok(sum2, 'remote function call with primitives works')
 
-    o = F1.C1();
-    print(str(o))
-    print('f1a a1' + str(o.a1));   
-    print('f1a m1' + str(o.m1));   
-    print('f1a foo' + str(o.foo));   
+    val3 = F1.x1()
+    is_ok(val3,11,'result of local functin call to plain function works')
+
+    local1 = F1.C1();
+    ok_show(local1, 'local constructor works')
+    if local1:
+        ok_show(local1.foo, 'local object property access works')
  
-    obj1 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda a,b: a+b']);
-    print('result 1, remote lambda: ' + str(obj1))
+    remote1 = c.send_request_and_receive_response('call_function', None, 'F1.echo', [local1]);
+    is_ok(remote1, local1, 'remote function call with object echo works')
 
-    obj2 = c.send_request_and_receive_response('call_function', None, 'F1.add', [4,5]);
-    print('result 2, remote function call with primitives: ' + str(obj2))
+    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
+    ok(remote2, 'remote object construction works')
+    
+    if remote2:
+        val2 = remote2.m1()
+        is_ok(val2,"456","remote method call returns as expected")
 
-    obj3 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
-    print('obj: ' + str(obj3))
+    remote3 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda a,b: a+b']);
+    ok_show(remote3, 'remote lambda construction works')
 
-    print(obj3.m1())
+    if remote3:
+        val3 = remote3(6,2)
+        is_ok(val3,8,"remote lambda works")
 
 '''    
     zz = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['z']);

@@ -20,9 +20,10 @@ node_for_object = {}
 remote_id_for_object = {}
 
 # turn on debug messages if an environment variable is set
-#if os.eviron.has_key('RMI_DEBUG'):
-#    DEBUG = os.environ['RMI_DEBUG']
-RMI_DEBUG_FLAG = 0
+try:
+    RMI_DEBUG_FLAG = os.environ['RMI_DEBUG']
+except:
+    RMI_DEBUG_FLAG = 0 
 
 # this is used at the beginning of each debug message
 # setting it to a single space for a server makes server/client distinction
@@ -69,6 +70,8 @@ class Node:
 
         while True: 
             received = self._receive()
+            if RMI_DEBUG_FLAG:
+                print("$RMI::DEBUG_MSG_PREFIX N: $$ received" + str(received))
             if received.message_type == 'result': 
                 if RMI_DEBUG_FLAG:
                     print("$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $message_data->[0]\n")
@@ -134,7 +137,7 @@ class Node:
             else:
                 s = s + ','
         s = s + ')'
-        #print('s: ' + s)
+        print('s: ' + s)
         f = eval(s)
         #print('f: ' + str(f))
         return(f)
@@ -158,9 +161,11 @@ class Node:
         return_data = None
         try:
             if object != None:
+                if RMI_DEBUG_FLAG:
+                    print("$RMI::DEBUG_MSG_PREFIX N: $$ call " + method + " on " + str(object))
                 method_ref = getattr(object,method)
                 if RMI_DEBUG_FLAG:
-                    print("$RMI::DEBUG_MSG_PREFIX N: $$ call " + method + " on " + object + " gets ref" + str(method_ref) + "\n") 
+                    print("$RMI::DEBUG_MSG_PREFIX N: $$ call " + method + " on " + str(object) + " gets ref" + str(method_ref)) 
             else:
                 pos = method.find('.')
                 if pos != -1:
@@ -169,12 +174,11 @@ class Node:
                 method_ref = eval(method)
                 
                 if RMI_DEBUG_FLAG:
-                    pass
-                    #print("$RMI::DEBUG_MSG_PREFIX N: $$ call " + method + " gets ref" + str(method_ref) + "\n") 
-
+                    print("$RMI::DEBUG_MSG_PREFIX N: $$ call " + method + " gets ref" + str(method_ref) + "\n") 
+            
             dispatcher = self.get_dispatcher(len(params))
             #print('got dispatcher')
-            #print("$RMI::DEBUG_MSG_PREFIX N: $$ dispatcher is " + str(dispatcher) + ", params are " . pp.pformat(params) + "\n") 
+            print("$RMI::DEBUG_MSG_PREFIX N: $$ dispatcher is " + str(dispatcher) + ", params are " + pp.pformat(params)) 
 
             return_data = dispatcher(method_ref,params)
             #print('ran dispatcher!!!!!!!!!!!!!!!!!!')
@@ -268,8 +272,11 @@ class Node:
             else:
                 if isinstance(o,ProxyObject) or self._class_is_proxied(type(o)):
                     # sending back a proxy, the remote side will convert back to the original value
-                    key = remote_id_for_object[o];
-                    if key == None:
+                    key = None
+                    try:
+                        local_id = self._object_to_id(o)
+                        key = remote_id_for_object[local_id];
+                    except: 
                         raise(Exception("no id found for object " + str(o) + '?'))
                         
                     if RMI_DEBUG_FLAG:
@@ -303,7 +310,7 @@ class Node:
         #print('BLOB:' + serialized_blob)
         
         if RMI_DEBUG_FLAG:
-            print("$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n")
+            print("$RMI::DEBUG_MSG_PREFIX N: $$ " + str(message.message_type) + " serialized as " + serialized_blob)
         
         if serialized_blob.find('\n') != -1:
             raise(Exception("newline found in message data!"))
@@ -312,10 +319,10 @@ class Node:
         return serialized_blob
         
     def _deserialize(self,serialized_blob):
-        serialized = eval(serialized_blob)
         if RMI_DEBUG_FLAG:
             print("$RMI::DEBUG_MSG_PREFIX N: $$ processing (serialized): " + pp.pformat(serialized_blob))
         
+        serialized = eval(serialized_blob)
         message_type = serialized.pop(0)
         if message_type == None:
             raise(Exception("unexpected undef type from incoming message: " + serialized_blob))
@@ -329,6 +336,9 @@ class Node:
         while (len(serialized)):
             vtype = serialized.pop(0)
             
+            if RMI_DEBUG_FLAG:
+                print("$RMI::DEBUG_MSG_PREFIX N: $$ processing item: " + str(vtype))
+
             if (vtype == 0):
                 # primitive value
                 value = serialized.pop(0)
@@ -366,16 +376,20 @@ class Node:
                 if RMI_DEBUG_FLAG:
                     print("$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n")
             
-            elif (type == 3):
+            elif (vtype == 3):
                 # exists on this side, and was a proxy on the other side: get the real reference by id
                 local_id = serialized.pop(0)
-                o = sent_objects[local_id] 
-                if not o:
+                try:
+                    o = sent_objects[local_id] 
+                except:
                     print("$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n")
+                    raise
                 message_data.append(o)
                 if RMI_DEBUG_FLAG:
-                    print("$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n")
-        
+                    print("$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object " + str(o) + " for value " + local_id)
+            else:
+                raise(Exception("Unknown type in serialized data!"))        
+
         if RMI_DEBUG_FLAG:
             print("$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n")
 
@@ -391,8 +405,9 @@ class Node:
         
         return(Message(message_type,message_data))
         
-    def _exec_coderef():
-        raise(Exception(__LINE__))
+    def _exec_coderef(code,args,kwargs):
+        dispatcher = RMI.Node.get_dispatcher(None,len(args))
+        return dispatcher(code,args)
         '''
         my $sub_id = shift;
         my $sub = $RMI::executing_nodes[-1]{_sent_objects}{$sub_id};
@@ -459,8 +474,25 @@ class Server:
 class ProxyObject:
     def __init__(self,node,remote_id):
         pass
-    
-    def __getattribute__(self,attr):
+
+    def __call__(self, *args, **kwargs):
+        node = None
+        try:
+            local_id = str(self)
+            node = node_for_object[local_id]
+        except KeyError: 
+            print("no node for object?! " + str(self))
+            raise
+
+        print("calling: node is " + str(node))
+        send = [self]
+        send.append(args)
+        response = node.send_request_and_receive_response('call_function', None, 'RMI.Node._exec_coderef', send);
+        print("call response is " + str(response))
+        #value = self.sockio.remotecall(self.oid, self.name, args, kwargs)
+        return response 
+
+    def __getattr__(self,attr):
         node = None
         try:
             local_id = str(self)
@@ -470,8 +502,8 @@ class ProxyObject:
             raise
 
         print("node is " + str(node))
-        response = node.send_request_and_receive_response('call_function',None, str(type(self)) + '.__getattribute__', [attr]);
-        print("ro resposne is " + response)
+        response = node.send_request_and_receive_response('call_function', None, 'getattr', [self,attr]);
+        print("ro response is " + str(response))
         return response
         '''
             no strict;
