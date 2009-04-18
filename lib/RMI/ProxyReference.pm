@@ -48,11 +48,7 @@ sub DESTROY {
     my ($c,$node,$remote_id,$t) = @$self;
     $node = delete $RMI::Node::node_for_object{$t};
     print "$RMI::DEBUG_MSG_PREFIX R: $$ DESTROYING $self wrapping $remote_id from $node with $t\n" if $RMI::DEBUG;
-    my $other_ref = delete $node->{_received_objects}{$remote_id};
-    if (!$other_ref and !$RMI::process_is_ending) {
-        #warn "$RMI::DEBUG_MSG_PREFIX R: $$ DESTROYING $self wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
-        #    . Data::Dumper::Dumper($node->{_received_objects});
-    }
+    delete $node->{_received_objects}{$remote_id};
     push @{ $node->{_received_and_destroyed_ids} }, $remote_id;
 }
 

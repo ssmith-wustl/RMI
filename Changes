@@ -1,5 +1,8 @@
 Revision history for RMI:
 
+0.05 Wed 28 Jan 2009
+            An additional bug fixed appearing only with Perl 5.10 when proxy references DESTROY.
+
 0.04 Tue 27 Jan 2009
             Fixed a bug causing segfault on Perl 5.10 when virtual libs are in use.
 
