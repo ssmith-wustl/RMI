@@ -59,7 +59,7 @@ class Node:
 
     def send_request_and_receive_response(self, call_type, object = None, method = None, params = [], opts = None):
         if RMI_DEBUG_FLAG: 
-            print("RMI_DEBUG_FLAG_MSG_PREFIX N: " + str(os.getpid()) + " calling via " + str(self) + " on " + str(object) + ": " + str(method) + " with " + pp.pformat(params))
+            print("$RMI::DEBUG_MSG_PREFIX N: " + str(os.getpid()) + " calling via " + str(self) + " on " + str(object) + ": " + str(method) + " with " + pp.pformat(params))
         
         sendable = [method,0,object]
         for p in params:
