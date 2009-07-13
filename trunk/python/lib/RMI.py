@@ -21,9 +21,9 @@ remote_id_for_object = {}
 
 # turn on debug messages if an environment variable is set
 try:
-    RMI_DEBUG_FLAG = os.environ['RMI_DEBUG']
+    DEBUG_FLAG = os.environ['RMI_DEBUG']
 except:
-    RMI_DEBUG_FLAG = 0 
+    DEBUG_FLAG = 0 
 
 # this is used at the beginning of each debug message
 # setting it to a single space for a server makes server/client distinction
@@ -58,10 +58,15 @@ class Node:
             self.writer.close 
 
     def send_request_and_receive_response(self, call_type, object = None, method = None, params = [], opts = None):
-        if RMI_DEBUG_FLAG: 
-            print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " calling via " + str(self) + " on " + str(object) + ": " + str(method) + " with " + pp.pformat(params))
+        if DEBUG_FLAG: 
+            print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) 
+                + " calling via " + str(self) 
+                + " on " + str(object) 
+                + ": " + str(method) 
+                + " with " + pp.pformat(params)
+            )
         
-        sendable = [method,0,object]
+        sendable = [method,0,object,len(params)]
         for p in params:
             sendable.append(p)
 
@@ -70,11 +75,11 @@ class Node:
 
         while True: 
             received = self._receive()
-            if RMI_DEBUG_FLAG:
+            if DEBUG_FLAG:
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " received" + str(received))
             if received.message_type == 'result': 
-                if RMI_DEBUG_FLAG:
-                    print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " returning scalar $message_data->[0]\n")
+                if DEBUG_FLAG:
+                    print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " returning " + str(received.message_data[0]) + "\n")
                 return received.message_data[0]
             elif received.message_type == 'close':
                 return
@@ -99,27 +104,32 @@ class Node:
 
     def _send(self, message):
         s = self._serialize(message);
-        if (RMI_DEBUG_FLAG):
-            print(DEBUG_MSG_PREFIX + 'N: " + str(os.getpid()) + " sending: >' + s + "<\n")
+        if (DEBUG_FLAG):
+            print(DEBUG_MSG_PREFIX + 'N: ' + str(os.getpid()) + " sending: >" + s + "<\n")
         self.writer.write(s)
         self.writer.write("\n")
         self.writer.flush()
         return True
 
     def _receive(self):
-        if (RMI_DEBUG_FLAG):
+        if (DEBUG_FLAG):
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " receiving\n")
 
-        serialized_blob = self.reader.readline()
+        serialized_blob = None
+        try:
+            serialized_blob = self.reader.readline()
+        except:
+            if (DEBUG_FLAG):
+                print(DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " read failure: >\n")
 
         if (serialized_blob == None):
             # a failure to get data returns a message type of 'close', and undefined message_data
-            if (RMI_DEBUG_FLAG):
+            if (DEBUG_FLAG):
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " connection closed\n")
             self.is_closed = 1
             return(Message('close',undef));
 
-        if (RMI_DEBUG_FLAG):
+        if (DEBUG_FLAG):
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " got >" + serialized_blob + "<\n")
             if not serialized_blob:
                 print("\n")
@@ -145,14 +155,21 @@ class Node:
     def testme(a=111,b=222):
         print("hi")
         return(a+b)
-        
+
     def _process_query(self,message_data):
         method = message_data.pop(0)
         wantarray = message_data.pop(0)
         object = message_data.pop(0)
-        params = message_data
+        nparams = message_data.pop(0)
         
-        if RMI_DEBUG_FLAG:
+        params = []
+        processed = 0
+        while processed < nparams:
+            x = message_data.pop(0)
+            params.append(x)
+            processed = processed + 1
+        
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " unserialized method/wantarray/object/params:" + method + '/' + str(wantarray) + '/' + str(object) + '/' + str(params))
         
         executing_nodes.append(self)
@@ -161,10 +178,10 @@ class Node:
         return_data = None
         try:
             if object != None:
-                if RMI_DEBUG_FLAG:
+                if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " call " + method + " on " + str(object))
                 method_ref = getattr(object,method)
-                if RMI_DEBUG_FLAG:
+                if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " call " + method + " on " + str(object) + " gets result " + str(method_ref)) 
             else:
                 pos = method.find('.')
@@ -173,12 +190,12 @@ class Node:
                     exec('import ' + pkg)
                 method_ref = eval(method)
                 
-                if RMI_DEBUG_FLAG:
+                if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " call " + method + " gets ref" + str(method_ref) + "\n") 
             
             dispatcher = self.get_dispatcher(len(params))
             #print('got dispatcher')
-            if RMI_DEBUG_FLAG:
+            if DEBUG_FLAG:
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " dispatcher is " + str(dispatcher) + ", params are " + pp.pformat(params)) 
 
             return_data = dispatcher(method_ref,params)
@@ -188,15 +205,15 @@ class Node:
         except BaseException as e:
             return_data = str(e)
             return_type = 'exception'
-            if RMI_DEBUG_FLAG:
-                traceback.print_exc(file=sys.stdout)
+            if DEBUG_FLAG:
+                #traceback.print_exc(file=sys.stdout)
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " EXCEPTION " + str(e) + "\n") 
             
         if (return_type == 'exception'):
-            if (RMI_DEBUG_FLAG):
+            if (DEBUG_FLAG):
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with EXCEPTION (unserialized): $@\n")
         else:
-            if (RMI_DEBUG_FLAG):
+            if (DEBUG_FLAG):
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with result (unserialized): @result\n")
         
         executing_nodes.pop
@@ -282,7 +299,7 @@ class Node:
                     except: 
                         raise(Exception("no id found for object " + str(o) + '?'))
                         
-                    if RMI_DEBUG_FLAG:
+                    if DEBUG_FLAG:
                         print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " proxy $o references remote $key:\n")
                     serialized.append(3)
                     serialized.append(key)
@@ -300,19 +317,19 @@ class Node:
                     serialized.append(id)
                     sent_objects[id] = o;
 
-        if RMI_DEBUG_FLAG:
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " $message_type translated for serialization to @serialized\n")
 
         message_data = None # essential to get the DESTROY handler to fire for proxies we're not holding on-to
  
-        if RMI_DEBUG_FLAG:
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " destroyed proxies: @$received_and_destroyed_ids\n")        
        
         serialized_blob = pp.pformat(serialized)
         serialized_blob.replace("\n",' ') 
         #print('BLOB:' + serialized_blob)
         
-        if RMI_DEBUG_FLAG:
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " " + str(message.message_type) + " serialized as " + serialized_blob)
         
         if serialized_blob.find('\n') != -1:
@@ -322,7 +339,7 @@ class Node:
         return serialized_blob
         
     def _deserialize(self,serialized_blob):
-        if RMI_DEBUG_FLAG:
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " processing (serialized): " + pp.pformat(serialized_blob))
         
         serialized = eval(serialized_blob)
@@ -339,13 +356,13 @@ class Node:
         while (len(serialized)):
             vtype = serialized.pop(0)
             
-            if RMI_DEBUG_FLAG:
+            if DEBUG_FLAG:
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " processing item: " + str(vtype))
 
             if (vtype == 0):
                 # primitive value
                 value = serialized.pop(0)
-                if RMI_DEBUG_FLAG:
+                if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " - primitive " + str(value) + "\n")
                 message_data.append(value)
                 
@@ -376,8 +393,8 @@ class Node:
                     remote_id_for_object[local_id] = remote_id;
                 
                 message_data.append(o)
-                if RMI_DEBUG_FLAG:
-                    print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " - made proxy for $value\n")
+                if DEBUG_FLAG:
+                    print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " - made proxy for " + remote_id  + "\n")
             
             elif (vtype == 3):
                 # exists on this side, and was a proxy on the other side: get the real reference by id
@@ -388,12 +405,12 @@ class Node:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " reconstituting local object $value, but not found in my sent objects!\n")
                     raise
                 message_data.append(o)
-                if RMI_DEBUG_FLAG:
+                if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " - resolved local object " + str(o) + " for value " + local_id)
             else:
                 raise(Exception("Unknown type in serialized data!"))        
 
-        if RMI_DEBUG_FLAG:
+        if DEBUG_FLAG:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " remote side destroyed: @$received_and_destroyed_ids\n")
 
         missing = []
@@ -498,6 +515,7 @@ class ProxyObject:
 
     # sequences
     def __len__(self):
+        return(1)
         node = None
         try:
             local_id = str(self)
@@ -507,7 +525,7 @@ class ProxyObject:
             raise
 
         print("len: node is " + str(node))
-        response = node.send_request_and_receive_response('call_object_method', self, '__len__', []);
+        response = node.send_request_and_receive_response('call_function', None, 'len', [ self ]);
         print("len response is " + str(response))
         #value = self.sockio.remotecall(self.oid, self.name, args, kwargs)
         return response 

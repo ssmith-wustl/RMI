@@ -10,6 +10,9 @@ def echo(o):
     print("got for echo: " + str(o))
     return o
 
+def cat(a,b,c):
+    print(a + b + c)
+
 class C1:
     def __init__(self):
         self.a1 = "123"

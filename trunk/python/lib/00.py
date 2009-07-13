@@ -70,19 +70,34 @@ def addo(a,b):
     return(a+b)
 
 if os.fork():
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
-    s.receive_request_and_send_response();
+    RMI.DEBUG_FLAG = 1
+    RMI.DEBUG_MSG_PREFIX = '    SERVER'
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+
+    exit
+
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
     
 else:
-    RMI.DEBUG_FLAG = 1
+    RMI.DEBUG_FLAG = 1 
+    RMI.DEBUG_MSG_PREFIX = 'CLIENT'
+    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
+    ok(remote2, "got remote obj")
+ 
+    if remote2:
+        val2 = remote2.m1()
+        is_ok(val2,"456","remote method call returns as expected")
+        ref2 = remote2.m1
+        ok(ref2,"remote method ref is as expected")
+        val2b = ref2()
+        is_ok(val2b,"456","remote methodref returns as expected")
+    exit
+
     r = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['2+3']);
     is_ok(r,5,'result of remote eval of 2+3 is 5')
 
@@ -103,12 +118,6 @@ else:
     remote1 = c.send_request_and_receive_response('call_function', None, 'F1.echo', [local1]);
     is_ok(remote1, local1, 'remote function call with object echo works')
 
-    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
-    ok(remote2, 'remote object construction works')
-    
-    if remote2:
-        val2 = remote2.m1()
-        is_ok(val2,"456","remote method call returns as expected")
 
     remote3 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda a,b: a+b']);
     ok_show(remote3, 'remote lambda construction works')
