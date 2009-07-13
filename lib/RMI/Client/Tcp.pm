@@ -53,15 +53,15 @@ sub new {
 
 =head1 NAME
 
-RMI::Client::Tcp - do RMI over a TCP/IP socket
-
+RMI::Client::Tcp - an RMI::Client implementation using TCP/IP sockets
 
 =head1 SYNOPSIS
 
     $c = RMI::Client::Tcp->new(
         host => 'myserver.com', # defaults to 'localhost'
-        port => 1234            # defaults to 10293
+        port => 1234            # defaults to 4409
     );
+
     $c->call_use('IO::File');
     $remote_fh = $c->call_class_method('IO::File', 'new', '/my/file');
     print <$remote_fh>;
@@ -69,13 +69,14 @@ RMI::Client::Tcp - do RMI over a TCP/IP socket
 =head1 DESCRIPTION
 
 This subclass of RMI::Client makes a TCP/IP socket connection to an
-B<RMI::Server::Tcp>.  See B<RMI::Server::Tcp> for details on server options.  
+B<RMI::Server::Tcp>.  See B<RMI::Client> for details on the general client 
+API.
+
+See for B<RMI::Server::Tcp> for details on how to start a matching
+B<RMI::Server>.
 
 See the general B<RMI> description for an overview of how RMI::Client and
-RMI::Servers interact, and examples.   Seee B<RMI::Client> for details
-on the general client API.
-
-=back
+RMI::Servers interact, and examples.   
 
 =head1 METHODS
 

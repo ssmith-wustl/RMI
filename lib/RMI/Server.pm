@@ -97,7 +97,7 @@ sub _receive_eval {
 
 =head1 NAME
 
-RMI::Server - service remote RMI requests
+RMI::Server - service RMI::Client requests from another process
 
 =head1 SYNOPSIS
 
@@ -140,9 +140,7 @@ documentation.
 
 =head1 METHODS
 
-=over 4
-
-=item new()
+=head2 new()
 
  $s = RMI::Server->new(reader => $fh1, writer => $fh2)
 
@@ -150,21 +148,19 @@ This is typically overriden in a specific subclass of RMI::Server to construct
 the reader and writer according to a particular strategy.  It is possible for
 the reader and the writer to be the same handle, particularly for B<RMI::Server::Tcp>.
 
-=item receive_request_and_send_response()
+=head2 receive_request_and_send_response()
 
  $bool = $
 
 Implemented in the base class for all RMI::Node objects, this handles processing
 a single request from the reader handle.
 
-=item run()
+=head2 run()
 
  $s->run();
  
 Enter a loop processing RMI requests.  This will continue as long as the
 connection is open.
-
-=back
 
 =head1 BUGS AND CAVEATS
 
@@ -173,5 +169,21 @@ See general bugs in B<RMI> for general system limitations
 =head1 SEE ALSO
 
 B<RMI> B<RMI::Node> B<RMI::Client> B<RMI::Server::Tcp> B<RMI::Server::ForkedPipes>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
 
 =cut
