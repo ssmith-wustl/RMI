@@ -14,6 +14,8 @@ use_ok("RMI::Server::Tcp");
 my $parent_pid = $$;
 my $child_pid = fork();
 unless ($child_pid) {
+    # the child process is the server
+
     # if $RMI::LOG is true, this will make the server logs indent relative to the client
     do { no warnings; $RMI::DEBUG_MSG_PREFIX = ' '; };
 
@@ -112,5 +114,8 @@ my @lines = <$o>; #->getlines;
 ok(scalar(@lines) > 1, "got " . scalar(@lines) . " lines");
 is(ref($o),'IO::File', "ref() returns IO::File instead of RMI::ProxyObject because we've fully proxied the entire package in this process");
 
+$c->call_eval("exit 1");
+
 # kill the server in the child process
 kill $child_pid;
+

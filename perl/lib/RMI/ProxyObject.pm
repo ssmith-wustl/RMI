@@ -42,6 +42,10 @@ sub isa {
     $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'isa', \@_);
 }
 
+END {
+    $RMI::process_is_ending = 1;
+}
+
 sub DESTROY {
     my $self = $_[0];
     my $id = "$self";
