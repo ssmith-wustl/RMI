@@ -80,8 +80,8 @@ if os.fork():
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
-    exit();
     s.receive_request_and_send_response()
+    exit();
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
@@ -110,9 +110,6 @@ else:
     remote1 = c.send_request_and_receive_response('call_function', None, 'F1.echo', [local1]);
     is_ok(remote1, local1, 'remote function call with object echo works')
 
-
-'''    
-
     # This breaks b/c when we pull back an array it only gets the "method" interface, not the array-ish features 
     remote2 = c.send_request_and_receive_response('call_function', None, '__main__.getarray', []);
     ok_show(remote2, 'got a result, hopefully an array');
@@ -120,6 +117,9 @@ else:
         ok_show(remote2[0], "got value 1");
         ok_show(remote2[1], "got value 2");
         ok_show(remote2[2], "got value 3");
+
+'''    
+
   
     # This breaks b/c params go as an array, which has problems
     remote4 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda: 555']);
