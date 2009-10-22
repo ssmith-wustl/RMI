@@ -86,8 +86,10 @@ class Node:
             elif received.message_type == 'query':
                 self._process_query(received.message_data)
             elif received.message_type == 'exception':
+                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " caught exception " + received.message_data)
                 raise(Exception(received.message_data))
             else:
+                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " unexpected message_type " + received.message_type)
                 raise(Exception("unexpected message type from RMI message:" % received.message_type))
             
     def receive_request_and_send_response(self):
@@ -149,7 +151,7 @@ class Node:
         s = s + ')'
         #print('s: ' + s)
         f = eval(s)
-        #print('f: ' + str(f))
+        print('f: ' + str(f))
         return(f)
         
     def testme(a=111,b=222):

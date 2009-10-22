@@ -4,6 +4,7 @@ import os
 import posix
 import RMI
 import F1
+import F2
 
 test_pass = 0
 test_fail = 0
@@ -69,34 +70,25 @@ ok(s)
 def addo(a,b):
     return(a+b)
 
+def getarray():
+    return([111,222,333]);
+
 if os.fork():
-    RMI.DEBUG_FLAG = 1
-    RMI.DEBUG_MSG_PREFIX = '    SERVER'
+    #RMI.DEBUG_FLAG = 1
+    #RMI.DEBUG_MSG_PREFIX = '    SERVER'
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
-
-    exit
-
     s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    exit();
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     
 else:
-    RMI.DEBUG_FLAG = 1 
-    RMI.DEBUG_MSG_PREFIX = 'CLIENT'
-    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
-    ok(remote2, "got remote obj")
- 
-    if remote2:
-        val2 = remote2.m1()
-        is_ok(val2,"456","remote method call returns as expected")
-        ref2 = remote2.m1
-        ok(ref2,"remote method ref is as expected")
-        val2b = ref2()
-        is_ok(val2b,"456","remote methodref returns as expected")
-    exit
+    #RMI.DEBUG_FLAG = 1 
+    #RMI.DEBUG_MSG_PREFIX = 'CLIENT'
 
     r = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['2+3']);
     is_ok(r,5,'result of remote eval of 2+3 is 5')
@@ -119,14 +111,43 @@ else:
     is_ok(remote1, local1, 'remote function call with object echo works')
 
 
+'''    
+
+    # This breaks b/c when we pull back an array it only gets the "method" interface, not the array-ish features 
+    remote2 = c.send_request_and_receive_response('call_function', None, '__main__.getarray', []);
+    ok_show(remote2, 'got a result, hopefully an array');
+    if remote2:
+        ok_show(remote2[0], "got value 1");
+        ok_show(remote2[1], "got value 2");
+        ok_show(remote2[2], "got value 3");
+  
+    # This breaks b/c params go as an array, which has problems
+    remote4 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda: 555']);
+    ok_show(remote4, 'remote lambda construction works')
+
+    if remote4:
+        val2 = remote4()
+        is_ok(val2,555,"remote lambda works with zero params")
+
     remote3 = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['lambda a,b: a+b']);
-    ok_show(remote3, 'remote lambda construction works')
+    ok_show(remote3, 'remote lambda construction works with params')
 
     if remote3:
         val3 = remote3(6,2)
-        is_ok(val3,8,"remote lambda works")
+        is_ok(val3,8,"remote lambda works with params")
+    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
+    ok(remote2, "got remote obj")
+ 
+    exit
 
-'''    
+    if remote2:
+        val2 = remote2.m1()
+        is_ok(val2,"456","remote method call returns as expected")
+        ref2 = remote2.m1
+        ok(ref2,"remote method ref is as expected")
+        val2b = ref2()
+        is_ok(val2b,"456","remote methodref returns as expected")
+
     zz = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['z']);
     print('zz: ' + str(zz))
 
