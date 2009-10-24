@@ -120,50 +120,17 @@ is_ok(val2b,"456","remote methodref returns as expected")
 zz = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['"z"']);
 print('zz: ' + str(zz))
 
+'''
 f1c = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['F1.x1()'])
 print('f1b: ' + str(f1c))
 
 imp = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['import F1'])
 print('imp: ' + str(imp))
+'''
 
 # Somehow, closing the connection doesn't cause the server to catch the close, so we have a hack to
 # signal to it that it should exit.  Fix me.
 c.close
 c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['"exitnow"']);
 print("CLIENT DONE")
-    
-'''    
-
-  
-
-'''
-  
-    
-       
-'''
-exit
-
-
-if os.fork():
-     service one request and exit
-    exit
-
-# send one request and get the result
-
-    
-# we might have also done..
-#robj = c->send_request_and_receive_response('call_class_method', 'IO::File', 'new', '/my/file');
-
-# this only works on objects which are remote proxies:
-#$txt = $c->send_request_and_receive_response('call_object_method', $robj, 'getline');
    
-def ok(result,message):
-    if result:
-        print('ok  ' + message)
-    else:
-        print('NOK ' + message)
-
-ok(1, "hello")
-ok(0, "goodbye")
-'''
-    
