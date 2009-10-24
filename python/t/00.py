@@ -81,10 +81,11 @@ if os.fork():
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
     s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
+    s.receive_request_and_send_response()
     exit();
-    s.receive_request_and_send_response()
-    s.receive_request_and_send_response()
-    s.receive_request_and_send_response()
     
 else:
     #RMI.DEBUG_FLAG = 1 
@@ -112,12 +113,14 @@ else:
 
     # This breaks b/c when we pull back an array it only gets the "method" interface, not the array-ish features 
     remote2 = c.send_request_and_receive_response('call_function', None, '__main__.getarray', []);
-    ok_show(remote2, 'got a result, hopefully an array');
-    if remote2:
-        ok_show(remote2[0], "got value 1");
-        ok_show(remote2[1], "got value 2");
-        ok_show(remote2[2], "got value 3");
+    ok_show(remote2, 'got a result, hopefully an array: ' + str(remote2));
+    print("item 1 is " + str(remote2[1]) + "\n")
+    #RMI.pp.pformat(remote2);
+    #ok_show(str(remote2[0]), "got value 1");
+    #ok_show(str(remote2[1]), "got value 2");
+    #ok_show(str(remote2[2]), "got value 3");
 
+    
 '''    
 
   

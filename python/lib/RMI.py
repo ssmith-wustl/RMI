@@ -86,7 +86,7 @@ class Node:
             elif received.message_type == 'query':
                 self._process_query(received.message_data)
             elif received.message_type == 'exception':
-                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " caught exception " + received.message_data)
+                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " caught exception " + pp.pformat(received.message_data))
                 raise(Exception(received.message_data))
             else:
                 print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " unexpected message_type " + received.message_type)
@@ -151,7 +151,6 @@ class Node:
         s = s + ')'
         #print('s: ' + s)
         f = eval(s)
-        print('f: ' + str(f))
         return(f)
         
     def testme(a=111,b=222):
@@ -164,6 +163,7 @@ class Node:
         object = message_data.pop(0)
         nparams = message_data.pop(0)
         
+        DEBUG_FLAG=0
         params = []
         processed = 0
         while processed < nparams:
@@ -175,7 +175,7 @@ class Node:
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " unserialized method/wantarray/object/params:" + method + '/' + str(wantarray) + '/' + str(object) + '/' + str(params))
         
         executing_nodes.append(self)
-        
+
         return_type = None
         return_data = None
         try:
@@ -195,13 +195,7 @@ class Node:
                 if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " call " + method + " gets ref" + str(method_ref) + "\n") 
             
-            dispatcher = self.get_dispatcher(len(params))
-            #print('got dispatcher')
-            if DEBUG_FLAG:
-                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " dispatcher is " + str(dispatcher) + ", params are " + pp.pformat(params)) 
-
-            return_data = dispatcher(method_ref,params)
-            #print('ran dispatcher!!!!!!!!!!!!!!!!!!')
+            return_data = method_ref(*params)
             return_type = 'result'
             
         except BaseException as e:
@@ -213,13 +207,15 @@ class Node:
             
         if (return_type == 'exception'):
             if (DEBUG_FLAG):
-                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with EXCEPTION (unserialized): $@\n")
+                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with EXCEPTION (unserialized): " + pp.pformat(return_data) + "\n")
         else:
             if (DEBUG_FLAG):
-                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with result (unserialized): @result\n")
+                print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " executed with result (unserialized): " + pp.pformat(return_data) + "\n")
         
         executing_nodes.pop
         
+        DEBUG_FLAG=0
+
         # we MUST undef these in case they are the only references to remote objects which need to be destroyed
         # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
         object = None;
@@ -306,11 +302,6 @@ class Node:
                     serialized.append(3)
                     serialized.append(key)
                 
-                elif isinstance(o,list):
-                    serialized.append(2)
-                    serialized.append(id)
-                    sent_objects[id] = o
-
                 else:
                     # sending an object local to this side, the remote side will convert to 
                     # TODO: use something better than stringification since this can be overridden!!!
@@ -442,6 +433,12 @@ class Node:
         goto $sub;
         '''
         
+    def bind_local_var_to_remote():
+        raise(Exception(__LINE__))
+    
+    def bind_local_class_to_remote():
+        raise(Exception(__LINE__))
+    
     def _remote_has_ref():
         raise(Exception(__LINE__))
         '''
@@ -481,10 +478,6 @@ class Client:
         raise(Exception(__LINE__))
     def bind():
         raise(Exception(__LINE__))
-    def _bind_local_var_to_remote():
-        raise(Exception(__LINE__))
-    def _bind_local_class_to_remote():
-        raise(Exception(__LINE__))
 
 class Server:
     def __init__(self):
@@ -511,13 +504,9 @@ class ProxyObject:
         except KeyError: 
             print("no node for object?! " + str(self))
             raise
-
-        print("calling: node is " + str(node))
         send = [self]
         send.append(args)
         response = node.send_request_and_receive_response('call_function', None, 'RMI.Node._exec_coderef', send);
-        print("call response is " + str(response))
-        #value = self.sockio.remotecall(self.oid, self.name, args, kwargs)
         return response 
 
     # sequences
@@ -530,13 +519,16 @@ class ProxyObject:
         except KeyError: 
             print("no node for object?! " + str(self))
             raise
-
         print("len: node is " + str(node))
         response = node.send_request_and_receive_response('call_function', None, 'len', [ self ]);
         print("len response is " + str(response))
-        #value = self.sockio.remotecall(self.oid, self.name, args, kwargs)
         return response 
-            
+
+    # __getattr__ won't catch everything, so we have to explicitly do this for some builtin methods
+    def __getitem__(self,i):
+        delegate = self.__getattr__('__getitem__');
+        return delegate(i)
+
     # objects with attributes (including method references
     def __getattr__(self,attr):
         node = None
@@ -546,10 +538,7 @@ class ProxyObject:
         except KeyError: 
             print("no node for object?! " + str(self))
             raise
-
-        print("node is " + str(node))
         response = node.send_request_and_receive_response('call_function', None, 'getattr', [self,attr]);
-        print("ro response is " + str(response))
         return response
         '''
             no strict;
@@ -565,6 +554,7 @@ class ProxyObject:
             print RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " $object $method redirecting to node $node\n" if $RMI::DEBUG;
             $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, \@_);
         '''
+
 
     def can():
         raise(Exception(__LINE__))
