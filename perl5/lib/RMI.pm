@@ -3,7 +3,7 @@ package RMI;
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.07');
+our $VERSION = qv('0.08');
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
@@ -33,7 +33,7 @@ RMI - Remote Method Invocation with transparent proxies v0.07
 
 head1 VERSION
 
-This document describes RMI v0.07.
+This document describes RMI v0.08.
 
 =head1 SYNOPSIS
 
