@@ -7,7 +7,7 @@ def add(a,b):
     return(a+b)
 
 def echo(o):
-    print("got for echo: " + str(o))
+    print("calling F1.echo with " + str(o))
     return o
 
 def cat(a,b,c):

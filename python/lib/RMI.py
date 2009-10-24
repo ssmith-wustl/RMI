@@ -56,17 +56,19 @@ class Node:
                 self.reader.close
         if self.writer:
             self.writer.close 
+        self.reader = None
+        self.writer = None
 
-    def send_request_and_receive_response(self, call_type, object = None, method = None, params = [], opts = None):
+    def send_request_and_receive_response(self, call_type, obj = None, method = None, params = [], opts = None):
         if DEBUG_FLAG: 
             print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) 
                 + " calling via " + str(self) 
-                + " on " + str(object) 
+                + " on " + pp.pformat(obj) 
                 + ": " + str(method) 
                 + " with " + pp.pformat(params)
             )
         
-        sendable = [method,0,object,len(params)]
+        sendable = [method,0,obj,len(params)]
         for p in params:
             sendable.append(p)
 
@@ -298,7 +300,7 @@ class Node:
                         raise(Exception("no id found for object " + str(o) + '?'))
                         
                     if DEBUG_FLAG:
-                        print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " proxy $o references remote $key:\n")
+                        print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " proxy " + pp.pformat(o) + " references remote " + str(key) + "\n")
                     serialized.append(3)
                     serialized.append(key)
                 
@@ -424,8 +426,7 @@ class Node:
         return(Message(message_type,message_data))
         
     def _exec_coderef(code,args):
-        dispatcher = RMI.Node.get_dispatcher(None,len(args))
-        return dispatcher(code,args)
+        return code(*args)
         '''
         my $sub_id = shift;
         my $sub = $RMI::executing_nodes[-1]{_sent_objects}{$sub_id};
@@ -491,45 +492,34 @@ class Server:
     def _receive_eval():
         raise(Exception(__LINE__))
 
+class Wrap:
+    def delegate(self,method,*args):
+        node = None
+        try:
+            local_id = str(self)
+            node = node_for_object[local_id]
+        except KeyError: 
+            print("no node for object?! " + str(self))
+            raise
+        response = node.send_request_and_receive_response('call_object_method', self, method, args);
+        return response
+
+
+class ProxyMeta:
+    def __init__(self):
+        pass
+
 class ProxyObject:
+    __metaclass__ = RMI.ProxyMeta
+    
     def __init__(self,node,remote_id):
         pass
 
-    # callables
-    def __call__(self, *args, **kwargs):
-        node = None
-        try:
-            local_id = str(self)
-            node = node_for_object[local_id]
-        except KeyError: 
-            print("no node for object?! " + str(self))
-            raise
-        send = [self]
-        send.append(args)
-        response = node.send_request_and_receive_response('call_function', None, 'RMI.Node._exec_coderef', send);
-        return response 
-
-    # sequences
-    def __len__(self):
-        return(1)
-        node = None
-        try:
-            local_id = str(self)
-            node = node_for_object[local_id]
-        except KeyError: 
-            print("no node for object?! " + str(self))
-            raise
-        print("len: node is " + str(node))
-        response = node.send_request_and_receive_response('call_function', None, 'len', [ self ]);
-        print("len response is " + str(response))
-        return response 
-
-    # __getattr__ won't catch everything, so we have to explicitly do this for some builtin methods
-    def __getitem__(self,i):
-        delegate = self.__getattr__('__getitem__');
-        return delegate(i)
-
-    # objects with attributes (including method references
+    # Basically every method call will attempt to find the method
+    # reference in the object's symbol table.  We return a wrapper
+    # on demand, which ends up being called.
+    # This means we never really go through the "call_object_method" interface
+    # except to go to 
     def __getattr__(self,attr):
         node = None
         try:
@@ -540,36 +530,27 @@ class ProxyObject:
             raise
         response = node.send_request_and_receive_response('call_function', None, 'getattr', [self,attr]);
         return response
-        '''
-            no strict;
-            my $object = shift;
-            my $method = $AUTOLOAD;
-            my ($class,$subname) = ($method =~ /^(.*)::(.*?)$/);
-            $method = $subname;
-            no warnings;
-            my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
-            unless ($node) {
-                die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
-            }
-            print RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " $object $method redirecting to node $node\n" if $RMI::DEBUG;
-            $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, \@_);
-        '''
 
+    # Some methods which implement standard language functionality are "special", and won't be
+    # seen by __getattr__ above.  We need to catch these calls and delegate them across the connection.
 
+    def __call__(self, *args):
+        return RMI.Wrap.delegate(self,'__call__',*args)
+        #delegate = self.__getattr__('__call__');
+        #return delegate(*args,**kwargs)
+    
+    def __len__(self,*args,**kwargs):
+        return RMI.Wrap.delegate(self,'__len__',*args)
+
+    def __getitem__(self,*args):
+        return RMI.Wrap.delegate(self,'__getitem__',*args)
+    
     def can():
         raise(Exception(__LINE__))
+    
     def isa():
         raise(Exception(__LINE__))
-    def DESTROY():
-        raise(Exception(__LINE__))
 
-class ProxyReference:
-    def __init__(self):
-        raise(Exception(__LINE__))
-    def TIE():
-        raise(Exception(__LINE__))
-    def AUTOLOAD():
-        raise(Exception(__LINE__))
     def DESTROY():
         raise(Exception(__LINE__))
 
