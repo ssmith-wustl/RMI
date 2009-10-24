@@ -43,7 +43,7 @@ sub _ck {
 }
 
 # SCALAR
-ok($c->_bind_local_var_to_remote('$main::x'), 'bound $main::x');
+ok($c->bind_local_var_to_remote('$main::x'), 'bound $main::x');
 
 $main::x = 5;
 ckremote('$main::x');
@@ -58,7 +58,7 @@ ckremote('$main::x');
 @main::a = (11,22,33);
 nomatch('@main::a');
 
-ok($c->_bind_local_var_to_remote('@main::a'), 'bound @main::a');
+ok($c->bind_local_var_to_remote('@main::a'), 'bound @main::a');
 
 $c->call_eval('@main::a = (111,222,333,444)');
 cklocal('@main::a');
