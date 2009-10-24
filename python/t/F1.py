@@ -18,10 +18,9 @@ class C1:
         self.a1 = "123"
 
     def m1(self):
-        #print("method1\n")
         return("456")
 
-    def __getattribute__(self,attr):
+    def X__getattribute__(self,attr):
         #print('ga: ' + str(self) + ' attr ' + str(attr))
         try:
             return object.__getattribute__(self,attr)

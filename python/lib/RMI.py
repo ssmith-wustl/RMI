@@ -370,14 +370,15 @@ class Node(object):
                 # an object exists on the other side: make a proxy unless we already have one
                 # note that type 2 is for Perl non-object references, which Python doesn't ever generate, but may receive
                 remote_id = serialized.pop(0)
+                o = None
                 try:
                     o = received_objects[remote_id]
+                    message_data.append(o)
                 except KeyError:
                     # no proxy for this id yet...
                     remote_class = self._id_to_class(remote_id)
                     remote_shape = self._id_to_shape(remote_id)
                     
-                    o = None
                     if remote_shape == 'ARRAY':
                         o = ProxyObject(self,remote_id)
                     elif remote_shape == 'HASH':
@@ -386,13 +387,15 @@ class Node(object):
                         o = lambda params: self.send_request_and_receive_response('call_coderef', None, 'RMI.Node._exec_coderef', [remote_id, params])
                     else:
                         o = ProxyObject(self,remote_id)
-                    
-                    received_objects[remote_id] = weakref.ref(o)
+                   
+                    message_data.append(o)
+
+                    # TODO: make sure this is actually a weak ref
+                    received_objects[remote_id] = o
                     local_id = self._object_to_id(o)
                     node_for_object[local_id] = self;
                     remote_id_for_object[local_id] = remote_id;
                 
-                message_data.append(o)
                 if DEBUG_FLAG:
                     print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " - made proxy for " + remote_id  + "\n")
             

@@ -79,7 +79,7 @@ is_ok(val3,11,'result of local functin call to plain function works')
 local1 = F1.C1();
 ok_show(local1, 'local constructor works')
 if local1:
-    ok_show(local1.foo, 'local object property access works')
+    ok_show(local1.m1, 'local object property access works')
 
 remote1 = c.send_request_and_receive_response('call_function', None, 'F1.echo', [local1]);
 is_ok(remote1, local1, 'remote function call with object echo works')
@@ -105,6 +105,27 @@ ok(remote3 != None, 'remote lambda construction works with params')
 val3 = remote3(6,2)
 is_ok(val3,8,"remote lambda works with params")
 
+note("testing returning a remote object from a function")
+remote5 = c.send_request_and_receive_response('call_function', None, 'F1.C1',[]);
+val2 = remote5.m1()
+is_ok(val2,"456","remote method call returns as expected")
+#c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['RMI.DEBUG_FLAG']);
+
+ref2 = remote5.__getattr__('m1')
+ok(ref2 != None,"remote method ref is as expected")
+print(RMI.pp.pformat(ref2));
+val2b = ref2()
+is_ok(val2b,"456","remote methodref returns as expected")
+
+zz = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['"z"']);
+print('zz: ' + str(zz))
+
+f1c = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['F1.x1()'])
+print('f1b: ' + str(f1c))
+
+imp = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['import F1'])
+print('imp: ' + str(imp))
+
 # Somehow, closing the connection doesn't cause the server to catch the close, so we have a hack to
 # signal to it that it should exit.  Fix me.
 c.close
@@ -114,27 +135,7 @@ print("CLIENT DONE")
 '''    
 
   
-    remote2 = c.send_request_and_receive_response('call_function', None, 'F1.C1');
-    ok(remote2, "got remote obj")
- 
-    exit
 
-    if remote2:
-        val2 = remote2.m1()
-        is_ok(val2,"456","remote method call returns as expected")
-        ref2 = remote2.m1
-        ok(ref2,"remote method ref is as expected")
-        val2b = ref2()
-        is_ok(val2b,"456","remote methodref returns as expected")
-
-    zz = c.send_request_and_receive_response('call_function', None, 'RMI.Node._eval', ['z']);
-    print('zz: ' + str(zz))
-
-    imp = c.send_request_and_receive_response('call_function', None, 'RMI.Node._e', [1,'import F1'])
-    print('imp: ' + str(imp))
-
-    f1c = c.send_request_and_receive_response('call_function', None, 'RMI.Node._e', [2, 'F1.x1()'])
-    print('f1b: ' + str(f1c))
 '''
   
     
