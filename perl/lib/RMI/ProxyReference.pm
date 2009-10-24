@@ -40,7 +40,7 @@ sub AUTOLOAD {
     if ($delegate_class eq 'Tie::StdArray' and $method eq 'EXTEND') {
         $delegate_class = 'Tie::Array';
     }
-    $node->send_request_and_receive_response('call_function', undef, $delegate_class . '::' . $method, \@_);
+    $node->send_request_and_receive_response('call_function', $delegate_class . '::' . $method, @_);
 }
 
 sub DESTROY {

@@ -2,10 +2,9 @@ package RMI::ProxyObject;
 
 use strict;
 use warnings;
-use version;
-our $VERSION = qv('0.1');
 
 use RMI;
+our $VERSION = $RMI::VERSION;
 
 sub AUTOLOAD {
     no strict;
@@ -19,7 +18,7 @@ sub AUTOLOAD {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, \@_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, @_);
 }
 
 sub can {
@@ -29,7 +28,7 @@ sub can {
         die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'can', \@_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'can', @_);
 }
 
 sub isa {
@@ -39,7 +38,7 @@ sub isa {
         die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'isa', \@_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'isa', @_);
 }
 
 END {

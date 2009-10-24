@@ -1,10 +1,8 @@
-
 package RMI::Client;
 
 use strict;
 use warnings;
-use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION; 
 
 use base 'RMI::Node';
 
@@ -16,22 +14,24 @@ use base 'RMI::Node';
 
 sub call_function {
     my ($self,$fname,@params) = @_;
-    return $self->send_request_and_receive_response('call_function', undef, $fname, \@params);
+    #return $self->send_request_and_receive_response('call_function', undef, $fname, \@params);
+    return $self->send_request_and_receive_response('call_function', $fname, @params);
 }
 
 sub call_class_method {
     my ($self,$class,$method,@params) = @_;
-    return $self->send_request_and_receive_response('call_class_method', $class, $method, \@params);
+    return $self->send_request_and_receive_response('call_class_method', $class, $method, @params);
 }
 
 sub call_object_method {
     my ($self,$object,$method,@params) = @_;
-    return $self->send_request_and_receive_response('call_object_method', $object, $method, \@params);
+    return $self->send_request_and_receive_response('call_object_method', $object, $method, @params);
 }
 
 sub call_eval {
     my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response('call_eval', undef, 'RMI::Server::_receive_eval', [$src, @params]);    
+    #return $self->send_request_and_receive_response('call_eval', undef, 'RMI::Server::_receive_eval', [$src, @params]);    
+    return $self->send_request_and_receive_response('call_eval', $src, @params);    
 }
 
 sub call_use {
@@ -46,14 +46,14 @@ sub call_use {
     ($class,$module,$path, @exported) = 
         $self->send_request_and_receive_response(
             'call_use',
-            undef,
-            'RMI::Server::_receive_use',
-            [
+            #undef,
+            #'RMI::Server::_receive_use',
+            #[
                 $class,
                 $module,
                 defined($use_args),
                 ($use_args ? @$use_args : ())
-            ]
+            #]
         );
         
     return ($class,$module,$path,@exported);
@@ -62,7 +62,8 @@ sub call_use {
 sub call_use_lib {
     my $self = shift;
     my $lib = shift;
-    return $self->send_request_and_receive_response('call_use_lib', undef, 'RMI::Server::_receive_use_lib', [$lib]);
+    #return $self->send_request_and_receive_response('call_use_lib', undef, 'RMI::Server::_receive_use_lib', [$lib]);
+    return $self->send_request_and_receive_response('call_use_lib', $lib);
 }
 
 

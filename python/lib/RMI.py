@@ -305,7 +305,12 @@ class Node:
                         print(RMI.DEBUG_MSG_PREFIX + ": " + str(os.getpid()) + " proxy $o references remote $key:\n")
                     serialized.append(3)
                     serialized.append(key)
-                    next
+                
+                elif isinstance(o,list):
+                    serialized.append(2)
+                    serialized.append(id)
+                    sent_objects[id] = o
+
                 else:
                     # sending an object local to this side, the remote side will convert to 
                     # TODO: use something better than stringification since this can be overridden!!!
