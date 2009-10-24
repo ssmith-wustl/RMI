@@ -31,7 +31,7 @@ our $DEBUG_MSG_PREFIX = '';
 
 RMI - Remote Method Invocation with transparent proxies v0.07
 
-head1 VERSION
+=head1 VERSION
 
 This document describes RMI v0.08.
 
