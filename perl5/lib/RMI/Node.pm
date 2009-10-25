@@ -349,7 +349,12 @@ sub _serialize {
 
     @$message_data = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;    
-    
+
+    # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
+    # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
+    # something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
+    # currently expects the records are divided by newlines (instead of sending a message length or other 
+    # terminator) and Dumper conveniently escapes newlines in any strings we pass.
     my $serialized_blob = Data::Dumper->new([[$message_type, @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
     if ($serialized_blob =~ s/\n/ /gms) {
@@ -363,8 +368,10 @@ sub _serialize {
 
 sub _deserialize {
     my ($self, $serialized_blob) = @_;
-    
+   
+    # see TODO above for switching from Dumper/eval to something simpler.
     my $serialized = eval "no strict; no warnings; $serialized_blob";
+
     if ($@) {
         die "Exception de-serializing message: $@";
     }        
