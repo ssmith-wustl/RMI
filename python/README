@@ -1,0 +1,18 @@
+RMI - Remote Method Invocation with transparent proxies
+
+STATUS
+    This is a half-implemented copy of the Perl RMI module.  It barely passes its one test case script.
+    It has some distance to go before it implements the basic features of object sharing between Python processes.
+    After that Python<->Perl integration must be done in both source trees.
+
+INSTALLATION
+    python setup.py build
+    sudo python setup.py install
+
+AUTHORS
+    Scott Smith <sakoht@cpan.org>
+
+COPYRIGHT
+    Copyright (c) 2009 Scott Smith <sakoht@cpan.org> All rights
+    reserved.
+
