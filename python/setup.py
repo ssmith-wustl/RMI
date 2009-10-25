@@ -9,6 +9,7 @@ setup(
     author = 'Scott Smith',
     author_email = 'sakoht@cpan.org',
     url = 'https://github.com/sakoht/RMI/',
+    package_dir = {'': 'lib'},
     #py_modules = ['RMI'],
     packages = ['RMI']
 )
