@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-PYTHONPATH=./lib:$PYTHONPATH t/00.py
+PYTHONPATH=./lib:$PYTHONPATH tests/00.py
