@@ -105,7 +105,7 @@ RMI::Client - connection to an RMI::Server
 
 =head1 VERSION
 
-This document describes RMI::Client v0.09.
+This document describes RMI::Client v0.10.
 
 =head1 SYNOPSIS
 

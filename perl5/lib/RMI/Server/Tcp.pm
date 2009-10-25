@@ -137,7 +137,7 @@ RMI::Server::Tcp - service RMI::Client::Tcp requests
 
 =head1 VERSION
 
-This document describes RMI::Server::Tcp v0.09.
+This document describes RMI::Server::Tcp v0.10.
 
 =head1 SYNOPSIS
 

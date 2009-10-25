@@ -56,7 +56,7 @@ RMI::Client::Tcp - an RMI::Client implementation using TCP/IP sockets
 
 =head1 VERSION
 
-This document describes RMI::Client::Tcp v0.09.
+This document describes RMI::Client::Tcp v0.10.
 
 =head1 SYNOPSIS
 

@@ -73,7 +73,7 @@ RMI::ProxyReference - used internally by RMI to tie references
     
 =head1 VERSION
 
-This document describes RMI::ProxyReference v0.09.
+This document describes RMI::ProxyReference v0.10.
 
 =head1 DESCRIPTION
 

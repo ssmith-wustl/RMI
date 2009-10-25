@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name = 'RMI',
-    version = '0.01',
+    version = '0.10',
     description = 'Remote Method Invocation',
     author = 'Scott Smith',
     author_email = 'sakoht@cpan.org',

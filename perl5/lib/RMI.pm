@@ -32,7 +32,7 @@ RMI - Remote Method Invocation with transparent proxies
 
 =head1 VERSION
 
-This document describes RMI v0.09.
+This document describes RMI v0.10.
 
 =head1 SYNOPSIS
 

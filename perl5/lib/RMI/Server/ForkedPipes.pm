@@ -17,7 +17,7 @@ RMI::Server::ForkedPipes - service RMI::Client::ForkedPipes requests
 
 =head1 VERSION
 
-This document describes RMI::Server::ForkedPipes v0.09.
+This document describes RMI::Server::ForkedPipes v0.10.
 
 =head1 SYNOPSIS
 

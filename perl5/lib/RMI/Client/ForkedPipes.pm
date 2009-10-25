@@ -72,7 +72,7 @@ RMI::Client::ForkedPipes - an RMI::Client implementation with a private out-of-p
 
 =head1 VERSION
 
-This document describes RMI::Clinet::ForkedPipes v0.09.
+This document describes RMI::Clinet::ForkedPipes v0.10.
 
 =head1 SYNOPSIS
 

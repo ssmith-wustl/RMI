@@ -1,5 +1,5 @@
 
-version = '0.06'
+version = '0.10'
 
 import os
 import weakref
