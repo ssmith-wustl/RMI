@@ -103,6 +103,10 @@ sub bind {
 
 RMI::Client - connection to an RMI::Server
 
+=head1 VERSION
+
+This document describes RMI::Client v0.09.
+
 =head1 SYNOPSIS
 
  # simple

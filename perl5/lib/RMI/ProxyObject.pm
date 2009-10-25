@@ -66,7 +66,11 @@ sub DESTROY {
 =head1 NAME
 
 RMI::ProxyObject - used internally by RMI for "stub" objects
-    
+
+=head1 VERSION
+
+This document describes RMI::ProxyObject v0.09.
+
 =head1 DESCRIPTION
 
 This class is the real class of all transparent proxy objects, though

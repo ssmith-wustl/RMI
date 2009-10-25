@@ -4,7 +4,7 @@ use base 'RMI::Server';
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION;
 
 use RMI;
 use IO::Socket;
@@ -134,6 +134,10 @@ sub _close_connection {
 =head1 NAME
 
 RMI::Server::Tcp - service RMI::Client::Tcp requests
+
+=head1 VERSION
+
+This document describes RMI::Server::Tcp v0.09.
 
 =head1 SYNOPSIS
 

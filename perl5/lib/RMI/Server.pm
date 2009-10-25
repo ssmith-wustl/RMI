@@ -3,7 +3,7 @@ package RMI::Server;
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION;
 
 use base 'RMI::Node';
 
@@ -24,6 +24,10 @@ sub run {
 =head1 NAME
 
 RMI::Server - service RMI::Client requests from another process
+
+=head1 VERSION
+
+This docuement describes RMI::Server v0.09.
 
 =head1 SYNOPSIS
 

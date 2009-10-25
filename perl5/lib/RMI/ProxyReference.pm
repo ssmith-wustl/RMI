@@ -3,7 +3,7 @@ package RMI::ProxyReference;
 use strict;
 use warnings;   
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION;
 
 use RMI;
 
@@ -71,6 +71,10 @@ sub DESTROY {
 
 RMI::ProxyReference - used internally by RMI to tie references
     
+=head1 VERSION
+
+This document describes RMI::ProxyReference v0.09.
+
 =head1 DESCRIPTION
 
 When an refrerence is detected in the params or return value for an RMI

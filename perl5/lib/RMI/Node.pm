@@ -3,7 +3,7 @@ package RMI::Node;
 use strict;
 use warnings;
 use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION;
 
 # Note: if any of these get proxied as full classes, we'd have issues.
 # Since it's impossible to proxy a class which has already been "used",
@@ -574,6 +574,10 @@ sub _mk_ro_accessors {
 =head1 NAME
 
 RMI::Node - base class for RMI::Client and RMI::Server 
+
+=head1 VERSION
+
+This document describes RMI::Node v0.09.
 
 =head1 SYNOPSIS
     

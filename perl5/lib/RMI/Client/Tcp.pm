@@ -2,8 +2,7 @@ package RMI::Client::Tcp;
 
 use strict;
 use warnings;
-use version;
-our $VERSION = qv('0.1');
+our $VERSION = $RMI::VERSION; 
 
 use base 'RMI::Client';
 
@@ -54,6 +53,10 @@ sub new {
 =head1 NAME
 
 RMI::Client::Tcp - an RMI::Client implementation using TCP/IP sockets
+
+=head1 VERSION
+
+This document describes RMI::Client::Tcp v0.09.
 
 =head1 SYNOPSIS
 

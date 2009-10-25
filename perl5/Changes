@@ -1,4 +1,9 @@
 Revision history for RMI:
+
+0.09 Sat 24 Oct 2009
+            Updated version numbers across the module tree to be consistent.
+            Some modules used qv(), while others used numbers, causing errors in version tracking.
+
 0.08 Fri 23 Oct 2009
             Code cleanup for clarity.
 
