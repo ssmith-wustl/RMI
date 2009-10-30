@@ -300,7 +300,7 @@ sub _serialize {
     Carp::confess() unless ref($message_data);
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
-            if ($type eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
+            if (substr($type,0,length('RMI::ProxyObject')) eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 3, $key;
@@ -439,7 +439,21 @@ sub _deserialize {
                         bless $o, $remote_class;
                     }
                     else {
-                        bless $o, 'RMI::ProxyObject';    
+                        # Put the object into a custom subclass of RMI::ProxyObject
+                        # this allows class-wide customization of how proxying should
+                        # occur.  It also makes Data::Dumper results more readable.
+                        my $target_class = 'RMI::ProxyObject::' . $remote_class;
+                        unless ($RMI::stubbed_classes{$remote_class}) {
+                            no strict 'refs';
+                            @{$target_class . '::ISA'} = ('RMI::ProxyObject');
+                            no strict;
+                            no warnings;
+                            local $SIG{__DIE__} = undef;
+                            local $SIG{__WARN__} = undef;
+                            eval "use $target_class";
+                            $RMI::stubbed_classes{$remote_class} = 1;
+                        }
+                        bless $o, $target_class;    
                     }
                 }
                 $received_objects->{$value} = $o;
