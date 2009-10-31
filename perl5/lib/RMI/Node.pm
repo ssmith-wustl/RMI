@@ -304,21 +304,21 @@ sub _serialize {
 
     my @serialized = ([@$received_and_destroyed_ids]);
     @$received_and_destroyed_ids = ();
-   
+
+    # there is currently only one option to serialize: a global "copy" flag.
     my $copy;
     if ($opts) {
         $copy = delete $opts->{copy};
         if (%$opts) {
             Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
         }
-        print "copy is $copy\n";
     }
 
-    Carp::confess() unless ref($message_data);
+    Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
             # sending some sort of reference
-            if (substr($type,0,length('RMI::ProxyObject')) eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
+            if (substr($type,0,length('RMI::Proxy::')) eq "RMI::Proxy::" or $RMI::proxied_classes{$type}) {
                 # this is a proxy object on THIS side: the real object will be used on the remote side
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
@@ -471,8 +471,8 @@ sub _deserialize {
                         # Put the object into a custom subclass of RMI::ProxyObject
                         # this allows class-wide customization of how proxying should
                         # occur.  It also makes Data::Dumper results more readable.
-                        my $target_class = 'RMI::ProxyObject::' . $remote_class;
-                        unless ($RMI::stubbed_classes{$remote_class}) {
+                        my $target_class = 'RMI::Proxy::' . $remote_class;
+                        unless ($RMI::classes_with_proxied_objects{$remote_class}) {
                             no strict 'refs';
                             @{$target_class . '::ISA'} = ('RMI::ProxyObject');
                             no strict;
@@ -480,7 +480,7 @@ sub _deserialize {
                             local $SIG{__DIE__} = undef;
                             local $SIG{__WARN__} = undef;
                             eval "use $target_class";
-                            $RMI::stubbed_classes{$remote_class} = 1;
+                            $RMI::classes_with_proxied_objects{$remote_class} = 1;
                         }
                         bless $o, $target_class;    
                     }
@@ -827,7 +827,7 @@ Each value is preceded by an integer which categorizes the value.
 
   0    a primitive, non-reference value
        
-       The value itself follows, and is passed by-copy.
+       The value itself follows, it is not a reference, and it is passed by-copy.
        
   1    an object reference originating on the sender's side
  
@@ -843,6 +843,18 @@ Each value is preceded by an integer which categorizes the value.
        
        The following value is the identifier the remote side sent previously.
        The remote side should substitue the original object when deserializing
+
+  4    a serialized object
+
+       This is the result of serializing the reference.  This happens only
+       when explicitly requested.  (DBI has some issues with proxies, for instance
+       and has customizations in RMI::Proxy::DBI::db to force serialization of
+       some connection attributes.)
+
+       See B<RMI::ProxyObject> for more details on forcing serialization.
+
+       Note that, because the current wire protocol is to use newline as a record 
+       separator, we use double-quoted strings to ensure all newlines are escaped.
 
 Note that all references are turned into primitives by the above process.
 
