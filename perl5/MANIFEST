@@ -15,6 +15,7 @@ lib/RMI/Client.pm
 lib/RMI/Client/ForkedPipes.pm
 lib/RMI/Client/Tcp.pm
 lib/RMI/Node.pm
+lib/RMI/Proxy/DBI/db.pm
 lib/RMI/ProxyObject.pm
 lib/RMI/ProxyReference.pm
 lib/RMI/Server.pm
@@ -35,6 +36,7 @@ t/06_client_server_pairs.t
 t/07_as_documented.t
 t/08_wantarray.t
 t/09_bind_variables.t
+t/10_custom_opts.t
 t/RMI/TestClass.pm
 t/RMI/TestClass1.pm
 t/RMI/TestClass2.pm
