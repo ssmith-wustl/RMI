@@ -21,7 +21,7 @@ unlink $dbfile if -e $dbfile;
 use_ok("DBI") or die "cannot use DBI?";
 my $dbh = DBI->connect("dbi:SQLite:$dbfile", { AutoCommit => 1, RaiseError => 1 });
 ok($dbh, "connected in the main process to the db file $dbfile");
-print Dumper($dbh);
+#print Dumper($dbh);
 
 my $r;
 $r = $dbh->do("create table foo (c1 int, c2 text)");
@@ -54,12 +54,16 @@ $c->call_use("DBI");
 $dbh = $c->call_class_method("DBI","connect","dbi:SQLite:$dbfile", { AutoCommit => 1, RaiseError => 1});
 ok($dbh, "got remote dbh");
 
-check_data2($dbh);
-sub check_data2 {
-    my $dbh = shift;
-    my $a = $dbh->selectall_arrayref("select * from foo order by c1", { Slice => {} });
-    ok($a, "got results arrayref back") or diag($dbh->errstr);
-    is_deeply($a,[{c1 => 100, c2 => 'one'},{c1 => 200, c2 => 'two'},{ c1 => 300, c2 =>'three'}], "data matches");
-    note(Dumper($a));
-}
+# The presence of a hashref with a "Slice" key does some magic in DBI.  First the selectall_arrayref 
+# goes to a C implementation, then reads the hash, and when it finds a Slice key falls back to Perl.
+# Problems occur on the C end when the hashref is remoted, and its not totally clear how/why.
+
+# This was a perfect candidate for testing "forced copying".  The RMI::Proxy::DBI::db implementation
+# indicates that selectall_arrayref should have its parameters copied instead of proxied.  This gets
+# around the DBI issue, and also improves performance, while being safe since the hashref isn't mutated.
+my $a = $dbh->selectall_arrayref("select * from foo order by c1", { Slice => {} });
+ok($a, "got results arrayref back") or diag($dbh->errstr);
+
+is_deeply($a,[{c1 => 100, c2 => 'one'},{c1 => 200, c2 => 'two'},{ c1 => 300, c2 =>'three'}], "data matches");
+note(Dumper($a));
 
