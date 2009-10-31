@@ -316,9 +316,8 @@ sub _serialize {
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
             # sending some sort of reference
-            if (substr($type,0,length('RMI::Proxy::')) eq "RMI::Proxy::" or $RMI::proxied_classes{$type}) {
+            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
                 # this is a proxy object on THIS side: the real object will be used on the remote side
-                my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 3, $key;
                 next;
