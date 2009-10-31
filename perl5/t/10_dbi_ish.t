@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 84;
+use Test::More tests => 12;
 use FindBin;
 use lib $FindBin::Bin;
 use File::Temp;
@@ -44,27 +44,22 @@ sub check_data {
     my $a = $sth->fetchall_arrayref();
     ok($a, "got results arrayref back") or diag($sth->errstr);
     is_deeply($a,[[100,'one'],[200,'two'],[300,'three']], "data matches");
-    #print Dumper($a);
 }
 
 use_ok("RMI::Client::ForkedPipes");
 my $c = RMI::Client::ForkedPipes->new();
-#use RMI::Client::Tcp;
-#my $c = RMI::Client::Tcp->new(port => 1234);
 ok($c, "created an RMI::Client");
 $c->call_use("DBI");
 
 $dbh = $c->call_class_method("DBI","connect","dbi:SQLite:$dbfile", { AutoCommit => 1, RaiseError => 1});
 ok($dbh, "got remote dbh");
 
-#check_data($dbh);
 check_data2($dbh);
 sub check_data2 {
     my $dbh = shift;
-    my $a = $c->call_object_method($dbh,'selectall_arrayref',"select * from foo order by c1", { Slice => {} });
-    #my $a = $dbh->selectall_arrayref("select * from foo order by c1", undef);
+    my $a = $dbh->selectall_arrayref("select * from foo order by c1", { Slice => {} });
     ok($a, "got results arrayref back") or diag($dbh->errstr);
-    is_deeply($a,[[100,'one'],[200,'two'],[300,'three']], "data matches");
-    print Dumper($a);
+    is_deeply($a,[{c1 => 100, c2 => 'one'},{c1 => 200, c2 => 'two'},{ c1 => 300, c2 =>'three'}], "data matches");
+    note(Dumper($a));
 }
 

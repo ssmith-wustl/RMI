@@ -54,13 +54,21 @@ sub close {
 
 sub send_request_and_receive_response {
     my $self = shift;
-    
+
     if ($RMI::DEBUG) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self: @_\n";
     }
     
     my $wantarray = wantarray;
-    $self->_send('query',[$wantarray, @_]) or die "failed to send! $!";
+
+    # Qptional specs to get control of the serialization process is at 
+    # the beginning.  The remainder of the params are only analyzed on the
+    # remote side, so we make no presumptions here about the remainder.
+    #Carp::cluck("params are @_\n");
+    my $opts = shift(@_) if ref($_[0]) eq 'HASH';
+    #print "opts is $opts, params are @_\n";
+
+    $self->_send('query',[$wantarray, @_],$opts) or die "failed to send! $!";
     
     for (1) {
         my ($message_type, $message_data) = $self->_receive();
@@ -110,8 +118,8 @@ sub receive_request_and_send_response {
 _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
 
 sub _send {
-    my ($self, $message_type, $message_data) = @_;
-    my $s = $self->_serialize($message_type,$message_data);    
+    my ($self, $message_type, $message_data, $opts) = @_;
+    my $s = $self->_serialize($message_type,$message_data, $opts);    
     
     print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG;
     return $self->{writer}->print($s,"\n");                
@@ -289,24 +297,37 @@ sub _respond_to_coderef {
 # serialize params when sending a query, or results when sending a response
 
 sub _serialize {
-    my ($self, $message_type, $message_data) = @_;    
+    my ($self, $message_type, $message_data, $opts) = @_;    
     
     my $sent_objects = $self->{_sent_objects};
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
 
     my @serialized = ([@$received_and_destroyed_ids]);
     @$received_and_destroyed_ids = ();
-    
+   
+    my $copy;
+    if ($opts) {
+        $copy = delete $opts->{copy};
+        if (%$opts) {
+            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
+        }
+        print "copy is $copy\n";
+    }
+
     Carp::confess() unless ref($message_data);
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
+            # sending some sort of reference
             if (substr($type,0,length('RMI::ProxyObject')) eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
+                # this is a proxy object on THIS side: the real object will be used on the remote side
                 my $key = $RMI::Node::remote_id_for_object{$o};
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 3, $key;
                 next;
             }
             elsif ($type eq "RMI::ProxyReference") {
+                # this is a proxy reference on THIS side: the real reference will be used on the remote side
+
                 # This only happens from inside of AUTOLOAD in RMI::ProxyReference.
                 # There is some other reference in the system which has been tied, and this object is its
                 # surrogate.  We need to make sure that reference is deserialized on the other side.
@@ -315,7 +336,15 @@ sub _serialize {
                 push @serialized, 3, $key;
                 next;
             }            
+            elsif($copy) {
+                # a reference on this side which should be copied on the other side instead of proxied
+                # this never happens by default in the RMI modules, only when specially requested for performance
+                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
+                push @serialized, 4, $o;
+            }
             else {
+                # a reference originating on this side: send info so the remote side can create a proxy
+
                 # TODO: use something better than stringification since this can be overridden!!!
                 my $key = "$o";
                 
@@ -479,6 +508,11 @@ sub _deserialize {
             print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
             push @message_data, $o;
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
+        }
+        elsif ($type == 4) {
+            # fully serialized blob
+            # this is never done by default, but is part of shortcut/optimization on a per-class basis
+            push @message_data, $value;
         }
     }
     print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
