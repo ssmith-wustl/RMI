@@ -61,12 +61,10 @@ sub send_request_and_receive_response {
     
     my $wantarray = wantarray;
 
-    # Qptional specs to get control of the serialization process is at 
-    # the beginning.  The remainder of the params are only analyzed on the
-    # remote side, so we make no presumptions here about the remainder.
-    #Carp::cluck("params are @_\n");
+    # Specs to get control of the serialization process are optional,  
+    # and may be at the beginning of the parameter list.  
+    # The remainder of the params are only analyzed on the caller's side.
     my $opts = shift(@_) if ref($_[0]) eq 'HASH';
-    #print "opts is $opts, params are @_\n";
 
     $self->_send('query',[$wantarray, @_],$opts) or die "failed to send! $!";
     
@@ -712,24 +710,27 @@ Closes handles, and does any additional required bookeeping.
  
 =head2 send_request_and_recieve_response()
 
- @result = $n->send_request_and_recieve_response($call_type,$object,$method,$params,$opts)
+ @result = $n->send_request_and_recieve_response($call_type,@data);
 
- $fh = $n->send_request_and_receive_response('call_class_method', 'IO::File', 'new', ['/my/file'], {});
+ @result = $n->send_request_and_recieve_response($opts_hashref, $call_type, @data);
 
-This is the primary method used by nodes acting in a client-like capacity.
+ This is the method behind all of the call_* methods on RMI::Client objects.
+ It is also the method behind the proxied objects themselves (in AUTOLOAD).
 
- $call_type:    one of: call_object_method, call_class_method, or call_function, or one of several internal types
- $object:       the object or class on which the method is being called, may be undef for subroutine/function calls
- $method:       the method to call on $object (even if $object is a class name), or the fully-qualified sub name
- @params:       an optional array of values which should be passed to $method
+ The optional initial hashref allows special serialization control.  It is currently
+ only used to force serializing instead of proxying in some cases where this is
+ helpful and safe.
 
-Return values:
+ The call_type maps to the client request, and is one of:
+    call_function
+    call_class_method
+    call_object_method
+    call_eval
+    call_use
+    call_use_lib
 
- $result|@result: the return value will be either a scalar or list, depending on the value of $wantarray
-
-This method sends a method call request through the writer, and waits on a response from the reader.
-It will handle a response with the answer, exception messages, and also handle counter-requests
-from the server, which may occur b/c the server calls methods on objects passed as parameters.
+The interpretation of the @data parameters is dependent on the particular call_type, and
+is handled entirely on the remote side.  
 
 =head2 receive_request_and_send_response()
 
