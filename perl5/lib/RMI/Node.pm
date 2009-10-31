@@ -300,8 +300,9 @@ sub _serialize {
     Carp::confess() unless ref($message_data);
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
-            if ($type eq "RMI::ProxyObject" or $RMI::proxied_classes{$type}) {
-                my $key = $RMI::Node::remote_id_for_object{$o};
+            # sending some sort of reference
+            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
+                # this is a proxy object on THIS side: the real object will be used on the remote side
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
                 push @serialized, 3, $key;
                 next;
