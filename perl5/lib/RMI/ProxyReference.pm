@@ -25,7 +25,6 @@ sub TIE {
 
 sub AUTOLOAD {
     no strict 'refs';
-    $DB::single = 1;
     my $method = $RMI::ProxyReference::AUTOLOAD;
     $method =~ s/^.*:://g;
     my $o = $_[0];

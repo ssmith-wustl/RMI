@@ -5,6 +5,7 @@ use warnings;
 
 use RMI;
 our $VERSION = $RMI::VERSION;
+our %OPTS;
 
 sub AUTOLOAD {
     no strict;
@@ -19,6 +20,7 @@ sub AUTOLOAD {
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
     $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, @_);
+
 }
 
 sub can {
