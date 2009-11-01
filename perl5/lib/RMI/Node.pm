@@ -298,10 +298,6 @@ sub _serialize {
     my ($self, $message_type, $message_data, $opts) = @_;    
     
     my $sent_objects = $self->{_sent_objects};
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-
-    my @serialized = ([@$received_and_destroyed_ids]);
-    @$received_and_destroyed_ids = ();
 
     # there is currently only one option to serialize: a global "copy" flag.
     my $copy;
@@ -312,6 +308,7 @@ sub _serialize {
         }
     }
 
+    my @serialized;
     Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
@@ -322,17 +319,6 @@ sub _serialize {
                 push @serialized, 3, $key;
                 next;
             }
-            elsif ($type eq "RMI::ProxyReference") {
-                # this is a proxy reference on THIS side: the real reference will be used on the remote side
-
-                # This only happens from inside of AUTOLOAD in RMI::ProxyReference.
-                # There is some other reference in the system which has been tied, and this object is its
-                # surrogate.  We need to make sure that reference is deserialized on the other side.
-                my $key = $RMI::Node::remote_id_for_object{$o};
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
-                push @serialized, 3, $key;
-                next;
-            }            
             elsif($copy) {
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
@@ -368,13 +354,20 @@ sub _serialize {
             }
         }
         else {
+            # sending a non-reference value
             push @serialized, 0, $o;
         }
     }
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @serialized\n" if $RMI::DEBUG;
 
     @$message_data = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
+
+    # Do this after emptying the $message_data array, so the list will be expanded to include objects which
+    # were sent from the other side, and are only referenced in the data we're returning.
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;    
+    unshift @serialized, [@$received_and_destroyed_ids];
+    @$received_and_destroyed_ids = ();
 
     # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
     # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
