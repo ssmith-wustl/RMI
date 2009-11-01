@@ -307,15 +307,6 @@ sub _serialize {
                 push @serialized, 3, $key;
                 next;
             }
-            elsif ($type eq "RMI::ProxyReference") {
-                # This only happens from inside of AUTOLOAD in RMI::ProxyReference.
-                # There is some other reference in the system which has been tied, and this object is its
-                # surrogate.  We need to make sure that reference is deserialized on the other side.
-                my $key = $RMI::Node::remote_id_for_object{$o};
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ tied proxy special obj $o references remote $key:\n" if $RMI::DEBUG;
-                push @serialized, 3, $key;
-                next;
-            }            
             else {
                 # TODO: use something better than stringification since this can be overridden!!!
                 my $key = "$o";
