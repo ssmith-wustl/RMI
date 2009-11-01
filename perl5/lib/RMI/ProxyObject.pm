@@ -19,9 +19,8 @@ sub AUTOLOAD {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    my $pclass = substr($class,length('RMI::Proxy::')); 
-    my $opts = $DEFAULT_OPTS{$pclass} && $DEFAULT_OPTS{$pclass}{$method};
-    $node->send_request_and_receive_response(($opts ? ($opts) : ()),(ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, @_);
+    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, @_);
+
 }
 
 sub can {

@@ -296,7 +296,67 @@ sub _respond_to_coderef {
 
 sub _serialize {
     my ($self, $message_type, $message_data, $opts) = @_;    
-    
+  
+    # TODO: we previously had no knowledge in the client of the type of call being made, 
+    # but to support overrides we now need it.  Refactor this conditional logic!!
+    if ($message_type eq 'query') {
+        my $call_type = $message_data->[1];
+        my $pkg;
+        my $sub;
+        if ($call_type eq 'call_object_method') {
+            $pkg = ref($message_data->[2]);
+            $pkg =~ s/RMI::Proxy:://;
+            $sub = $message_data->[3];
+        }
+        elsif ($call_type eq 'call_class_method') {
+            $pkg = $message_data->[2];
+            $sub = $message_data->[3];
+        }
+        elsif ($call_type eq 'call_function') {
+            ($pkg,$sub) = ($message_data->[2] =~ /^(.*)::([^\:]*)$/);
+        }
+        elsif (
+            $call_type eq 'call_eval'
+            or $call_type eq 'call_coderef'
+            or $call_type eq 'call_use'
+            or $call_type eq 'call_use_lib'
+        ) {
+            $pkg = '-' . $call_type;
+            if ($call_type eq 'call_use') {
+                $sub = $message_data->[2];
+                if (!$sub) {
+                    $sub = $message_data->[3];
+                    $sub =~ s/.pm$//;
+                    $sub =~ s/\//\::/g;
+                }
+                $sub .= '';
+            }
+            else {
+                $sub = $message_data->[2] . '';
+            }
+        }
+        else {
+            die "no handling for CALL TYPE $call_type?";
+        }
+
+        unless ($pkg) {
+            die "Failed to resolve a pkg/sub pair for query @$message_data!";
+        }
+
+        my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
+        if ($default_opts) {
+            if ($opts) {
+                $opts = { %$default_opts, %$opts };
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub merged with specified opts for combined set: " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;
+            }
+            else {
+                $opts = $default_opts;
+            }
+        }
+
+    }
+
     my $sent_objects = $self->{_sent_objects};
 
     # there is currently only one option to serialize: a global "copy" flag.
