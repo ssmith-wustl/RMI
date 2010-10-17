@@ -2,13 +2,26 @@
 
 use strict;
 use warnings;
-use Test::More tests => 12;
+use Test::More;
 use FindBin;
 use lib $FindBin::Bin;
 use File::Temp;
 use Data::Dumper;
 use RMI::Node;
 use RMI;
+
+if (eval "use DBI; return 1" == 1) {
+    if (eval "use DBD::SQLite; return 1" == 1) {
+        plan tests => 12;
+    }
+    else {
+        plan skip_all => "no DBD::SQLite installed, skipping special DBI tests...";
+    }
+}
+else {
+    plan skip_all => "no DBI installed, skipping special DBI tests...";
+}
+
 
 my $dir = "/tmp/rmi-test-$$";
 
