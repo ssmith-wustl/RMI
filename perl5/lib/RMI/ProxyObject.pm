@@ -50,8 +50,15 @@ END {
 sub DESTROY {
     my $self = $_[0];
     my $id = "$self";
-    my $remote_id = delete $RMI::Node::remote_id_for_object{$id};
     my $node = delete $RMI::Node::node_for_object{$id};
+    my $remote_id = delete $RMI::Node::remote_id_for_object{$id};
+    if (not defined $remote_id) {
+        if ($RMI::DEBUG) {
+            warn "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $node but NO REMOTE ID FOUND DURING DESTRUCTION?!\n"
+                . Data::Dumper::Dumper($node->{_received_objects});
+        }
+        return;
+    }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
     my $other_ref = delete $node->{_received_objects}{$remote_id};
     if (!$other_ref and !$RMI::process_is_ending) {
