@@ -798,12 +798,12 @@ This method returns an anonymous subroutine which can be used in a "use lib $mys
 call, to cause subsequent "use" statements to go through this node to its partner.
  
  e.x.:
-    use lib RMI::Client::Tcp-new(host=>'myserver',port=>1234)->virtual_lib;
+    use lib RMI::Client::Tcp->new(host=>'myserver',port=>1234)->virtual_lib;
  
 If a client is constructed for other purposes in the application, the above
 can also be accomplished with: $client->use_lib_remote().  (See L<RMI::Client>)
 
-=head1 INTERNALS
+=head1 INTERNALS: MESSAGE TYPES
 
 The RMI internals are built around sending a "message", which has a type, and an
 array of data. The interpretation of the message data array is based on the message
@@ -843,7 +843,7 @@ The message data contains, in order:
 The return value from a succesful "query" which does not result in an
 exception being thrown on the remote side.
   
-The message data contains, the return value or vaues of that query.
+The message data contains the return value or values of that query.
   
 =head2 exception
 
@@ -857,7 +857,9 @@ Indicatees that the remote side has closed the connection.  This is actually
 constructed on the receiver end when it fails to read from the input stream.
   
 The message data is undefined in this case.
-  
+
+=head1 INTERNALS: WIRE PROTOCOL
+
 The _send() and _receive() methods are symmetrical.  These two methods are used
 by the public API to encapsulate message transmission and reception.  The _send()
 method takes a message_type and a message_data arrayref, and transmits them to
