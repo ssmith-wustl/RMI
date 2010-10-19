@@ -1,5 +1,10 @@
 Revision history for RMI:
 
+0.10 Tue 19 Oct 2010
+            Any package/class can have custom proxy handling by implementing RMI::Proxy::$CLASSNAME
+            Custom handling for DBI gets around odd XS issues.
+            Build process cleanup.
+
 0.09 Sat 24 Oct 2009
             Updated version numbers across the module tree to be consistent.
             Some modules used qv(), while others used numbers, causing errors in version tracking.
