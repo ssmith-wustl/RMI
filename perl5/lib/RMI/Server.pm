@@ -27,7 +27,7 @@ RMI::Server - service RMI::Client requests from another process
 
 =head1 VERSION
 
-This docuement describes RMI::Server v0.10.
+This docuement describes RMI::Server v0.11.
 
 =head1 SYNOPSIS
 

@@ -78,7 +78,7 @@ RMI::ProxyObject - used internally by RMI for "stub" objects
 
 =head1 VERSION
 
-This document describes RMI::ProxyObject v0.10.
+This document describes RMI::ProxyObject v0.11.
 
 =head1 DESCRIPTION
 

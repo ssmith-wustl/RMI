@@ -682,7 +682,7 @@ RMI::Node - base class for RMI::Client and RMI::Server
 
 =head1 VERSION
 
-This document describes RMI::Node v0.10.
+This document describes RMI::Node v0.11.
 
 =head1 SYNOPSIS
     
