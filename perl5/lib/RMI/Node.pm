@@ -66,6 +66,7 @@ sub send_request_and_receive_response {
     # The remainder of the params are only analyzed on the caller's side.
     my $opts = shift(@_) if ref($_[0]) eq 'HASH';
 
+    # @_ contains the message_type and message_data we package and transmit
     $self->_send('query',[$wantarray, @_],$opts) or die "failed to send! $!";
     
     for (1) {
@@ -100,6 +101,8 @@ sub receive_request_and_send_response {
     my ($self) = @_;
     my ($message_type, $message_data) = $self->_receive();
     if ($message_type eq 'query') {
+        # the following line will send a response
+        # it also happens to return the response typ & data to the server runner
         my ($response_type, $response_data) = $self->_process_query($message_data);
         return ($message_type, $message_data, $response_type, $response_data);
     }
