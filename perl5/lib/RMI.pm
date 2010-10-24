@@ -86,7 +86,7 @@ specific objects it returns, with all further proxying happening through them.
 
 The procedure typically goes as follows:
 
-1. a server is started which has access to some objects or data which is of value
+1. a server is started which has access to some objects or data which are of value
  
 2. a client connects to that server, and asks that it execute code on its behalf
  
