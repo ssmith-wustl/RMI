@@ -8,7 +8,7 @@ use base 'RMI::Node';
 
 # all methods in this module are convenience wrappers for RMI::Node generic methods.
 
-*call_function = \&call_function;
+*call_sub = \&call_function;
 
 sub call_function {
     my ($self,$fname,@params) = @_;
