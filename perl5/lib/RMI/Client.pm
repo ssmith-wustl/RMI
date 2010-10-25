@@ -31,19 +31,31 @@ sub call_object_method {
 
 sub call_eval {
     my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response('call_eval', $src, @params);    
+    return $self->send_request_and_receive_response('call_eval', '', '', $src, @params);    
 }
 
 sub call_use {
     my ($self,$class,$module,$use_args) = @_;
 
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
+    }
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+
     my @exported;
     my $path;
-    
     ($class,$module,$path, @exported) = 
         $self->send_request_and_receive_response(
             'call_use',
             $class,
+            '-call_use',
             $module,
             defined($use_args),
             ($use_args ? @$use_args : ())

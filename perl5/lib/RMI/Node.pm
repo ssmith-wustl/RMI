@@ -231,7 +231,7 @@ sub _respond_to_object_method {
 }
 
 sub _respond_to_use {
-    my ($self,$class,$module,$has_args,@use_args) = @_;
+    my ($self,$class,$dummy,$module,$has_args,@use_args) = @_;
 
     no strict 'refs';
     if ($class and not $module) {
@@ -280,6 +280,9 @@ sub _respond_to_use_lib {
 
 sub _respond_to_eval {
     my $self = shift;
+    my $dummy_class = shift;
+    my $dummy_method = shift;
+    
     my $src = shift;
     if (wantarray) {
         my @result = eval $src;
@@ -301,6 +304,8 @@ sub _respond_to_coderef {
     # NOTE: It's important to shift these two parameters off since goto must 
     # pass the remainder of @_ to the subroutine.
     my $self = shift;
+    my $dummy_class = shift;
+    my $dummy_method = shift;
     my $sub_id = shift;
     my $sub = $self->{_sent_objects}{$sub_id};
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
@@ -314,39 +319,40 @@ sub _resolve_default_opts {
     my $call_type = $message_data->[1];
     my $pkg;
     my $sub;
-    if ($call_type eq 'call_function'
+    #if (
+    #    $call_type eq 'call_coderef'        
+    #    or $call_type eq 'call_eval'
+    #    or $call_type eq 'call_use_lib'        
+    #) {
+    #    return;
+    #}    
+    #els
+    if (1) {
+        $pkg = $message_data->[2];
+        $sub = $message_data->[3];        
+    }
+    elsif ($call_type eq 'call_function'
         or $call_type eq 'call_class_method'
         or $call_type eq 'call_object_method'
+        or $call_type eq 'call_use'
     ) {
         $pkg = $message_data->[2];
         $sub = $message_data->[3];
     }
     elsif (
-        $call_type eq 'call_eval'
-        or $call_type eq 'call_coderef'
-        or $call_type eq 'call_use'
-        or $call_type eq 'call_use_lib'
+        $call_type eq 'call_coderef'        
+        or $call_type eq 'call_eval'
+        or $call_type eq 'call_use_lib'        
     ) {
-        $pkg = '-' . $call_type;
-        if ($call_type eq 'call_use') {
-            $sub = $message_data->[2];
-            if (!$sub) {
-                $sub = $message_data->[3];
-                $sub =~ s/.pm$//;
-                $sub =~ s/\//\::/g;
-            }
-            $sub .= '';
-        }
-        else {
-            $sub = $message_data->[2] . '';
-        }
+        return;
     }
     else {
         die "no handling for CALL TYPE $call_type?";
     }
 
     unless ($pkg) {
-        die "Failed to resolve a pkg/sub pair for query @$message_data!";
+        return;
+        #die "Failed to resolve a pkg/sub pair for query @$message_data!";
     }
 
     my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
@@ -508,7 +514,7 @@ sub _deserialize {
                 elsif ($remote_shape eq 'CODE') {
                     my $sub_id = $value;
                     $o = sub {
-                        $self->send_request_and_receive_response('call_coderef', $sub_id, @_);
+                        $self->send_request_and_receive_response('call_coderef', '', '', $sub_id, @_);
                     };
                     # TODO: ensure this cleans up on the other side when it is destroyed
                 }
@@ -658,13 +664,13 @@ sub bind_local_class_to_remote {
 sub _remote_has_ref {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response('call_eval', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response('call_eval', 'exists $RMI::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
 }
 
 # this generate basic accessors w/o using any other Perl modules which might have proxy effects
