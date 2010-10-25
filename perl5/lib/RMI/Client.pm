@@ -24,7 +24,9 @@ sub call_class_method {
 sub call_object_method {
     # called rarely, since the stub AUTOLOAD actually calls the method transparently
     my ($self,$object,$method,@params) = @_;
-    return $self->send_request_and_receive_response('call_object_method', $object, $method, @params);
+    my $class = ref($object);
+    $class =~ s/RMI::Proxy:://;
+    return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
 }
 
 sub call_eval {

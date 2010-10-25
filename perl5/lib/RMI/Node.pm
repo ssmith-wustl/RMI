@@ -226,7 +226,7 @@ sub _respond_to_class_method {
 }
 
 sub _respond_to_object_method {
-    my ($self, $object, $method, @params) = @_;
+    my ($self, $class, $method, $object, @params) = @_;
     $object->$method(@params);
 }
 
@@ -314,13 +314,9 @@ sub _resolve_default_opts {
     my $call_type = $message_data->[1];
     my $pkg;
     my $sub;
-    if ($call_type eq 'call_object_method') {
-        $pkg = ref($message_data->[2]);
-        $pkg =~ s/RMI::Proxy:://;
-        $sub = $message_data->[3];
-    }
-    elsif ($call_type eq 'call_class_method'
-        or $call_type eq 'call_function'
+    if ($call_type eq 'call_function'
+        or $call_type eq 'call_class_method'
+        or $call_type eq 'call_object_method'
     ) {
         $pkg = $message_data->[2];
         $sub = $message_data->[3];

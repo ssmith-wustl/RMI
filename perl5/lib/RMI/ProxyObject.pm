@@ -12,34 +12,57 @@ sub AUTOLOAD {
     my $object = shift;
     my $subname = $AUTOLOAD;
     my ($class,$method) = ($subname =~ /^(.*)::(.*?)$/);
+    $class =~ s/RMI::Proxy:://;
     no warnings;
     my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
     unless ($node) {
         die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
-    print "$RMI::DEBUG_MSG_PREFIX O: $$ $object $method redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), ($object||$class), $method, @_);
+    print "$RMI::DEBUG_MSG_PREFIX O: $$ $class $method ($object) with @_ redirecting to node $node\n" if $RMI::DEBUG;
+    if (ref($object)) {
+        $node->send_request_and_receive_response('call_object_method', $class, $method, $object, @_);        
+    }
+    else {
+        $node->send_request_and_receive_response('call_class_method', $class, $method, @_);        
+    }
 
 }
 
 sub can {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$object};
+    my $class = ref($object) || $object;
+    $class =~ s/RMI::Proxy:://;
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
     unless ($node) {
         die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'can', @_);
+    
+
+    if (ref($object)) {
+        $node->send_request_and_receive_response('call_object_method', $class, 'can', $object, @_);        
+    }
+    else {
+        $node->send_request_and_receive_response('call_class_method', $class, 'can', @_);        
+    }
+
 }
 
 sub isa {
     my $object = shift;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$object};
+    my $class = ref($object) || $object;
+    $class =~ s/RMI::Proxy:://;
+    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
     unless ($node) {
         die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
     }
     print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
-    $node->send_request_and_receive_response((ref($object) ? 'call_object_method' : 'call_class_method'), $object, 'isa', @_);
+    if (ref($object)) {
+        $node->send_request_and_receive_response('call_object_method', $class, 'isa', $object, @_);        
+    }
+    else {
+        $node->send_request_and_receive_response('call_class_method', $class, 'isa', @_);        
+    }
 }
 
 END {
