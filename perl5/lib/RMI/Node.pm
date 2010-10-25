@@ -66,9 +66,15 @@ sub send_request_and_receive_response {
     # The remainder of the params are only analyzed on the caller's side.
     my $opts = shift(@_) if ref($_[0]) eq 'HASH';
 
+    # the message...    
     my $message_data = [$wantarray, @_];
-    
-    my $default_opts = $self->_resolve_default_opts($message_data);    
+
+    my $call_type = $message_data->[1];
+    my $pkg = $message_data->[2];
+    my $sub = $message_data->[3];
+    my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
+
     if ($default_opts) {
         if ($opts) {
             my $new_opts = { %$default_opts, %$opts };
@@ -312,54 +318,6 @@ sub _respond_to_coderef {
     goto $sub;
 }
 
-sub _resolve_default_opts {
-    my ($self, $message_data) = @_;
-    my $message_type = 'query';
-
-    my $call_type = $message_data->[1];
-    my $pkg;
-    my $sub;
-    #if (
-    #    $call_type eq 'call_coderef'        
-    #    or $call_type eq 'call_eval'
-    #    or $call_type eq 'call_use_lib'        
-    #) {
-    #    return;
-    #}    
-    #els
-    if (1) {
-        $pkg = $message_data->[2];
-        $sub = $message_data->[3];        
-    }
-    elsif ($call_type eq 'call_function'
-        or $call_type eq 'call_class_method'
-        or $call_type eq 'call_object_method'
-        or $call_type eq 'call_use'
-    ) {
-        $pkg = $message_data->[2];
-        $sub = $message_data->[3];
-    }
-    elsif (
-        $call_type eq 'call_coderef'        
-        or $call_type eq 'call_eval'
-        or $call_type eq 'call_use_lib'        
-    ) {
-        return;
-    }
-    else {
-        die "no handling for CALL TYPE $call_type?";
-    }
-
-    unless ($pkg) {
-        return;
-        #die "Failed to resolve a pkg/sub pair for query @$message_data!";
-    }
-
-    my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
-    
-    return $default_opts;
-}
 
 # The private API for the client-ish role of the RMI::Node is still in the RMI::Client module,
 # where it is documented.  All of that API is a thin wrapper for methods here.
