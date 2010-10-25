@@ -204,7 +204,10 @@ sub _process_query {
     return ($return_type, $return_data);
 }
 
-# private API for the server-ish role
+## private API for the responding to Perl 5 requests ##
+
+# Each _respond_to_* method maps to a call_* method implemented in the client,
+# where it is documented.
 
 sub _respond_to_function {
     my ($self, $pkg, $sub, @params) = @_;
@@ -308,13 +311,17 @@ sub _respond_to_coderef {
 }
 
 
-# The private API for the client-ish role of the RMI::Node is still in the RMI::Client module,
-# where it is documented.  All of that API is a thin wrapper for methods here.
 
 # serialize params when sending a query, or results when sending a response
 
 sub _serialize {
     my ($self, $message_type, $message_data, $opts) = @_;    
+  
+    # 0: non-reference value (copy me as text)
+    # 1: blessed reference (proxy me)
+    # 2: unblessed reference (proxy me)
+    # 3: returning proxy reference (unproxy me)
+    # 4: serialize don't proxy (copy me as a dumped reference)
   
     my $sent_objects = $self->{_sent_objects};
 

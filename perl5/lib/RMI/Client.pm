@@ -215,11 +215,11 @@ Any additional arguments are set to @_ before eval on the remote side, after pro
  
 =head2 use_remote($class)
 
-Creases the effect of "use $class", but all calls of any kind for that
-namespace are proxied through the client.  This is the most transparent way to
-get remote objects, since you can just call normal constructors and class methods
-as though the module were local.  It does means that ALL objects of the given
-class must come from through this client.
+Creates the effect of "use $class", but all calls of any kind for that
+namespace are proxied through the client to the server.  This is the most t
+ransparent way to get remote objects, since you can just call normal
+constructors and class methods as though the module were local.  It does means
+that ALL objects of the given class must come from through this client.
 
  # NOTE: you probably shouldn't do this with IO::File unless you
  # _really_ want all of its files to open on the server,
@@ -239,14 +239,15 @@ Exporting does work.  To turn it off, use empty braces as you would empty parens
 
  $c->use_remote('Sys::Hostname',[]);
 
-To get this effect (and prevent export of the hostame() function).
+To get the effect of the following (prevents export of the hostame() function).
 
  use Sys::Hostname ();
 
 =head2 use_lib_remote($path)
 
 Installs a special handler into the local @INC which causes it to check the remote
-side for a class.  If available, it will do use_remote() on that class.
+side for a package in subsequent use/require calls.  If available, it will do
+use_remote() on that class.
 
  use A;
  use B; 
@@ -329,7 +330,7 @@ Scott Smith <sakoht@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+Copyright (c) 2008 - 2010 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 

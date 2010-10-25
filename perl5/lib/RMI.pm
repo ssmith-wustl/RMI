@@ -182,10 +182,10 @@ Proxied objects/references reveal that they are proxies when ref($o) is
 called on them, unless the entire package is proxied with ->use_remote.
 
 Calls to ->isa() still operate as though the proxy were the object it
-represents.  Code which goes around the isa() override to UNIVERSAL::isa()
-will circumvent the illusion as well.
+represents, but code which goes around the isa() override to UNIVERSAL::isa()
+will circumvent the illusion.
 
-=head2 remote objects do not stringify to matche the original object
+=head2 remote objects do not stringify to match the original object
 
 Like ref(), this reveals the actual reference (and possibly class) of the proxy,
 not the object which is proxied.
@@ -241,6 +241,20 @@ as intended.
 This problem is prevented in one place automatically by the current RMI
 implementation: there is custom code to handle exporting of methods into the
 caller's namespace inside "use_remote".
+
+=head1 BUGS AND KNOWN ISSUES
+
+=head2 the stringification of a reference is used as its identifier
+
+This is bad when a class overrides stringification and does not do so
+in an unambiguous way.
+
+=head2 the wire protocol is inefficient
+
+It's basically Data::Dumper, which is unfortunate because the structures are not
+complex and it could be more terse.  It will be modularized and switchable
+in a later version.
+
 
 =head1 IMPLEMENTATIONS IN OTHER LANGUAGES
 
