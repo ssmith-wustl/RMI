@@ -7,7 +7,6 @@ our $VERSION = $RMI::VERSION;
 
 use RMI;
 
-
 # When references are "passed" to a remote client/server, the proxy is tied using this package to proxy back all data access.
 # NOTE: if the reference is blessed, the proxy will also be blessed into RMI::ProxyObject, in addition to being _tied_ to this package.
 
@@ -15,7 +14,6 @@ use RMI;
 *TIEHASH    = \&TIE;
 *TIESCALAR  = \&TIE;
 *TIEHANDLE  = \&TIE;
-
 # CODE references are handled specially, using an anonymous sub on the proxy side, without tie, since tie does not support them
 
 sub TIE {
@@ -39,7 +37,7 @@ sub AUTOLOAD {
     if ($delegate_class eq 'Tie::StdArray' and $method eq 'EXTEND') {
         $delegate_class = 'Tie::Array';
     }
-    $node->send_request_and_receive_response('call_function', $delegate_class . '::' . $method, @_);
+    $node->send_request_and_receive_response('call_function', $delegate_class, $method, @_);
 }
 
 sub DESTROY {

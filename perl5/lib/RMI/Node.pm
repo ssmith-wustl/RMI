@@ -214,8 +214,9 @@ sub _process_query {
 # private API for the server-ish role
 
 sub _respond_to_function {
-    my ($self, $fname, @params) = @_;
+    my ($self, $pkg, $sub, @params) = @_;
     no strict 'refs';
+    my $fname = $pkg . '::' . $sub;
     $fname->(@params);
 }
 
@@ -318,12 +319,11 @@ sub _resolve_default_opts {
         $pkg =~ s/RMI::Proxy:://;
         $sub = $message_data->[3];
     }
-    elsif ($call_type eq 'call_class_method') {
+    elsif ($call_type eq 'call_class_method'
+        or $call_type eq 'call_function'
+    ) {
         $pkg = $message_data->[2];
         $sub = $message_data->[3];
-    }
-    elsif ($call_type eq 'call_function') {
-        ($pkg,$sub) = ($message_data->[2] =~ /^(.*)::([^\:]*)$/);
     }
     elsif (
         $call_type eq 'call_eval'
@@ -724,7 +724,7 @@ This document describes RMI::Node v0.11.
     }
     
     # send one request and get the result
-    $sum = $c->send_request_and_receive_response('call_function', 'main::add', 5, 6);
+    $sum = $c->send_request_and_receive_response('call_function', 'main', 'add', 5, 6);
     
     # we might have also done..
     $robj = $c->send_request_and_receive_response('call_class_method', 'IO::File', 'new', '/my/file');

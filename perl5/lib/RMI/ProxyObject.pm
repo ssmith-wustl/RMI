@@ -10,9 +10,8 @@ our %OPTS;
 sub AUTOLOAD {
     no strict;
     my $object = shift;
-    my $method = $AUTOLOAD;
-    my ($class,$subname) = ($method =~ /^(.*)::(.*?)$/);
-    $method = $subname;
+    my $subname = $AUTOLOAD;
+    my ($class,$method) = ($subname =~ /^(.*)::(.*?)$/);
     no warnings;
     my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
     unless ($node) {

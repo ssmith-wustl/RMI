@@ -12,7 +12,8 @@ use base 'RMI::Node';
 
 sub call_function {
     my ($self,$fname,@params) = @_;
-    return $self->send_request_and_receive_response('call_function', $fname, @params);
+    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
+    return $self->send_request_and_receive_response('call_function', $pkg, $sub, @params);
 }
 
 sub call_class_method {
