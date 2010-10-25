@@ -8,7 +8,7 @@ use base 'RMI::Node';
 
 # all methods in this module are convenience wrappers for RMI::Node generic methods.
 
-*call_sub = \&call_function;
+*call_function = \&call_function;
 
 sub call_function {
     my ($self,$fname,@params) = @_;
@@ -55,7 +55,7 @@ sub call_use {
         $self->send_request_and_receive_response(
             'call_use',
             $class,
-            '-call_use',
+            '',
             $module,
             defined($use_args),
             ($use_args ? @$use_args : ())
@@ -65,8 +65,8 @@ sub call_use {
 }
 
 sub call_use_lib {
-    my ($self,$lib) = @_;
-    return $self->send_request_and_receive_response('call_use_lib', $lib);
+    my ($self,$lib, @other) = @_;
+    return $self->send_request_and_receive_response('call_use_lib', '', '', $lib);
 }
 
 sub use_remote {

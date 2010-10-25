@@ -54,24 +54,15 @@ sub close {
 
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
-
-    if ($RMI::DEBUG) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self: @_\n";
-    }
     
-    my $wantarray = wantarray;
+    if ($RMI::DEBUG) {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via @_\n";
+    }
 
-    # Specs to get control of the serialization process are optional,  
-    # and may be at the beginning of the parameter list.  
-    # The remainder of the params are only analyzed on the caller's side.
-    my $opts = shift(@_) if ref($_[0]) eq 'HASH';
-
-    # the message...    
-    my $message_data = [$wantarray, $call_type, $pkg, $sub, @params];
-
+    my $opts;
+    
     my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
-
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;    
     if ($default_opts) {
         if ($opts) {
             my $new_opts = { %$default_opts, %$opts };
@@ -83,8 +74,8 @@ sub send_request_and_receive_response {
         }
     }
 
-    # @_ contains the message_type and message_data we package and transmit
-    $self->_send('query',$message_data,$opts) or die "failed to send! $!";
+    my $wantarray = wantarray;
+    $self->_send('query', [$wantarray, $call_type, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
         my ($message_type, $message_data) = $self->_receive();
@@ -172,7 +163,6 @@ sub _process_query {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ processing query $call_type in wantarray context $wantarray with : @$message_data\n" if $RMI::DEBUG;
     };
     
-    
     # swap call_ for _respond_to_
     my $method = '_respond_to_' . substr($call_type,5);
     
@@ -234,7 +224,7 @@ sub _respond_to_object_method {
 }
 
 sub _respond_to_use {
-    my ($self,$class,$dummy,$module,$has_args,@use_args) = @_;
+    my ($self,$class,$dummy_no_method,$module,$has_args,@use_args) = @_;
 
     no strict 'refs';
     if ($class and not $module) {
@@ -275,16 +265,18 @@ sub _respond_to_use {
 }
 
 sub _respond_to_use_lib {
-    my $self = shift; 
-    my $lib = shift;
+    my $self = shift;
+    my $dummy_no_class = shift;
+    my $dummy_no_method = shift;
+    my @libs = @_;
     require lib;
-    return lib->import($lib);
+    return lib->import(@libs);
 }
 
 sub _respond_to_eval {
     my $self = shift;
-    my $dummy_class = shift;
-    my $dummy_method = shift;
+    my $dummy_no_class = shift;
+    my $dummy_no_method = shift;
     
     my $src = shift;
     if (wantarray) {
@@ -307,8 +299,8 @@ sub _respond_to_coderef {
     # NOTE: It's important to shift these two parameters off since goto must 
     # pass the remainder of @_ to the subroutine.
     my $self = shift;
-    my $dummy_class = shift;
-    my $dummy_method = shift;
+    my $dummy_no_class = shift;
+    my $dummy_no_method = shift;
     my $sub_id = shift;
     my $sub = $self->{_sent_objects}{$sub_id};
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
