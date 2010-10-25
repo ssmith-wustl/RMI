@@ -53,7 +53,7 @@ sub close {
 }
 
 sub send_request_and_receive_response {
-    my $self = shift;
+    my ($self,$call_type,$pkg,$sub,@params) = @_;
 
     if ($RMI::DEBUG) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via $self: @_\n";
@@ -67,11 +67,8 @@ sub send_request_and_receive_response {
     my $opts = shift(@_) if ref($_[0]) eq 'HASH';
 
     # the message...    
-    my $message_data = [$wantarray, @_];
+    my $message_data = [$wantarray, $call_type, $pkg, $sub, @params];
 
-    my $call_type = $message_data->[1];
-    my $pkg = $message_data->[2];
-    my $sub = $message_data->[3];
     my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
 
