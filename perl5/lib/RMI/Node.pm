@@ -66,8 +66,22 @@ sub send_request_and_receive_response {
     # The remainder of the params are only analyzed on the caller's side.
     my $opts = shift(@_) if ref($_[0]) eq 'HASH';
 
+    my $message_data = [$wantarray, @_];
+    
+    my $default_opts = $self->_resolve_default_opts($message_data);    
+    if ($default_opts) {
+        if ($opts) {
+            my $new_opts = { %$default_opts, %$opts };
+            $opts = $new_opts;
+            # print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub merged with specified opts for combined set: " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;
+        }
+        else {
+            $opts = $default_opts;
+        }
+    }
+
     # @_ contains the message_type and message_data we package and transmit
-    $self->_send('query',[$wantarray, @_],$opts) or die "failed to send! $!";
+    $self->_send('query',$message_data,$opts) or die "failed to send! $!";
     
     for (1) {
         my ($message_type, $message_data) = $self->_receive();
@@ -292,6 +306,59 @@ sub _respond_to_coderef {
     goto $sub;
 }
 
+sub _resolve_default_opts {
+    my ($self, $message_data) = @_;
+    my $message_type = 'query';
+
+    my $call_type = $message_data->[1];
+    my $pkg;
+    my $sub;
+    if ($call_type eq 'call_object_method') {
+        $pkg = ref($message_data->[2]);
+        $pkg =~ s/RMI::Proxy:://;
+        $sub = $message_data->[3];
+    }
+    elsif ($call_type eq 'call_class_method') {
+        $pkg = $message_data->[2];
+        $sub = $message_data->[3];
+    }
+    elsif ($call_type eq 'call_function') {
+        ($pkg,$sub) = ($message_data->[2] =~ /^(.*)::([^\:]*)$/);
+    }
+    elsif (
+        $call_type eq 'call_eval'
+        or $call_type eq 'call_coderef'
+        or $call_type eq 'call_use'
+        or $call_type eq 'call_use_lib'
+    ) {
+        $pkg = '-' . $call_type;
+        if ($call_type eq 'call_use') {
+            $sub = $message_data->[2];
+            if (!$sub) {
+                $sub = $message_data->[3];
+                $sub =~ s/.pm$//;
+                $sub =~ s/\//\::/g;
+            }
+            $sub .= '';
+        }
+        else {
+            $sub = $message_data->[2] . '';
+        }
+    }
+    else {
+        die "no handling for CALL TYPE $call_type?";
+    }
+
+    unless ($pkg) {
+        die "Failed to resolve a pkg/sub pair for query @$message_data!";
+    }
+
+    my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
+    
+    return $default_opts;
+}
+
 # The private API for the client-ish role of the RMI::Node is still in the RMI::Client module,
 # where it is documented.  All of that API is a thin wrapper for methods here.
 
@@ -300,66 +367,6 @@ sub _respond_to_coderef {
 sub _serialize {
     my ($self, $message_type, $message_data, $opts) = @_;    
   
-    # TODO: we previously had no knowledge in the client of the type of call being made, 
-    # but to support overrides we now need it.  Refactor this conditional logic!!
-    if ($message_type eq 'query') {
-        my $call_type = $message_data->[1];
-        my $pkg;
-        my $sub;
-        if ($call_type eq 'call_object_method') {
-            $pkg = ref($message_data->[2]);
-            $pkg =~ s/RMI::Proxy:://;
-            $sub = $message_data->[3];
-        }
-        elsif ($call_type eq 'call_class_method') {
-            $pkg = $message_data->[2];
-            $sub = $message_data->[3];
-        }
-        elsif ($call_type eq 'call_function') {
-            ($pkg,$sub) = ($message_data->[2] =~ /^(.*)::([^\:]*)$/);
-        }
-        elsif (
-            $call_type eq 'call_eval'
-            or $call_type eq 'call_coderef'
-            or $call_type eq 'call_use'
-            or $call_type eq 'call_use_lib'
-        ) {
-            $pkg = '-' . $call_type;
-            if ($call_type eq 'call_use') {
-                $sub = $message_data->[2];
-                if (!$sub) {
-                    $sub = $message_data->[3];
-                    $sub =~ s/.pm$//;
-                    $sub =~ s/\//\::/g;
-                }
-                $sub .= '';
-            }
-            else {
-                $sub = $message_data->[2] . '';
-            }
-        }
-        else {
-            die "no handling for CALL TYPE $call_type?";
-        }
-
-        unless ($pkg) {
-            die "Failed to resolve a pkg/sub pair for query @$message_data!";
-        }
-
-        my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;
-        if ($default_opts) {
-            if ($opts) {
-                $opts = { %$default_opts, %$opts };
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub merged with specified opts for combined set: " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;
-            }
-            else {
-                $opts = $default_opts;
-            }
-        }
-
-    }
-
     my $sent_objects = $self->{_sent_objects};
 
     # there is currently only one option to serialize: a global "copy" flag.
