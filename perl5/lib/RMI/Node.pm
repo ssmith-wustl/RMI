@@ -55,12 +55,9 @@ sub close {
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     
-    if ($RMI::DEBUG) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via @_\n";
-    }
-
-    my $opts;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via @_\n" if $RMI::DEBUG;
     
+    my $opts; 
     my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;    
     if ($default_opts) {
@@ -156,12 +153,258 @@ sub _receive {
     }
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got $serialized_blob" if $RMI::DEBUG;
     print "\n" if $RMI::DEBUG and not defined $serialized_blob;
+       
+    my ($message_type, $encoded_message_data) = $self->_deserialize($serialized_blob);
+    if ($RMI::DEBUG) {
+        no warnings;    
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (encoded): @$encoded_message_data\n";
+    };
     
-    my ($message_type,$message_data) = $self->_deserialize($serialized_blob);
-    return ($message_type, $message_data);
+    my $message_data = $self->_decode($encoded_message_data);
+    return ($message_type,$message_data);
+}
+
+## wire protocol ##
+
+sub _serialize {
+    my ($self, $message_type, $encoded_message_data) = @_;  
+
+    # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
+    # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
+    # something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
+    # currently expects the records are divided by newlines (instead of sending a message length or other 
+    # terminator) and Dumper conveniently escapes newlines in any strings we pass.
+    
+    my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
+    if ($serialized_blob =~ s/\n/ /gms) {
+        die "newline found in message data!";
+    }
+    
+    return $serialized_blob;
+}
+
+sub _deserialize {
+    my ($self, $serialized_blob) = @_;
+
+    # see TODO above for switching from Dumper/eval to something simpler.
+    my $encoded_message_data = eval "no strict; no warnings; $serialized_blob";
+
+    if ($@) {
+        die "Exception de-serializing message: $@";
+    }        
+
+    my $message_type = shift @$encoded_message_data;
+    if (! defined $message_type) {
+        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($encoded_message_data);
+    }    
+
+    return ($message_type, $encoded_message_data);    
 }
 
 ## Perl 5 specific implementation ##
+
+# application protocol for passing objects and values
+
+sub _encode {
+    my ($self, $message_data, $opts) = @_;
+
+    # NOTE: this destroys the contents of $message_data, and queues single-ref
+    # objects in the message for deletion on the remote side inside the encoding.
+
+    # 0: non-reference value (copy me as text)
+    # 1: blessed reference (proxy me)
+    # 2: unblessed reference (proxy me)
+    # 3: returning proxy reference (unproxy me)
+    # 4: serialize don't proxy (copy me as a dumped reference)
+      
+    # there is currently only one option to serialize: a global "copy" flag.
+    my $copy;
+    if ($opts) {
+        $copy = delete $opts->{copy};
+        if (%$opts) {
+            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
+        }
+    }
+
+    my $sent_objects = $self->{_sent_objects};
+    
+    my @encoded;
+    for my $o (@$message_data) {
+        if (my $type = ref($o)) {
+            # sending some sort of reference
+            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
+                # this is a proxy object on THIS side: the real object will be used on the remote side
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
+                push @encoded, 3, $key;
+                next;
+            }
+            elsif($copy) {
+                # a reference on this side which should be copied on the other side instead of proxied
+                # this never happens by default in the RMI modules, only when specially requested for performance
+                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
+                push @encoded, 4, $o;
+            }
+            else {
+                # a reference originating on this side: send info so the remote side can create a proxy
+
+                # TODO: use something better than stringification since this can be overridden!!!
+                my $key = "$o";
+                
+                # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
+                my $base_type = substr($key,index($key,'=')+1);
+                $base_type = substr($base_type,0,index($base_type,'('));
+                my $code;
+                if ($base_type ne $type) {
+                    # blessed reference
+                    $code = 1;
+                    if (my $allowed = $self->{allow_packages}) {
+                        unless ($allowed->{ref($o)}) {
+                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
+                        }
+                    }
+                }
+                else {
+                    # regular reference
+                    $code = 2;
+                }
+                
+                push @encoded, $code, $key;
+                $sent_objects->{$key} = $o;
+            }
+        }
+        else {
+            # sending a non-reference value
+            push @encoded, 0, $o;
+        }
+    }
+ 
+    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
+    # and will expand what is in _received_and_destroyed_ids...
+    @$message_data = (); 
+
+    # reset the received_and_destroyed_ids
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
+    @$received_and_destroyed_ids = ();
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
+    
+    return ($received_and_destroyed_ids_copy, @encoded);
+}
+
+sub _decode {
+    my ($self, $serialized) = @_;
+    
+    my @message_data;
+
+    my $sent_objects = $self->{_sent_objects};
+    my $received_objects = $self->{_received_objects};
+    my $received_and_destroyed_ids = shift @$serialized;
+    
+    while (@$serialized) { 
+        my $type = shift @$serialized;
+        my $value = shift @$serialized;
+        if ($type == 0) {
+            # primitive value
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
+            push @message_data, $value;
+        }
+        elsif ($type == 1 or $type == 2) {
+            # exists on the other side: make a proxy
+            my $o = $received_objects->{$value};
+            unless ($o) {
+                my ($remote_class,$remote_shape) = ($value =~ /^(.*?=|)(.*?)\(/);
+                chop $remote_class;
+                my $t;
+                if ($remote_shape eq 'ARRAY') {
+                    $o = [];
+                    $t = tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
+                }
+                elsif ($remote_shape eq 'HASH') {
+                    $o = {};
+                    $t = tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
+                }
+                elsif ($remote_shape eq 'SCALAR') {
+                    my $anonymous_scalar;
+                    $o = \$anonymous_scalar;
+                    $t = tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
+                }
+                elsif ($remote_shape eq 'CODE') {
+                    my $sub_id = $value;
+                    $o = sub {
+                        $self->send_request_and_receive_response('call_coderef', '', '', $sub_id, @_);
+                    };
+                    # TODO: ensure this cleans up on the other side when it is destroyed
+                }
+                elsif ($remote_shape eq 'GLOB' or $remote_shape eq 'IO') {
+                    $o = \do { local *HANDLE };
+                    $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
+                }
+                else {
+                    die "unknown reference type for $remote_shape for $value!!";
+                }
+                if ($type == 1) {
+                    if ($RMI::proxied_classes{$remote_class}) {
+                        bless $o, $remote_class;
+                    }
+                    else {
+                        # Put the object into a custom subclass of RMI::ProxyObject
+                        # this allows class-wide customization of how proxying should
+                        # occur.  It also makes Data::Dumper results more readable.
+                        my $target_class = 'RMI::Proxy::' . $remote_class;
+                        unless ($RMI::classes_with_proxied_objects{$remote_class}) {
+                            no strict 'refs';
+                            @{$target_class . '::ISA'} = ('RMI::ProxyObject');
+                            no strict;
+                            no warnings;
+                            local $SIG{__DIE__} = undef;
+                            local $SIG{__WARN__} = undef;
+                            eval "use $target_class";
+                            $RMI::classes_with_proxied_objects{$remote_class} = 1;
+                        }
+                        bless $o, $target_class;    
+                    }
+                }
+                $received_objects->{$value} = $o;
+                Scalar::Util::weaken($received_objects->{$value});
+                my $o_id = "$o";
+                my $t_id = "$t" if defined $t;
+                $RMI::Node::node_for_object{$o_id} = $self;
+                $RMI::Node::remote_id_for_object{$o_id} = $value;
+                if ($t) {
+                    # ensure calls to work with the "tie-buddy" to the reference
+                    # result in using the orinigla reference on the "real" side
+                    $RMI::Node::node_for_object{$t_id} = $self;
+                    $RMI::Node::remote_id_for_object{$t_id} = $value;
+                }
+            }
+            
+            push @message_data, $o;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
+        }
+        elsif ($type == 3) {
+            # exists on this side, and was a proxy on the other side: get the real reference by id
+            my $o = $sent_objects->{$value};
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
+            push @message_data, $o;
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
+        }
+        elsif ($type == 4) {
+            # fully serialized blob
+            # this is never done by default, but is part of shortcut/optimization on a per-class basis
+            push @message_data, $value;
+        }
+    }
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
+    unless (@done == @$received_and_destroyed_ids) {
+        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
+    }
+
+    return \@message_data;
+}
+
+## language-specific parsing of requests
 
 sub _process_query {
     my ($self, $message_data) = @_;
@@ -316,245 +559,6 @@ sub _respond_to_coderef {
 }
 
 
-## application protocol
-
-# serialize params when sending a query, or results when sending a response
-
-
-sub _serialize {
-    my ($self, $message_type, $encoded_message_data) = @_;  
-
-    # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
-    # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
-    # something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
-    # currently expects the records are divided by newlines (instead of sending a message length or other 
-    # terminator) and Dumper conveniently escapes newlines in any strings we pass.
-    
-    my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
-    if ($serialized_blob =~ s/\n/ /gms) {
-        die "newline found in message data!";
-    }
-    
-    return $serialized_blob;
-}
-
-# deserialize params when receiving a query, or results when receiving a response
-
-sub _deserialize {
-    my ($self, $serialized_blob) = @_;
-   
-    # see TODO above for switching from Dumper/eval to something simpler.
-    my $serialized = eval "no strict; no warnings; $serialized_blob";
-
-    if ($@) {
-        die "Exception de-serializing message: $@";
-    }        
-
-    my $message_type = shift @$serialized;
-    if (! defined $message_type) {
-        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($serialized);
-    }    
-
-    do {
-        no warnings;    
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (serialized): @$serialized\n" if $RMI::DEBUG;
-    };
-    
-    my @message_data;
-
-    my $sent_objects = $self->{_sent_objects};
-    my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = shift @$serialized;
-    
-    while (@$serialized) { 
-        my $type = shift @$serialized;
-        my $value = shift @$serialized;
-        if ($type == 0) {
-            # primitive value
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
-            push @message_data, $value;
-        }
-        elsif ($type == 1 or $type == 2) {
-            # exists on the other side: make a proxy
-            my $o = $received_objects->{$value};
-            unless ($o) {
-                my ($remote_class,$remote_shape) = ($value =~ /^(.*?=|)(.*?)\(/);
-                chop $remote_class;
-                my $t;
-                if ($remote_shape eq 'ARRAY') {
-                    $o = [];
-                    $t = tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
-                }
-                elsif ($remote_shape eq 'HASH') {
-                    $o = {};
-                    $t = tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
-                }
-                elsif ($remote_shape eq 'SCALAR') {
-                    my $anonymous_scalar;
-                    $o = \$anonymous_scalar;
-                    $t = tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
-                }
-                elsif ($remote_shape eq 'CODE') {
-                    my $sub_id = $value;
-                    $o = sub {
-                        $self->send_request_and_receive_response('call_coderef', '', '', $sub_id, @_);
-                    };
-                    # TODO: ensure this cleans up on the other side when it is destroyed
-                }
-                elsif ($remote_shape eq 'GLOB' or $remote_shape eq 'IO') {
-                    $o = \do { local *HANDLE };
-                    $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
-                }
-                else {
-                    die "unknown reference type for $remote_shape for $value!!";
-                }
-                if ($type == 1) {
-                    if ($RMI::proxied_classes{$remote_class}) {
-                        bless $o, $remote_class;
-                    }
-                    else {
-                        # Put the object into a custom subclass of RMI::ProxyObject
-                        # this allows class-wide customization of how proxying should
-                        # occur.  It also makes Data::Dumper results more readable.
-                        my $target_class = 'RMI::Proxy::' . $remote_class;
-                        unless ($RMI::classes_with_proxied_objects{$remote_class}) {
-                            no strict 'refs';
-                            @{$target_class . '::ISA'} = ('RMI::ProxyObject');
-                            no strict;
-                            no warnings;
-                            local $SIG{__DIE__} = undef;
-                            local $SIG{__WARN__} = undef;
-                            eval "use $target_class";
-                            $RMI::classes_with_proxied_objects{$remote_class} = 1;
-                        }
-                        bless $o, $target_class;    
-                    }
-                }
-                $received_objects->{$value} = $o;
-                Scalar::Util::weaken($received_objects->{$value});
-                my $o_id = "$o";
-                my $t_id = "$t" if defined $t;
-                $RMI::Node::node_for_object{$o_id} = $self;
-                $RMI::Node::remote_id_for_object{$o_id} = $value;
-                if ($t) {
-                    # ensure calls to work with the "tie-buddy" to the reference
-                    # result in using the orinigla reference on the "real" side
-                    $RMI::Node::node_for_object{$t_id} = $self;
-                    $RMI::Node::remote_id_for_object{$t_id} = $value;
-                }
-            }
-            
-            push @message_data, $o;
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
-        }
-        elsif ($type == 3) {
-            # exists on this side, and was a proxy on the other side: get the real reference by id
-            my $o = $sent_objects->{$value};
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n" and die unless $o;
-            push @message_data, $o;
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
-        }
-        elsif ($type == 4) {
-            # fully serialized blob
-            # this is never done by default, but is part of shortcut/optimization on a per-class basis
-            push @message_data, $value;
-        }
-    }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
-    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
-    unless (@done == @$received_and_destroyed_ids) {
-        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
-    }
-
-    return ($message_type,\@message_data);
-}
-
-sub _encode {
-    my ($self, $message_data, $opts) = @_;
-
-    # NOTE: this destroys the contents of $message_data, and queues single-ref
-    # objects in the message for deletion on the remote side inside the encoding.
-
-    # 0: non-reference value (copy me as text)
-    # 1: blessed reference (proxy me)
-    # 2: unblessed reference (proxy me)
-    # 3: returning proxy reference (unproxy me)
-    # 4: serialize don't proxy (copy me as a dumped reference)
-      
-    # there is currently only one option to serialize: a global "copy" flag.
-    my $copy;
-    if ($opts) {
-        $copy = delete $opts->{copy};
-        if (%$opts) {
-            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
-        }
-    }
-
-    my $sent_objects = $self->{_sent_objects};
-    
-    my @encoded;
-    for my $o (@$message_data) {
-        if (my $type = ref($o)) {
-            # sending some sort of reference
-            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
-                # this is a proxy object on THIS side: the real object will be used on the remote side
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
-                push @encoded, 3, $key;
-                next;
-            }
-            elsif($copy) {
-                # a reference on this side which should be copied on the other side instead of proxied
-                # this never happens by default in the RMI modules, only when specially requested for performance
-                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
-                push @encoded, 4, $o;
-            }
-            else {
-                # a reference originating on this side: send info so the remote side can create a proxy
-
-                # TODO: use something better than stringification since this can be overridden!!!
-                my $key = "$o";
-                
-                # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
-                my $base_type = substr($key,index($key,'=')+1);
-                $base_type = substr($base_type,0,index($base_type,'('));
-                my $code;
-                if ($base_type ne $type) {
-                    # blessed reference
-                    $code = 1;
-                    if (my $allowed = $self->{allow_packages}) {
-                        unless ($allowed->{ref($o)}) {
-                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
-                        }
-                    }
-                }
-                else {
-                    # regular reference
-                    $code = 2;
-                }
-                
-                push @encoded, $code, $key;
-                $sent_objects->{$key} = $o;
-            }
-        }
-        else {
-            # sending a non-reference value
-            push @encoded, 0, $o;
-        }
-    }
- 
-    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
-    # and will expand what is in _received_and_destroyed_ids...
-    @$message_data = (); 
-
-    # reset the received_and_destroyed_ids
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
-    @$received_and_destroyed_ids = ();
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
-    
-    return ($received_and_destroyed_ids_copy, @encoded);
-}
 
 
 # this proxies a single variable
