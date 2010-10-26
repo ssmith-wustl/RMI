@@ -317,28 +317,11 @@ sub _respond_to_coderef {
 # serialize params when sending a query, or results when sending a response
 
 sub _serialize {
-    my ($self, $message_type, $message_data, $opts) = @_;
-    
+    my ($self, $message_type, $message_data, $opts) = @_;  
     Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
   
-    # 0: non-reference value (copy me as text)
-    # 1: blessed reference (proxy me)
-    # 2: unblessed reference (proxy me)
-    # 3: returning proxy reference (unproxy me)
-    # 4: serialize don't proxy (copy me as a dumped reference)
-  
     my @encoded = $self->_encode($message_data, $opts);
-    
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
-
-    @$message_data = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
-
-    # Do this after emptying the $message_data array, so the list will be expanded to include objects which
-    # were sent from the other side, and are only referenced in the data we're returning.
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;    
-    unshift @encoded, [@$received_and_destroyed_ids];
-    @$received_and_destroyed_ids = ();
 
     # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
     # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
@@ -487,7 +470,16 @@ sub _deserialize {
 
 sub _encode {
     my ($self, $message_data, $opts) = @_;
-    
+
+    # NOTE: this destroys the contents of $message_data, and queues single-ref
+    # objects in the message for deletion on the remote side inside the encoding.
+
+    # 0: non-reference value (copy me as text)
+    # 1: blessed reference (proxy me)
+    # 2: unblessed reference (proxy me)
+    # 3: returning proxy reference (unproxy me)
+    # 4: serialize don't proxy (copy me as a dumped reference)
+      
     # there is currently only one option to serialize: a global "copy" flag.
     my $copy;
     if ($opts) {
@@ -548,7 +540,18 @@ sub _encode {
             push @encoded, 0, $o;
         }
     }
-    return @encoded;
+ 
+    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
+    # and will expand what is in _received_and_destroyed_ids...
+    @$message_data = (); 
+
+    # reset the received_and_destroyed_ids
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
+    @$received_and_destroyed_ids = ();
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
+    
+    return ($received_and_destroyed_ids_copy, @encoded);
 }
 
 
