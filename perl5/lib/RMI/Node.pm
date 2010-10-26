@@ -55,23 +55,13 @@ sub close {
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling via @_\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
     
-    my $opts; 
-    my $default_opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($default_opts) . "\n" if $RMI::DEBUG;    
-    if ($default_opts) {
-        if ($opts) {
-            my $new_opts = { %$default_opts, %$opts };
-            $opts = $new_opts;
-            # print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type $call_type on $pkg $sub merged with specified opts for combined set: " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;
-        }
-        else {
-            $opts = $default_opts;
-        }
-    }
+    my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     my $wantarray = wantarray;
+    
     $self->_send('query', [$wantarray, $call_type, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
@@ -90,9 +80,6 @@ sub send_request_and_receive_response {
             return;
         }
         elsif ($message_type eq 'query') {
-            # the response was a counter-request which must be fulfilled first
-            # do it, send the result back, rinse/repeat until the original
-            # call gets a return value...
             my ($return_type, $return_data) = $self->_process_query($message_data);
             $self->_send($return_type, $return_data);   
             redo;
@@ -110,8 +97,6 @@ sub receive_request_and_send_response {
     my ($self) = @_;
     my ($message_type, $message_data) = $self->_receive();
     if ($message_type eq 'query') {
-        # the following line will send a response
-        # it also happens to return the response typ & data to the server runner
         my ($response_type, $response_data) = $self->_process_query($message_data);
         $self->_send($response_type, $response_data);         
         return ($message_type, $message_data, $response_type, $response_data);
