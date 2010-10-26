@@ -52,17 +52,19 @@ sub close {
     $self->{reader}->close;
 }
 
-sub send_request_and_receive_response {
+*send_request_and_receive_response = \&send_request_and_return_result;
+
+sub send_request_and_return_result {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
     
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ query $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     my $wantarray = wantarray;
     
-    $self->_send('query', [$wantarray, $call_type, $pkg, $sub, @params], $opts) or die "failed to send! $!";
+    $self->_send('request', [$wantarray, $call_type, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
         my ($message_type, $message_data) = $self->_receive();
@@ -79,8 +81,9 @@ sub send_request_and_receive_response {
         elsif ($message_type eq 'close') {
             return;
         }
-        elsif ($message_type eq 'query') {
-            my ($return_type, $return_data) = $self->_process_query($message_data);
+        elsif ($message_type eq 'request') {
+            # a counter-request, possibly calling a method on an object we sent...
+            my ($return_type, $return_data) = $self->_process_request($message_data);
             $self->_send($return_type, $return_data);   
             redo;
         }
@@ -96,8 +99,8 @@ sub send_request_and_receive_response {
 sub receive_request_and_send_response {
     my ($self) = @_;
     my ($message_type, $message_data) = $self->_receive();
-    if ($message_type eq 'query') {
-        my ($response_type, $response_data) = $self->_process_query($message_data);
+    if ($message_type eq 'request') {
+        my ($response_type, $response_data) = $self->_process_request($message_data);
         $self->_send($response_type, $response_data);         
         return ($message_type, $message_data, $response_type, $response_data);
     }
@@ -130,36 +133,38 @@ sub _receive {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
 
     my $serialized_blob = $self->{reader}->getline;
+
     if (not defined $serialized_blob) {
-        # a failure to get data returns a message type of 'close', and undefined message_data
         print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
         $self->{is_closed} = 1;
         return ('close',undef);
     }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got $serialized_blob" if $RMI::DEBUG;
+    
+    no warnings; # undef in messages below...
+
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got blob: $serialized_blob" if $RMI::DEBUG;
     print "\n" if $RMI::DEBUG and not defined $serialized_blob;
        
     my ($message_type, $encoded_message_data) = $self->_deserialize($serialized_blob);
-    if ($RMI::DEBUG) {
-        no warnings;    
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing (encoded): @$encoded_message_data\n";
-    };
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
     
     my $message_data = $self->_decode($encoded_message_data);
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n";
+
     return ($message_type,$message_data);
 }
 
 ## wire protocol ##
 
+# TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
+# and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
+# something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
+# currently expects the records are divided by newlines (instead of sending a message length or other 
+# terminator) and Dumper conveniently escapes newlines in any strings we pass.
+
 sub _serialize {
     my ($self, $message_type, $encoded_message_data) = @_;  
 
-    # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
-    # and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
-    # something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
-    # currently expects the records are divided by newlines (instead of sending a message length or other 
-    # terminator) and Dumper conveniently escapes newlines in any strings we pass.
-    
     my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
     if ($serialized_blob =~ s/\n/ /gms) {
@@ -172,9 +177,7 @@ sub _serialize {
 sub _deserialize {
     my ($self, $serialized_blob) = @_;
 
-    # see TODO above for switching from Dumper/eval to something simpler.
     my $encoded_message_data = eval "no strict; no warnings; $serialized_blob";
-
     if ($@) {
         die "Exception de-serializing message: $@";
     }        
@@ -189,7 +192,8 @@ sub _deserialize {
 
 ## Perl 5 specific implementation ##
 
-# application protocol for passing objects and values
+# _encode and _decode convert message data (params or results) into
+# an arrayref of identities which do not embed references and can be xmitted
 
 sub _encode {
     my ($self, $message_data, $opts) = @_;
@@ -389,9 +393,10 @@ sub _decode {
     return \@message_data;
 }
 
-## language-specific parsing of requests
+# when the message type is 'request' this method looks for a specific
+# request in the message data and delegates to service it
 
-sub _process_query {
+sub _process_request {
     my ($self, $message_data) = @_;
 
     my $wantarray = shift @$message_data;
@@ -399,7 +404,7 @@ sub _process_query {
     
     do {    
         no warnings;
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing query $call_type in wantarray context $wantarray with : @$message_data\n" if $RMI::DEBUG;
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing request $call_type in wantarray context $wantarray with : @$message_data\n" if $RMI::DEBUG;
     };
     
     # swap call_ for _respond_to_
@@ -783,7 +788,7 @@ type.
 
 The following message types are passed within the current implementation:
 
-=head2 query
+=head2 request
 
 A request that logic execute on the remote side on behalf of the sender.
 This includes object method calls, class method calls, function calls,
@@ -812,14 +817,14 @@ The message data contains, in order:
 
 =head2 result
 
-The return value from a succesful "query" which does not result in an
+The return value from a succesful "request" which does not result in an
 exception being thrown on the remote side.
   
-The message data contains the return value or values of that query.
+The message data contains the return value or values of that request.
   
 =head2 exception
 
-The response to a query which resulted in an exception on the remote side.
+The response to a request which resulted in an exception on the remote side.
   
 The message data contains the value thrown via die() on the remote side.
   
