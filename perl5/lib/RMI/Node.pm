@@ -93,7 +93,11 @@ sub send_request_and_receive_response {
             return;
         }
         elsif ($message_type eq 'query') {
-            $self->_process_query($message_data);            
+            # the response was a counter-request which must be fulfilled first
+            # do it, send the result back, rinse/repeat until the original
+            # call gets a return value...
+            my ($return_type, $return_data) = $self->_process_query($message_data);
+            $self->_send($return_type, $return_data);   
             redo;
         }
         elsif ($message_type eq 'exception') {
@@ -112,6 +116,7 @@ sub receive_request_and_send_response {
         # the following line will send a response
         # it also happens to return the response typ & data to the server runner
         my ($response_type, $response_data) = $self->_process_query($message_data);
+        $self->_send($response_type, $response_data);         
         return ($message_type, $message_data, $response_type, $response_data);
     }
     elsif ($message_type eq 'close') {
@@ -151,6 +156,8 @@ sub _receive {
     my ($message_type,$message_data) = $self->_deserialize($serialized_blob);
     return ($message_type, $message_data);
 }
+
+## Perl 5 specific implementation ##
 
 sub _process_query {
     my ($self, $message_data) = @_;
@@ -199,15 +206,9 @@ sub _process_query {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
         ($return_type, $return_data) =  ('result',\@result);
     }
-    
-    $self->_send($return_type, $return_data);    
+     
     return ($return_type, $return_data);
 }
-
-## private API for the responding to Perl 5 requests ##
-
-# Each _respond_to_* method maps to a call_* method implemented in the client,
-# where it is documented.
 
 sub _respond_to_function {
     my ($self, $pkg, $sub, @params) = @_;
@@ -311,11 +312,14 @@ sub _respond_to_coderef {
 }
 
 
+## application protocol
 
 # serialize params when sending a query, or results when sending a response
 
 sub _serialize {
-    my ($self, $message_type, $message_data, $opts) = @_;    
+    my ($self, $message_type, $message_data, $opts) = @_;
+    
+    Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
   
     # 0: non-reference value (copy me as text)
     # 1: blessed reference (proxy me)
@@ -323,68 +327,9 @@ sub _serialize {
     # 3: returning proxy reference (unproxy me)
     # 4: serialize don't proxy (copy me as a dumped reference)
   
-    my $sent_objects = $self->{_sent_objects};
-
-    # there is currently only one option to serialize: a global "copy" flag.
-    my $copy;
-    if ($opts) {
-        $copy = delete $opts->{copy};
-        if (%$opts) {
-            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
-        }
-    }
-
-    my @serialized;
-    Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
-    for my $o (@$message_data) {
-        if (my $type = ref($o)) {
-            # sending some sort of reference
-            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
-                # this is a proxy object on THIS side: the real object will be used on the remote side
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
-                push @serialized, 3, $key;
-                next;
-            }
-            elsif($copy) {
-                # a reference on this side which should be copied on the other side instead of proxied
-                # this never happens by default in the RMI modules, only when specially requested for performance
-                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
-                push @serialized, 4, $o;
-            }
-            else {
-                # a reference originating on this side: send info so the remote side can create a proxy
-
-                # TODO: use something better than stringification since this can be overridden!!!
-                my $key = "$o";
-                
-                # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
-                my $base_type = substr($key,index($key,'=')+1);
-                $base_type = substr($base_type,0,index($base_type,'('));
-                my $code;
-                if ($base_type ne $type) {
-                    # blessed reference
-                    $code = 1;
-                    if (my $allowed = $self->{allow_packages}) {
-                        unless ($allowed->{ref($o)}) {
-                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
-                        }
-                    }
-                }
-                else {
-                    # regular reference
-                    $code = 2;
-                }
-                
-                push @serialized, $code, $key;
-                $sent_objects->{$key} = $o;
-            }
-        }
-        else {
-            # sending a non-reference value
-            push @serialized, 0, $o;
-        }
-    }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @serialized\n" if $RMI::DEBUG;
+    my @encoded = $self->_encode($message_data, $opts);
+    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
 
     @$message_data = (); # essential to get the DESTROY handler to fire for proxies we're not holding on-to
 
@@ -392,7 +337,7 @@ sub _serialize {
     # were sent from the other side, and are only referenced in the data we're returning.
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids\n" if $RMI::DEBUG;    
-    unshift @serialized, [@$received_and_destroyed_ids];
+    unshift @encoded, [@$received_and_destroyed_ids];
     @$received_and_destroyed_ids = ();
 
     # TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
@@ -400,7 +345,7 @@ sub _serialize {
     # something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
     # currently expects the records are divided by newlines (instead of sending a message length or other 
     # terminator) and Dumper conveniently escapes newlines in any strings we pass.
-    my $serialized_blob = Data::Dumper->new([[$message_type, @serialized]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    my $serialized_blob = Data::Dumper->new([[$message_type, @encoded]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
     if ($serialized_blob =~ s/\n/ /gms) {
         die "newline found in message data!";
@@ -539,6 +484,73 @@ sub _deserialize {
 
     return ($message_type,\@message_data);
 }
+
+sub _encode {
+    my ($self, $message_data, $opts) = @_;
+    
+    # there is currently only one option to serialize: a global "copy" flag.
+    my $copy;
+    if ($opts) {
+        $copy = delete $opts->{copy};
+        if (%$opts) {
+            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
+        }
+    }
+
+    my $sent_objects = $self->{_sent_objects};
+    
+    my @encoded;
+    for my $o (@$message_data) {
+        if (my $type = ref($o)) {
+            # sending some sort of reference
+            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
+                # this is a proxy object on THIS side: the real object will be used on the remote side
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
+                push @encoded, 3, $key;
+                next;
+            }
+            elsif($copy) {
+                # a reference on this side which should be copied on the other side instead of proxied
+                # this never happens by default in the RMI modules, only when specially requested for performance
+                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
+                push @encoded, 4, $o;
+            }
+            else {
+                # a reference originating on this side: send info so the remote side can create a proxy
+
+                # TODO: use something better than stringification since this can be overridden!!!
+                my $key = "$o";
+                
+                # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
+                my $base_type = substr($key,index($key,'=')+1);
+                $base_type = substr($base_type,0,index($base_type,'('));
+                my $code;
+                if ($base_type ne $type) {
+                    # blessed reference
+                    $code = 1;
+                    if (my $allowed = $self->{allow_packages}) {
+                        unless ($allowed->{ref($o)}) {
+                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
+                        }
+                    }
+                }
+                else {
+                    # regular reference
+                    $code = 2;
+                }
+                
+                push @encoded, $code, $key;
+                $sent_objects->{$key} = $o;
+            }
+        }
+        else {
+            # sending a non-reference value
+            push @encoded, 0, $o;
+        }
+    }
+    return @encoded;
+}
+
 
 # this proxies a single variable
 
