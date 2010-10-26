@@ -133,9 +133,13 @@ _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids 
 
 sub _send {
     my ($self, $message_type, $message_data, $opts) = @_;
-    my $s = $self->_encode_and_serialize($message_type,$message_data, $opts);    
-    
+
+    my @encoded = $self->_encode($message_data, $opts);
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
+
+    my $s = $self->_serialize($message_type,\@encoded);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG;
+
     return $self->{writer}->print($s,"\n");                
 }
 
@@ -316,15 +320,6 @@ sub _respond_to_coderef {
 
 # serialize params when sending a query, or results when sending a response
 
-sub _encode_and_serialize {
-    my ($self, $message_type, $message_data, $opts) = @_;  
-    Carp::confess("expected message_type, message_data_arrayref, optional_opts_hashref as params") unless ref($message_data);
-  
-    my @encoded = $self->_encode($message_data, $opts);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
-
-    return $self->_serialize($message_type,\@encoded);
-}
 
 sub _serialize {
     my ($self, $message_type, $encoded_message_data) = @_;  
