@@ -81,6 +81,9 @@ sub send_request_and_receive_response {
     for (1) {
         my ($response_type, $response_data) = $self->_receive();
         if ($response_type eq 'result') {
+            if ($opts and $opts->{copy_results}) {
+                $response_data = $self->_create_local_copy($response_data);
+            }
             if ($wantarray) {
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
                 return @$response_data;
@@ -183,15 +186,6 @@ sub _encode {
     # 2: unblessed reference (proxy me)
     # 3: returning proxy reference (unproxy me)
       
-    # there is currently only one option to serialize: a global "copy" flag.
-    my $copy;
-    if ($opts) {
-        $copy = delete $opts->{copy};
-        if (%$opts) {
-            Carp::confess("Uknown options!  The only supported option is the 'copy' flag.");
-        }
-    }
-
     my $sent_objects = $self->{_sent_objects};
     
     my @encoded;
@@ -204,7 +198,7 @@ sub _encode {
                 push @encoded, 3, $remote_id;
                 next;
             }
-            elsif($copy) {
+            elsif($opts and ($opts->{copy} or $opts->{copy_params})) {
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
                 # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
@@ -388,12 +382,12 @@ sub _create_local_copy {
 
 # mostly for testing
 
-sub _is_local_proxy {
+sub _is_proxy {
     my ($self,$obj) = @_;
     $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
 }
 
-sub _has_remote_proxy {
+sub _has_proxy {
     my ($self,$obj) = @_;
     my $id = "$obj";
     $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');

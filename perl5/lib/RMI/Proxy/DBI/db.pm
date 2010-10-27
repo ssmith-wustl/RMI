@@ -9,7 +9,11 @@ package RMI::Proxy::DBI::db;
 # It's safe to use a copy here, because DBI::db never attempts to mutlate the hash in a way the caller expects
 # to observe later.
 
-$RMI::ProxyObject::DEFAULT_OPTS{"DBI::db"}{"selectall_arrayref"} = { copy => 1 };
+$RMI::ProxyObject::DEFAULT_OPTS{"DBI::db"}{"selectall_arrayref"} = {
+    #copy => 1,          # legacy
+    copy_params => 1,
+    copy_results => 1, 
+};
 
 1;
 
