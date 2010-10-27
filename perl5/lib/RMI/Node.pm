@@ -193,12 +193,10 @@ sub _deserialize {
 
 # _encode and _decode convert message data (params or return values) into
 # an arrayref of identities which do not embed references and can be xmitted
+# NOTE: they create/destroys the contents of $message_data, and are not repeatable
 
 sub _encode {
     my ($self, $message_data, $opts) = @_;
-
-    # NOTE: this destroys the contents of $message_data, and queues single-ref
-    # objects in the message for deletion on the remote side inside the encoding.
     
     # 0: non-reference value (copy me as text)
     # 1: blessed reference (proxy me)
@@ -231,7 +229,8 @@ sub _encode {
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
                 # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
-                push @encoded, 4, $o;
+                $o = $self->_create_remote_copy($o);
+                redo;
             }
             else {
                 # a reference originating on this side: send info so the remote side can create a proxy
@@ -377,11 +376,14 @@ sub _decode {
             push @message_data, $o;
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
         }
-        elsif ($type == 4) {
-            # fully serialized blob
-            # this is never done by default, but is part of shortcut/optimization on a per-class basis
-            push @message_data, $value;
+        else {
+            die "Unknown type $type????"
         }
+        #elsif ($type == 4) {
+        #    # fully serialized blob
+        #    # this is never done by default, but is part of shortcut/optimization on a per-class basis
+        #    push @message_data, $value;
+        #}
     }
     print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
