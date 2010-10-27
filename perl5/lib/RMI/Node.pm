@@ -392,6 +392,8 @@ sub _decode {
     return \@message_data;
 }
 
+# for efficiency and to handle bugs in C bindings, we sometimes do serialize
+
 sub _create_remote_copy {
     my ($self,$v) = @_;
     my $serialized = 'no strict; no warnings; ' . Data::Dumper::Dumper($v);
@@ -407,6 +409,20 @@ sub _create_local_copy {
     die 'Failed to serialize!: ' . $@ if $@;
     return $local;    
 }
+
+# mostly for testing
+
+sub _remote_has_ref {
+    my ($self,$obj) = @_;
+    my $id = "$obj";
+    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+}
+
+sub _remote_has_sent {
+    my ($self,$obj) = @_;
+    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
+}
+
 
 # when the message type is 'request' this method looks for a specific
 # request in the message data and delegates to service it
@@ -640,18 +656,6 @@ sub bind_local_class_to_remote {
     print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
 }
 
-# used for testing
-
-sub _remote_has_ref {
-    my ($self,$obj) = @_;
-    my $id = "$obj";
-    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
-}
-
-sub _remote_has_sent {
-    my ($self,$obj) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
-}
 
 # this generate basic accessors w/o using any other Perl modules which might have proxy effects
 
