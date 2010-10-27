@@ -124,7 +124,7 @@ sub _send {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
 
     my $s = $self->_serialize($message_type,\@encoded);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG;
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG or $RMI::DUMP;
 
     return $self->{writer}->print($s,"\n");                
 }
@@ -168,7 +168,7 @@ sub _serialize {
     
     my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n";# if $RMI::DEBUG;    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
     
     return $serialized_blob;
 }
@@ -408,9 +408,6 @@ sub _create_local_copy {
 
 # mostly for testing
 
-*_remote_has_sent = \&_is_local_proxy;
-*_remote_has_ref = \&_has_remote_proxy;
-
 sub _is_local_proxy {
     my ($self,$obj) = @_;
     $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
@@ -420,6 +417,11 @@ sub _has_remote_proxy {
     my ($self,$obj) = @_;
     my $id = "$obj";
     $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+}
+
+sub _remote_node {
+    my ($self) = @_;
+    $self->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
 }
 
 # when the message type is 'request' this method looks for a specific
@@ -578,12 +580,9 @@ sub _respond_to_coderef {
     goto $sub;
 }
 
-
-
-
-# this proxies a single variable
-
 sub bind_local_var_to_remote {
+    # this proxies a single variable
+
     my $self = shift;
     my $local_var = shift;
     my $remote_var = (@_ ? shift : $local_var);
@@ -617,9 +616,10 @@ sub bind_local_var_to_remote {
     return 1;
 }
 
-# this proxies an entire class instead of just a single object
 
 sub bind_local_class_to_remote {
+    # this proxies an entire class instead of just a single object
+    
     my $self = shift;
     my ($class,$module,$path,@exported) = $self->call_use(@_);
     my $re_bind = 0;
@@ -655,9 +655,9 @@ sub bind_local_class_to_remote {
 }
 
 
-# this generate basic accessors w/o using any other Perl modules which might have proxy effects
-
 sub _mk_ro_accessors {
+    # this generate basic accessors w/o using any other Perl modules which might have proxy effects
+
     no strict 'refs';
     my $class = caller();
     for my $p (@_) {
