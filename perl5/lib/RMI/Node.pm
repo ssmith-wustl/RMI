@@ -31,8 +31,8 @@ sub new {
         writer => undef,
         local_language => 'perl5',
         remote_language => 'perl5',
-        encoding => 'a',
-        wire_protocol => 'eval',
+        encoding_protocol => 'a',
+        serialization_protocol => 'eval',
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
@@ -168,7 +168,7 @@ sub _serialize {
     
     my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n";# if $RMI::DEBUG;    
     
     return $serialized_blob;
 }
@@ -202,7 +202,6 @@ sub _encode {
     # 1: blessed reference (proxy me)
     # 2: unblessed reference (proxy me)
     # 3: returning proxy reference (unproxy me)
-    # 4: serialize don't proxy (copy me as a dumped reference)
       
     # there is currently only one option to serialize: a global "copy" flag.
     my $copy;
@@ -219,10 +218,10 @@ sub _encode {
     for my $o (@$message_data) {
         if (my $type = ref($o)) {
             # sending some sort of reference
-            if (my $key = $RMI::Node::remote_id_for_object{$o}) { 
+            if (my $remote_id = $RMI::Node::remote_id_for_object{$o}) { 
                 # this is a proxy object on THIS side: the real object will be used on the remote side
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $key:\n" if $RMI::DEBUG;
-                push @encoded, 3, $key;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $remote_id:\n" if $RMI::DEBUG;
+                push @encoded, 3, $remote_id;
                 next;
             }
             elsif($copy) {
@@ -236,10 +235,10 @@ sub _encode {
                 # a reference originating on this side: send info so the remote side can create a proxy
 
                 # TODO: use something better than stringification since this can be overridden!!!
-                my $key = "$o";
+                my $local_id = "$o";
                 
                 # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
-                my $base_type = substr($key,index($key,'=')+1);
+                my $base_type = substr($local_id,index($local_id,'=')+1);
                 $base_type = substr($base_type,0,index($base_type,'('));
                 my $code;
                 if ($base_type ne $type) {
@@ -256,8 +255,8 @@ sub _encode {
                     $code = 2;
                 }
                 
-                push @encoded, $code, $key;
-                $sent_objects->{$key} = $o;
+                push @encoded, $code, $local_id;
+                $sent_objects->{$local_id} = $o;
             }
         }
         else {
@@ -379,11 +378,6 @@ sub _decode {
         else {
             die "Unknown type $type????"
         }
-        #elsif ($type == 4) {
-        #    # fully serialized blob
-        #    # this is never done by default, but is part of shortcut/optimization on a per-class basis
-        #    push @message_data, $value;
-        #}
     }
     print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
@@ -414,17 +408,19 @@ sub _create_local_copy {
 
 # mostly for testing
 
-sub _remote_has_ref {
-    my ($self,$obj) = @_;
-    my $id = "$obj";
-    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
-}
+*_remote_has_sent = \&_is_local_proxy;
+*_remote_has_ref = \&_has_remote_proxy;
 
-sub _remote_has_sent {
+sub _is_local_proxy {
     my ($self,$obj) = @_;
     $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
 }
 
+sub _has_remote_proxy {
+    my ($self,$obj) = @_;
+    my $id = "$obj";
+    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+}
 
 # when the message type is 'request' this method looks for a specific
 # request in the message data and delegates to service it

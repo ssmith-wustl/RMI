@@ -107,11 +107,11 @@ expect_counts(0,1); # 1 object from the remote end
 
 note("test holding references");
 
-ok(!$c->_remote_has_ref($local1), "local object is not referenced on the other side before we pass it");
+ok(!$c->_has_remote_proxy($local1), "local object is not referenced on the other side before we pass it");
 $remote1->dummy_accessor($local1);
-ok($c->_remote_has_ref($local1), "local object is now referenced on the otehr side after passing to a method which retains it");
+ok($c->_has_remote_proxy($local1), "local object is now referenced on the otehr side after passing to a method which retains it");
 $remote1->dummy_accessor(undef);
-ok(!$c->_remote_has_ref($local1), "remote reference is gone after telling the remote object to undef it");
+ok(!$c->_has_remote_proxy($local1), "remote reference is gone after telling the remote object to undef it");
 
 note("can()");
 my $ref = $remote1->can('m2');
