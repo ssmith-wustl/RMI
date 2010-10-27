@@ -22,17 +22,21 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer/);
+_mk_ro_accessors(qw/reader writer remote_language local_language/);
 
 sub new {
     my $class = shift;
     my $self = bless {
         reader => undef,
         writer => undef,
+        local_language => 'perl5',
+        remote_language => 'perl5',
+        encoding => 'a',
+        wire_protocol => 'eval',
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
-        _tied_objects_for_tied_refs => {},        
+        _tied_objects_for_tied_refs => {},
         @_
     }, $class;
     if (my $p = delete $self->{allow_packages}) {
@@ -52,11 +56,8 @@ sub close {
     $self->{reader}->close;
 }
 
-*send_request_and_receive_response = \&send_request_and_return_result;
-
-sub send_request_and_return_result {
+sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
-    
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
     
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
@@ -64,34 +65,34 @@ sub send_request_and_return_result {
 
     my $wantarray = wantarray;
     
-    $self->_send('request', [$wantarray, $call_type, $pkg, $sub, @params], $opts) or die "failed to send! $!";
+    $self->_send('request', [$call_type, $wantarray, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
-        my ($message_type, $message_data) = $self->_receive();
-        if ($message_type eq 'result') {
+        my ($response_type, $response_data) = $self->_receive();
+        if ($response_type eq 'result') {
             if ($wantarray) {
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$message_data\n" if $RMI::DEBUG;
-                return @$message_data;
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
+                return @$response_data;
             }
             else {
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $message_data->[0]\n" if $RMI::DEBUG;
-                return $message_data->[0];
+                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
+                return $response_data->[0];
             }
         }
-        elsif ($message_type eq 'close') {
+        elsif ($response_type eq 'close') {
             return;
         }
-        elsif ($message_type eq 'request') {
+        elsif ($response_type eq 'request') {
             # a counter-request, possibly calling a method on an object we sent...
-            my ($return_type, $return_data) = $self->_process_request($message_data);
-            $self->_send($return_type, $return_data);   
+            my ($result_type, $result_data) = $self->_process_request($response_data);
+            $self->_send($result_type, $result_data);   
             redo;
         }
-        elsif ($message_type eq 'exception') {
-            die $message_data->[0];
+        elsif ($response_type eq 'exception') {
+            die $response_data->[0];
         }
         else {
-            die "unexpected message type from RMI message: $message_type";
+            die "unexpected message type from RMI message: $response_type";
         }
     }    
 }
@@ -149,7 +150,7 @@ sub _receive {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
     
     my $message_data = $self->_decode($encoded_message_data);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n";
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n" if $RMI::DEBUG;
 
     return ($message_type,$message_data);
 }
@@ -163,13 +164,11 @@ sub _receive {
 # terminator) and Dumper conveniently escapes newlines in any strings we pass.
 
 sub _serialize {
-    my ($self, $message_type, $encoded_message_data) = @_;  
-
+    my ($self, $message_type, $encoded_message_data) = @_;
+    
     my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;
-    if ($serialized_blob =~ s/\n/ /gms) {
-        die "newline found in message data!";
-    }
+    
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
     
     return $serialized_blob;
 }
@@ -192,7 +191,7 @@ sub _deserialize {
 
 ## Perl 5 specific implementation ##
 
-# _encode and _decode convert message data (params or results) into
+# _encode and _decode convert message data (params or return values) into
 # an arrayref of identities which do not embed references and can be xmitted
 
 sub _encode {
@@ -200,7 +199,7 @@ sub _encode {
 
     # NOTE: this destroys the contents of $message_data, and queues single-ref
     # objects in the message for deletion on the remote side inside the encoding.
-
+    
     # 0: non-reference value (copy me as text)
     # 1: blessed reference (proxy me)
     # 2: unblessed reference (proxy me)
@@ -393,14 +392,31 @@ sub _decode {
     return \@message_data;
 }
 
+sub _create_remote_copy {
+    my ($self,$v) = @_;
+    my $serialized = 'no strict; no warnings; ' . Data::Dumper::Dumper($v);
+    print "ser: $serialized\n";
+    my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
+    return $proxy;
+}
+
+sub _create_local_copy {
+    my ($self,$v) = @_;
+    my $serialized = $self->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
+    my $local = eval('no strict; no warnings; ' . $serialized);
+    die 'Failed to serialize!: ' . $@ if $@;
+    return $local;    
+}
+
 # when the message type is 'request' this method looks for a specific
 # request in the message data and delegates to service it
 
 sub _process_request {
     my ($self, $message_data) = @_;
 
-    my $wantarray = shift @$message_data;
     my $call_type = shift @$message_data;
+
+    my $wantarray = shift @$message_data;
     
     do {    
         no warnings;
