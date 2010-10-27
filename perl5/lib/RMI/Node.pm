@@ -37,6 +37,8 @@ sub new {
         _received_objects => {},
         _received_and_destroyed_ids => [],
         _tied_objects_for_tied_refs => {},
+        _serialize_method => undef,
+        _deserialize_method => undef,
         @_
     }, $class;
     if (my $p = delete $self->{allow_packages}) {
@@ -47,6 +49,15 @@ sub new {
             die "no $p on object!"
         }
     }
+    my $serialization_protocol = $self->{serialization_protocol};
+    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
+    eval "use $serialization_namespace";
+    if ($@) {
+        die "error processing serialization protocol $serialization_protocol: $@"
+    }
+    $self->{_serialize_method} = $serialization_namespace->can('serialize');
+    $self->{_deserialize_method} = $serialization_namespace->can('deserialize');
+    
     return $self;
 }
 
@@ -123,7 +134,8 @@ sub _send {
     my @encoded = $self->_encode($message_data, $opts);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
 
-    my $s = $self->_serialize($message_type,\@encoded);
+    my $serialize_method = $self->{_serialize_method};
+    my $s = $self->$serialize_method($message_type,\@encoded);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG or $RMI::DUMP;
 
     return $self->{writer}->print($s,"\n");                
@@ -145,48 +157,16 @@ sub _receive {
 
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got blob: $serialized_blob" if $RMI::DEBUG;
     print "\n" if $RMI::DEBUG and not defined $serialized_blob;
-       
-    my ($message_type, $encoded_message_data) = $self->_deserialize($serialized_blob);
+    
+ 
+    my $deserialize_method = $self->{_deserialize_method};   
+    my ($message_type, $encoded_message_data) = $self->$deserialize_method($serialized_blob);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
     
     my $message_data = $self->_decode($encoded_message_data);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n" if $RMI::DEBUG;
 
     return ($message_type,$message_data);
-}
-
-## wire protocol ##
-
-# TODO: the use of Data::Dumper here is pure laziness.  The @serialized list contains no references, 
-# and could be turned into a string with something simpler than data dumper.  It could also be parsed with 
-# something simpler than eval() on the other side.  The only thing to be careful of is that parsing 
-# currently expects the records are divided by newlines (instead of sending a message length or other 
-# terminator) and Dumper conveniently escapes newlines in any strings we pass.
-
-sub _serialize {
-    my ($self, $message_type, $encoded_message_data) = @_;
-    
-    my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
-    
-    return $serialized_blob;
-}
-
-sub _deserialize {
-    my ($self, $serialized_blob) = @_;
-
-    my $encoded_message_data = eval "no strict; no warnings; $serialized_blob";
-    if ($@) {
-        die "Exception de-serializing message: $@";
-    }        
-
-    my $message_type = shift @$encoded_message_data;
-    if (! defined $message_type) {
-        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($encoded_message_data);
-    }    
-
-    return ($message_type, $encoded_message_data);    
 }
 
 ## Perl 5 specific implementation ##
