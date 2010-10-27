@@ -17,7 +17,7 @@ our %proxied_classes; # tracks classes which have been fully proxied into this p
 
 # turn on debug messages if an environment variable is set
 our $DEBUG;
-BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; };
+BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; $RMI::DUMP = $ENV{RMI_DUMP} };
 
 # this is used at the beginning of each debug message
 # setting it to a single space for a server makes server/client distinction
