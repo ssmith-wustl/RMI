@@ -645,12 +645,12 @@ sub bind_local_class_to_remote {
 sub _remote_has_ref {
     my ($self,$obj) = @_;
     my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
-    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}', $obj);
+    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
 }
 
 # this generate basic accessors w/o using any other Perl modules which might have proxy effects
