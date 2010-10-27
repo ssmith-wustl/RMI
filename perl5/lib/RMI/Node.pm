@@ -650,8 +650,7 @@ sub _remote_has_ref {
 
 sub _remote_has_sent {
     my ($self,$obj) = @_;
-    my $id = "$obj";
-    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_sent_objects}{"' . $id . '"}');
+    my $has_sent = $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}', $obj);
 }
 
 # this generate basic accessors w/o using any other Perl modules which might have proxy effects
