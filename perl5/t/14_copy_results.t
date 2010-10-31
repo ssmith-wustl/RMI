@@ -42,5 +42,5 @@ is($a1, $a, "got the same array back when NOT copying results");
 
 my $a2 = $c->call_function('Test2::append_to_array',$a,201..205);
 ok($a2 != $a, "got the a different array back when copying results");
-ok($c->_is_proxy($a2) == 0, "it is a local object");
+ok(!$c->_is_proxy($a2), "it is a local object");
 

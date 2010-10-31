@@ -10,8 +10,11 @@ package RMI::Proxy::DBI::db;
 # to observe later.
 
 $RMI::ProxyObject::DEFAULT_OPTS{"DBI::db"}{"selectall_arrayref"} = {
-    #copy => 1,          # legacy
     copy_params => 1,
+    copy_results => 1, 
+};
+
+$RMI::ProxyObject::DEFAULT_OPTS{"DBI::db"}{"selectcol_arrayref"} = {
     copy_results => 1, 
 };
 

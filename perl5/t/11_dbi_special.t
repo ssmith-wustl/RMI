@@ -12,7 +12,7 @@ use RMI;
 
 if (eval "use DBI; return 1" == 1) {
     if (eval "use DBD::SQLite; return 1" == 1) {
-        plan tests => 12;
+        plan tests => 16;
     }
     else {
         plan skip_all => "no DBD::SQLite installed, skipping special DBI tests...";
@@ -76,7 +76,18 @@ ok($dbh, "got remote dbh");
 # around the DBI issue, and also improves performance, while being safe since the hashref isn't mutated.
 my $a = $dbh->selectall_arrayref("select * from foo order by c1", { Slice => {} });
 ok($a, "got results arrayref back") or diag($dbh->errstr);
-
 is_deeply($a,[{c1 => 100, c2 => 'one'},{c1 => 200, c2 => 'two'},{ c1 => 300, c2 =>'three'}], "data matches");
 note(Dumper($a));
+
+# make sure the results are real/local, because we also now force copy results
+ok(!$c->_is_proxy($a), "results are a local copy");
+
+my $sth = $dbh->prepare("select * from foo order by c1");
+ok($c->_is_proxy($sth), "sth is a proxy");
+my $a2 = $dbh->selectall_arrayref($sth);
+ok($a2, "got results arrayref back") or diag($dbh->errstr);
+is_deeply($a2,[[100, 'one'],[200, 'two'],[ 300, 'three']], "data matches");
+note(Dumper($a2));
+
+
 
