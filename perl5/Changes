@@ -1,11 +1,12 @@
 Revision history for RMI:
 
 0.11 ?????? ????????
-        Large API cleanup.
-        Added a copy_results flag to allow serialization of results.
-        Added a copy_params flag to replace the old copy flag.
+        API updated, breaks compatability.
         When params or results are copied this is done with an independent call instead of using a special encoding value.
         Added a serialization_protocol property to break out that part of the system.
+        Added a copy_params flag to replace the old copy flag.
+        Added a copy_results flag to allow serialization of results.
+        Updated DBI overrides to do more copying of results.
         Fixed and renamed _is_proxy and _has_proxy.
     
 0.10 Tue 19 Oct 2010
