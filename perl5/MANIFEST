@@ -28,7 +28,6 @@ lib/RMI/Server/Tcp.pm
 LICENSE
 Makefile.PL
 MANIFEST
-prove-all.sh
 README
 t/00_echo.t
 t/01_basic.t
