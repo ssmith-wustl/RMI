@@ -2,7 +2,7 @@ package RMI;
 
 use strict;
 use warnings;
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
