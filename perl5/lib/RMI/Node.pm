@@ -366,8 +366,7 @@ sub _decode {
 
 sub _create_remote_copy {
     my ($self,$v) = @_;
-    my $serialized = 'no strict; no warnings; ' . Data::Dumper::Dumper($v);
-    print "ser: $serialized\n";
+    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
     return $proxy;
 }
@@ -384,7 +383,7 @@ sub _create_local_copy {
 
 sub _is_proxy {
     my ($self,$obj) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; print "$id $r\n"; return $r', $obj);
+    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
 }
 
 sub _has_proxy {
