@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer remote_language local_language/);
+_mk_ro_accessors(qw/reader writer remote_language local_language encoding_protocol serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -30,10 +30,12 @@ sub new {
         reader => undef,
         writer => undef,
         
-        local_language => 'perl5',      # always
+        local_language => 'perl5',      # always, if this is the code running
         remote_language => 'perl5',     # may vary
+        
+        encoding_protocol => 'v1',
         _encode_method => undef,
-        _decode_method => undef,        
+        _decode_method => undef,
         
         serialization_protocol => 'eval',
         _serialize_method => undef,
@@ -45,20 +47,23 @@ sub new {
         _tied_objects_for_tied_refs => {},
         @_
     }, $class;
+
     if (my $p = delete $self->{allow_packages}) {
         $self->{allow_packages} = { map { $_ => 1 } @$p };
     }
+
     for my $p (@RMI::Node::properties) {
         unless (exists $self->{$p}) {
             die "no $p on object!"
         }
     }
 
-    # encode/decode is possibly custom given the remote language
+    # encode/decode is the way we turn a set of values into a message without references
+    # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language));
+    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language)) . $self->{encoding_protocol};
     $self->{_remote_language_namespace} = $encoding_namespace;
-    eval "use $encoding_namespace";
+    eval "no warnings; use $encoding_namespace";
     if ($@) {
         die "error processing encoding protocol $remote_language: $@"
     }
@@ -71,7 +76,7 @@ sub new {
         die "no encode method in $encoding_namespace!?!?";
     }
     
-    # serialize/deserialize
+    # serialize/deserialize is the way we transmit the encoded array
     my $serialization_protocol = $self->{serialization_protocol};
     my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
@@ -97,8 +102,10 @@ sub send_request_and_receive_response {
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
+    # lookup context
     my $wantarray = wantarray;
     
+    # send, with context
     $self->_send('request', [$call_type, $wantarray, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
@@ -107,6 +114,8 @@ sub send_request_and_receive_response {
             if ($opts and $opts->{copy_results}) {
                 $response_data = $self->_create_local_copy($response_data);
             }
+            
+            # respond, taking into account context
             if ($wantarray) {
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
                 return @$response_data;
@@ -115,6 +124,7 @@ sub send_request_and_receive_response {
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
                 return $response_data->[0];
             }
+            
         }
         elsif ($response_type eq 'close') {
             return;
@@ -153,6 +163,20 @@ sub receive_request_and_send_response {
 # private API
 
 _mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
+
+sub _mk_ro_accessors {
+    # this generate basic accessors w/o using any other Perl modules which might have proxy effects
+
+    no strict 'refs';
+    my $class = caller();
+    for my $p (@_) {
+        my $pname = $p;
+        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
+    }
+    no warnings;
+    push @{ $class . '::properties'}, @_;
+}
+
 
 sub _send {
     my ($self, $message_type, $message_data, $opts) = @_;
@@ -195,50 +219,8 @@ sub _receive {
     return ($message_type,$message_data);
 }
 
-## Perl 5 specific implementation ##
 
-# _encode and _decode convert message data (params or return values) into
-# an arrayref of identities which do not embed references and can be xmitted
-# NOTE: they create/destroys the contents of $message_data, and are not repeatable
-
-
-# for efficiency and to handle bugs in C bindings, we sometimes do serialize
-
-sub _create_remote_copy {
-    my ($self,$v) = @_;
-    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
-    my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
-    return $proxy;
-}
-
-sub _create_local_copy {
-    my ($self,$v) = @_;
-    my $serialized = $self->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
-    my $local = eval('no strict; no warnings; ' . $serialized);
-    die 'Failed to serialize!: ' . $@ if $@;
-    return $local;    
-}
-
-# mostly for testing
-
-sub _is_proxy {
-    my ($self,$obj) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
-}
-
-sub _has_proxy {
-    my ($self,$obj) = @_;
-    my $id = "$obj";
-    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
-}
-
-sub _remote_node {
-    my ($self) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
-}
-
-# when the message type is 'request' this method looks for a specific
-# request in the message data and delegates to service it
+# Perl 5 
 
 sub _process_request {
     my ($self, $message_data) = @_;
@@ -393,92 +375,43 @@ sub _respond_to_coderef {
     goto $sub;
 }
 
-sub bind_local_var_to_remote {
-    # this proxies a single variable
 
+# these methods depend on the remote language
+
+sub _delegate_by_remote_language {
+    no warnings;
     my $self = shift;
-    my $local_var = shift;
-    my $remote_var = (@_ ? shift : $local_var);
-    
-    my $type = substr($local_var,0,1);
-    if (index($local_var,'::')) {
-        $local_var = substr($local_var,1);
-    }
-    else {
-        my $caller = caller();
-        $local_var = $caller . '::' . substr($local_var,1);
-    }
-
-    unless ($type eq substr($remote_var,0,1)) {
-        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
-    }
-    if (index($remote_var,'::')) {
-        $remote_var = substr($remote_var,1);
-    }
-    else {
-        my $caller = caller();
-        $remote_var = $caller . '::' . substr($remote_var,1);
-    }
-    
-    my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $self->call_eval($src);
-    die $@ if $@;
-    $src = '*' . $local_var . ' = $r' . ";\n";
-    eval $src;
-    die $@ if $@;
-    return 1;
+    my $delegate = ((caller(1))[3]);
+    $delegate =~ s/^RMI::Node/$self->{_remote_language_namespace}/;
+    $self->$delegate(@_);
 }
 
+sub _create_remote_copy {
+    return shift->_delegate_by_remote_language(@_);
+}
+
+sub _create_local_copy {
+    return shift->_delegate_by_remote_language(@_);
+}
+
+sub _is_proxy {
+    return shift->_delegate_by_remote_language(@_);
+}
+
+sub _has_proxy {
+    return shift->_delegate_by_remote_language(@_);
+}
+
+sub _remote_node {
+    return shift->_delegate_by_remote_language(@_);
+}
+
+sub bind_local_var_to_remote {
+    return shift->_delegate_by_remote_language(@_);
+}
 
 sub bind_local_class_to_remote {
-    # this proxies an entire class instead of just a single object
-    
-    my $self = shift;
-    my ($class,$module,$path,@exported) = $self->call_use(@_);
-    my $re_bind = 0;
-    if (my $prior = $RMI::proxied_classes{$class}) {
-        if ($prior != $self) {
-            die "class $class has already been proxied by another RMI client: $prior!";
-        }
-        else {
-            # re-binding a class to the same remote side doesn't hurt,
-            # and allowing it allows the effect of export to occur
-            # in multiple places on the client side.
-        }
-    }
-    elsif (my $path = $INC{$module}) {
-        die "module $module has already been used locally from path: $path";
-    }
-    no strict 'refs';
-    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
-        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
-    }
-    if (@exported) {
-        my $caller ||= caller(0);
-        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(1) }
-        for my $sub (@exported) {
-            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
-            $self->bind_local_var_to_remote(@pair);
-        }
-    }
-    $RMI::proxied_classes{$class} = $self;
-    $INC{$module} = $self;
-    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
-}
-
-
-sub _mk_ro_accessors {
-    # this generate basic accessors w/o using any other Perl modules which might have proxy effects
-
-    no strict 'refs';
-    my $class = caller();
-    for my $p (@_) {
-        my $pname = $p;
-        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
-    }
-    no warnings;
-    push @{ $class . '::properties'}, @_;
+    return shift->_delegate_by_remote_language(@_);
 }
 
 =pod

@@ -1,11 +1,13 @@
-
-package RMI::RemoteLanguage::Perl5;
+package RMI::RemoteLanguage::Perl5v1;
+use strict;
+use warnings;
 
 our $value = 0;
 our $blessed_reference = 1;
 our $unblessed_reference = 2;
 our $return_proxy = 3;
 
+# encode for a Perl5v1 remote node
 sub encode {
     my ($self, $message_data, $opts) = @_;
       
@@ -17,7 +19,7 @@ sub encode {
             if (my $remote_id = $RMI::Node::remote_id_for_object{$o}) { 
                 # this is a proxy object on THIS side: the real object will be used on the remote side
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $remote_id:\n" if $RMI::DEBUG;
-                push @encoded, $RMI::RemoteLanguage::Perl5::return_proxy, $remote_id;
+                push @encoded, $RMI::RemoteLanguage::Perl5v1::return_proxy, $remote_id;
                 next;
             }
             elsif($opts and ($opts->{copy} or $opts->{copy_params})) {
@@ -39,7 +41,7 @@ sub encode {
                 my $code;
                 if ($base_type ne $type) {
                     # blessed reference
-                    $code = $RMI::RemoteLanguage::Perl5::blessed_reference;
+                    $code = $RMI::RemoteLanguage::Perl5v1::blessed_reference;
                     if (my $allowed = $self->{allow_packages}) {
                         unless ($allowed->{ref($o)}) {
                             die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
@@ -48,7 +50,7 @@ sub encode {
                 }
                 else {
                     # regular reference
-                    $code = $RMI::RemoteLanguage::Perl5::unblessed_reference;
+                    $code = $RMI::RemoteLanguage::Perl5v1::unblessed_reference;
                 }
                 
                 push @encoded, $code, $local_id;
@@ -57,7 +59,7 @@ sub encode {
         }
         else {
             # sending a non-reference value
-            push @encoded, $RMI::RemoteLanguage::Perl5::value, $o;
+            push @encoded, $RMI::RemoteLanguage::Perl5v1::value, $o;
         }
     }
  
@@ -74,6 +76,7 @@ sub encode {
     return ($received_and_destroyed_ids_copy, @encoded);
 }
 
+# decode from a Perl5v1 remote node
 sub decode {
     my ($self, $serialized) = @_;
     
@@ -184,6 +187,192 @@ sub decode {
     return \@message_data;
 }
 
+sub bind_local_var_to_remote {
+    # this proxies a single variable
+
+    my $self = shift;
+    my $local_var = shift;
+    my $remote_var = (@_ ? shift : $local_var);
+    
+    my $type = substr($local_var,0,1);
+    if (index($local_var,'::')) {
+        $local_var = substr($local_var,1);
+    }
+    else {
+        my $caller = caller();
+        $local_var = $caller . '::' . substr($local_var,1);
+    }
+
+    unless ($type eq substr($remote_var,0,1)) {
+        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
+    }
+    if (index($remote_var,'::')) {
+        $remote_var = substr($remote_var,1);
+    }
+    else {
+        my $caller = caller();
+        $remote_var = $caller . '::' . substr($remote_var,1);
+    }
+    
+    my $src = '\\' . $type . $remote_var . ";\n";
+    my $r = $self->call_eval($src);
+    die $@ if $@;
+    $src = '*' . $local_var . ' = $r' . ";\n";
+    eval $src;
+    die $@ if $@;
+    return 1;
+}
+
+
+sub bind_local_class_to_remote {
+    # this proxies an entire class instead of just a single object
+    
+    my $self = shift;
+    my ($class,$module,$path,@exported) = $self->call_use(@_);
+    my $re_bind = 0;
+    if (my $prior = $RMI::proxied_classes{$class}) {
+        if ($prior != $self) {
+            die "class $class has already been proxied by another RMI client: $prior!";
+        }
+        else {
+            # re-binding a class to the same remote side doesn't hurt,
+            # and allowing it allows the effect of export to occur
+            # in multiple places on the client side.
+        }
+    }
+    elsif (my $path = $INC{$module}) {
+        die "module $module has already been used locally from path: $path";
+    }
+    no strict 'refs';
+    for my $sub (qw/AUTOLOAD DESTROY can isa/) {
+        *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
+    }
+    if (@exported) {
+        my $caller ||= caller(0);
+        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(3) }  # change this num as we move this method
+        for my $sub (@exported) {
+            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
+            $self->bind_local_var_to_remote(@pair);
+        }
+    }
+    $RMI::proxied_classes{$class} = $self;
+    $INC{$module} = $self;
+    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+}
+
+
+# for cases where we really do want to transfer the original data...
+
+sub _create_remote_copy {
+    my ($self,$v) = @_;
+    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
+    my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
+    return $proxy;
+}
+
+sub _create_local_copy {
+    my ($self,$v) = @_;
+    my $serialized = $self->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
+    my $local = eval('no strict; no warnings; ' . $serialized);
+    die 'Failed to serialize!: ' . $@ if $@;
+    return $local;    
+}
+
+# interrogate the remote side
+# TODO: this should be part of the node API and accessing the remote node should provide an answer
+
+sub _is_proxy {
+    my ($self,$obj) = @_;
+    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
+}
+
+sub _has_proxy {
+    my ($self,$obj) = @_;
+    my $id = "$obj";
+    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+}
+
+sub _remote_node {
+    my ($self) = @_;
+    $self->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
+}
+
+=pod
+
+=head1 NAME
+
+RMI::RemoteLanguage::Perl5v1
+
+=head1 VERSION
+
+This document describes RMI::RemoteLanguage::Perl5v1 v0.11.
+
+=head1 DESCRIPTION
+
+The RMI::RemoteLanguage::Perl5v1 module handles encode/decode for RMI nodes where
+the remote node is a Perl5v1 node.  All modules in the RMI::RemoteLanguage::*
+namepace handle various remote languages for a Perl 5 client, and this one
+is the default which handles a client of the same language.
+
+=head1 METHODS
+
+=head2 encode
+
+Turns an array of real data values which contain references into an array
+of values which contains no references.
+
+=head2 decode
+
+Takes an array made by encode on the other side, and turns it into an array
+which functions like the one which was originally encoded.
+
+=head2 ENCODING
+
+An array of message_data of length n to is converted to have a length of n*2.
+Each value is preceded by an integer which categorizes the value.
+
+  0    a primitive, non-reference value
+       
+       The value itself follows, it is not a reference, and it is passed by-copy.
+       
+  1    an object reference originating on the sender's side
+ 
+       A unique identifier for the object follows instead of the object.
+       The remote side should construct a transparent proxy which uses that ID.
+       
+  2    a non-object (unblessed) reference originating on the sender's side
+       
+       A unique identifier for the reference follows, instead of the reference.
+       The remote side should construct a transparent proxy which uses that ID.
+       
+  3    passing-back a proxy: a reference which originated on the receiver's side
+       
+       The following value is the identifier the remote side sent previously.
+       The remote side should substitue the original object when deserializing
+
+=head1 SEE ALSO
+
+B<RMI>, B<RMI::Node>
+
+=head1 AUTHORS
+
+Scott Smith <sakoht@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2008 - 2010 Scott Smith <sakoht@cpan.org>  All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+The full text of the license can be found in the LICENSE file included with this
+module.
+
+=cut
 
 1;
+
 
