@@ -12,3 +12,4 @@ my $c = RMI::Client::ForkedPipes->new();
 ok($c, "created a test client/server pair");
 
 
+

@@ -29,16 +29,20 @@ sub new {
     my $self = bless {
         reader => undef,
         writer => undef,
-        local_language => 'perl5',
-        remote_language => 'perl5',
-        encoding_protocol => 'a',
+        
+        local_language => 'perl5',      # always
+        remote_language => 'perl5',     # may vary
+        _encode_method => undef,
+        _decode_method => undef,        
+        
         serialization_protocol => 'eval',
+        _serialize_method => undef,
+        _deserialize_method => undef,        
+        
         _sent_objects => {},
         _received_objects => {},
         _received_and_destroyed_ids => [],
         _tied_objects_for_tied_refs => {},
-        _serialize_method => undef,
-        _deserialize_method => undef,
         @_
     }, $class;
     if (my $p = delete $self->{allow_packages}) {
@@ -49,6 +53,18 @@ sub new {
             die "no $p on object!"
         }
     }
+
+    # encode/decode is possibly custom given the remote language
+    my $remote_language = $self->{remote_language};
+    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language));
+    eval "use $encoding_namespace";
+    if ($@) {
+        die "error processing encoding protocol $remote_language: $@"
+    }
+    $self->{_encode_method} = $encoding_namespace->can('encode');
+    $self->{_decode_method} = $encoding_namespace->can('decode');
+    
+    # serialize/deserialize
     my $serialization_protocol = $self->{serialization_protocol};
     my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
@@ -195,7 +211,7 @@ sub _encode {
             if (my $remote_id = $RMI::Node::remote_id_for_object{$o}) { 
                 # this is a proxy object on THIS side: the real object will be used on the remote side
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $remote_id:\n" if $RMI::DEBUG;
-                push @encoded, 3, $remote_id;
+                push @encoded, $RMI::RemoteLanguage::perl5::return_proxy, $remote_id;
                 next;
             }
             elsif($opts and ($opts->{copy} or $opts->{copy_params})) {
@@ -217,7 +233,7 @@ sub _encode {
                 my $code;
                 if ($base_type ne $type) {
                     # blessed reference
-                    $code = 1;
+                    $code = $RMI::RemoteLanguage::perl5::blessed_reference;
                     if (my $allowed = $self->{allow_packages}) {
                         unless ($allowed->{ref($o)}) {
                             die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
@@ -226,7 +242,7 @@ sub _encode {
                 }
                 else {
                     # regular reference
-                    $code = 2;
+                    $code = $RMI::RemoteLanguage::perl5::unblessed_reference;
                 }
                 
                 push @encoded, $code, $local_id;
@@ -235,7 +251,7 @@ sub _encode {
         }
         else {
             # sending a non-reference value
-            push @encoded, 0, $o;
+            push @encoded, $RMI::RemoteLanguage::perl5::value, $o;
         }
     }
  
@@ -366,7 +382,7 @@ sub _decode {
 
 sub _create_remote_copy {
     my ($self,$v) = @_;
-    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
     my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
     return $proxy;
 }

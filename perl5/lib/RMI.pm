@@ -12,6 +12,8 @@ use RMI::Server;
 use RMI::ProxyObject;
 use RMI::ProxyReference;
 
+use RMI::RemoteLanguage::perl5;
+
 our @executing_nodes; # required for some methods on the remote side to find the RMI node acting upon them
 our %proxied_classes; # tracks classes which have been fully proxied into this process by some client
 
