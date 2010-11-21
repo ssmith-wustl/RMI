@@ -30,14 +30,14 @@ sub new {
         reader => undef,
         writer => undef,
         
-        local_language => 'perl5',      # always, if this is the code running
+        local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary
         
-        encoding_protocol => 'v1',
+        encoding_protocol => 'v1',      # put together with the remote_language, decides encoding
         _encode_method => undef,
         _decode_method => undef,
         
-        serialization_protocol => 'eval',
+        serialization_protocol => 'eval',   # the lower level way we stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -148,8 +148,12 @@ sub receive_request_and_send_response {
     my ($self) = @_;
     my ($message_type, $message_data) = $self->_receive();
     if ($message_type eq 'request') {
+        # processing the request may involve calling a method and returning a result,
+        # or perhaps returning an exception.
         my ($response_type, $response_data) = $self->_process_request($message_data);
         $self->_send($response_type, $response_data);         
+
+        # the return value is mostly incidental, in case the server logic wants to log what just happened...
         return ($message_type, $message_data, $response_type, $response_data);
     }
     elsif ($message_type eq 'close') {
