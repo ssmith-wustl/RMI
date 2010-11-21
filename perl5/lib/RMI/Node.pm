@@ -99,14 +99,15 @@ sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
     
+    use Carp;
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     # lookup context
-    my $wantarray = wantarray;
+    my $context = $self->_capture_context();
     
     # send, with context
-    $self->_send('request', [$call_type, $wantarray, $pkg, $sub, @params], $opts) or die "failed to send! $!";
+    $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
     
     for (1) {
         my ($response_type, $response_data) = $self->_receive();
@@ -114,17 +115,7 @@ sub send_request_and_receive_response {
             if ($opts and $opts->{copy_results}) {
                 $response_data = $self->_create_local_copy($response_data);
             }
-            
-            # respond, taking into account context
-            if ($wantarray) {
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
-                return @$response_data;
-            }
-            else {
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
-                return $response_data->[0];
-            }
-            
+            return $self->_return_result_in_context($response_data, $context);
         }
         elsif ($response_type eq 'close') {
             return;
@@ -225,6 +216,27 @@ sub _receive {
 
 
 # Perl 5 
+
+# send & receive
+
+sub _capture_context {
+    return (caller(1))[5]    
+}
+
+sub _return_result_in_context {
+    my ($self, $response_data, $context) = @_;
+
+    if ($context) {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
+        return @$response_data;
+    }
+    else {
+        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
+        return $response_data->[0];
+    }
+}
+
+# recieve & send
 
 sub _process_request {
     my ($self, $message_data) = @_;
