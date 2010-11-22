@@ -68,17 +68,17 @@ sub encode {
 
 # decode from a Perl5v1 remote node
 sub decode {
-    my ($self, $serialized) = @_;
+    my ($self, $encoded) = @_;
     
     my @message_data;
 
     my $sent_objects = $self->{_sent_objects};
     my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = shift @$serialized;
+    my $received_and_destroyed_ids = shift @$encoded;
     
-    while (@$serialized) { 
-        my $type = shift @$serialized;
-        my $value = shift @$serialized;
+    while (@$encoded) { 
+        my $type = shift @$encoded;
+        my $value = shift @$encoded;
         if ($type == 0) {
             # primitive value
             print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
