@@ -31,7 +31,7 @@ sub new {
         writer => undef,
         
         local_language => 'perl5',      # always (since this is the Perl5 module)
-        remote_language => 'perl5',     # may vary
+        remote_language => 'perl5',     # may vary,but this is the default
         
         encoding_protocol => 'v1',      # put together with the remote_language, decides encoding
         _encode_method => undef,
@@ -122,8 +122,8 @@ sub send_request_and_receive_response {
         }
         elsif ($response_type eq 'request') {
             # a counter-request, possibly calling a method on an object we sent...
-            my ($result_type, $result_data) = $self->_process_request_in_context_and_return_response($response_data);
-            $self->_send($result_type, $result_data);   
+            my ($counter_response_type, $counter_response_data) = $self->_process_request_in_context_and_return_response($response_data);
+            $self->_send($counter_response_type, $counter_response_data);   
             redo;
         }
         elsif ($response_type eq 'exception') {
@@ -178,6 +178,20 @@ sub _send {
 
     my @encoded = $self->{_encode_method}->($self,$message_data, $opts);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
+
+ 
+    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
+    # and will expand what is in _received_and_destroyed_ids...
+    @$message_data = (); 
+
+    # reset the received_and_destroyed_ids
+    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
+    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
+    @$received_and_destroyed_ids = ();
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
+    
+    unshift @encoded, $received_and_destroyed_ids_copy;
+
 
     my $serialize_method = $self->{_serialize_method};
     my $s = $self->$serialize_method($message_type,\@encoded);

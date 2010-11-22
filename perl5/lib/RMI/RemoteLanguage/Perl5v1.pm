@@ -62,18 +62,8 @@ sub encode {
             push @encoded, $RMI::RemoteLanguage::Perl5v1::value, $o;
         }
     }
- 
-    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
-    # and will expand what is in _received_and_destroyed_ids...
-    @$message_data = (); 
 
-    # reset the received_and_destroyed_ids
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
-    @$received_and_destroyed_ids = ();
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
-    
-    return ($received_and_destroyed_ids_copy, @encoded);
+    return @encoded;
 }
 
 # decode from a Perl5v1 remote node
