@@ -122,7 +122,7 @@ sub send_request_and_receive_response {
         }
         elsif ($response_type eq 'request') {
             # a counter-request, possibly calling a method on an object we sent...
-            my ($result_type, $result_data) = $self->_process_request($response_data);
+            my ($result_type, $result_data) = $self->_process_request_in_context_and_return_response($response_data);
             $self->_send($result_type, $result_data);   
             redo;
         }
@@ -141,7 +141,7 @@ sub receive_request_and_send_response {
     if ($message_type eq 'request') {
         # processing the request may involve calling a method and returning a result,
         # or perhaps returning an exception.
-        my ($response_type, $response_data) = $self->_process_request($message_data);
+        my ($response_type, $response_data) = $self->_process_request_in_context_and_return_response($message_data);
         $self->_send($response_type, $response_data);         
 
         # the return value is mostly incidental, in case the server logic wants to log what just happened...
@@ -238,7 +238,7 @@ sub _return_result_in_context {
 
 # recieve & send
 
-sub _process_request {
+sub _process_request_in_context_and_return_response {
     my ($self, $message_data) = @_;
 
     my $call_type = shift @$message_data;
