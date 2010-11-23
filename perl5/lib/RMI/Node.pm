@@ -89,7 +89,7 @@ sub new {
     
     # serialize/deserialize is the way we transmit the encoded array
     my $serialization_protocol = $self->serialization_protocol;
-    my $serialization_namespace = 'RMI::SerializationProtocol::V' . ucfirst(lc($serialization_protocol));
+    my $serialization_namespace = 'RMI::SerializationProtocol::S' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
         die "error processing serialization protocol $serialization_protocol: $@"
@@ -214,6 +214,9 @@ sub _receive {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
 
     my $serialized_blob = $self->{reader}->getline;
+    
+    # TODO: figure out why not having this breaks test 11...
+    print "";
 
     if (not defined $serialized_blob) {
         print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
@@ -237,6 +240,7 @@ sub _receive {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
     my $sent_objects = $self->{_sent_objects};
     my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
+    
     unless (@done == @$received_and_destroyed_ids) {
         print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
     }
@@ -244,233 +248,62 @@ sub _receive {
     return ($message_type,$message_data);
 }
 
-
-# these methods depend on the remote language protocol or encoding
+# these methods vary by remote protocol.
+# should we subclas the node by remote protocol?
+# it would preclude switching protocols mid-connection which might be nice
+# this could get awkward in non-dynamic languages though
 
 sub _delegate_by_remote_protocol {
-    no warnings;
-    my $self = shift;
+    my $self = $_[0];
     my $delegate = ((caller(1))[3]);
     $delegate =~ s/^RMI::Node/$self->{_remote_protocol_namespace}/;
-    $self->$delegate(@_);
+    goto \&{$delegate};
 }
 
+# send & receive
+
 sub _capture_context {
-    return (caller(1))[5]    
+    shift->_delegate_by_remote_protocol(@_);
 }
 
 sub _return_result_in_context {
-    my ($self, $response_data, $context) = @_;
-
-    if ($context) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
-        return @$response_data;
-    }
-    else {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
-        return $response_data->[0];
-    }
-}
-
-
-sub X_process_request_in_context_and_return_response {
     return shift->_delegate_by_remote_protocol(@_);
 }
 
 # recieve & send
 
 sub _process_request_in_context_and_return_response {
-    my ($self, $message_data) = @_;
-
-    my $call_type = shift @$message_data;
-
-    my $wantarray = shift @$message_data;
-    
-    do {    
-        no warnings;
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing request $call_type in wantarray context $wantarray with : @$message_data\n" if $RMI::DEBUG;
-    };
-    
-    # swap call_ for _respond_to_
-    my $method = __PACKAGE__ . '::_respond_to_' . substr($call_type,5);
-    
-    my @result;
-
-    push @RMI::executing_nodes, $self;
-    eval {
-        if (not defined $wantarray) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
-            $self->$method(@$message_data);
-        }
-        elsif ($wantarray) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with true wantarray\n" if $RMI::DEBUG;
-            @result = $self->$method(@$message_data);
-        }
-        else {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with false wantarray\n" if $RMI::DEBUG;
-            my $result = $self->$method(@$message_data);
-            @result = ($result);
-        }
-    };
-    pop @RMI::executing_nodes;
-
-    # we MUST undef these in case they are the only references to remote objects which need to be destroyed
-    # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
-    @$message_data = ();
-    
-    my ($return_type, $return_data);
-    if ($@) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
-        ($return_type, $return_data) = ('exception',[$@]);
-    }
-    else {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
-        ($return_type, $return_data) =  ('result',\@result);
-    }
-     
-    return ($return_type, $return_data);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
-sub _respond_to_function {
-    my ($self, $pkg, $sub, @params) = @_;
-    no strict 'refs';
-    my $fname = $pkg . '::' . $sub;
-    $fname->(@params);
-}
-
-sub _respond_to_class_method {
-    my ($self, $class, $method, @params) = @_;
-    $class->$method(@params);
-}
-
-sub _respond_to_object_method {
-    my ($self, $class, $method, $object, @params) = @_;
-    $object->$method(@params);
-}
-
-sub _respond_to_use {
-    my ($self,$class,$dummy_no_method,$module,$has_args,@use_args) = @_;
-
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
-    }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
-    }
-    
-    my $n = $RMI::Exported::count++;
-    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
-    my $src = "
-        package $tmp_package_to_catch_exports;
-        require $class;
-        my \@exports = ();
-        if (\$has_args) {
-            if (\@use_args) {
-                $class->import(\@use_args);
-                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-            }
-            else {
-                # print qq/no import because of empty list!/;
-            }
-        }
-        else {
-            $class->import();
-            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
-        }
-        return (\$INC{'$module'}, \@exports);
-    ";
-    my ($path, @exported) = eval($src);
-    die $@ if $@;
-    return ($class,$module,$path,@exported);
-}
-
-sub _respond_to_use_lib {
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    my @libs = @_;
-    require lib;
-    return lib->import(@libs);
-}
-
-sub _respond_to_eval {
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    
-    my $src = shift;
-    if (wantarray) {
-        my @result = eval $src;
-        die $@ if $@;
-        return @result;        
-    }
-    else {
-        my $result = eval $src;
-        die $@ if $@;
-        return $result;
-    }
-}
-
-sub _respond_to_coderef {
-    # This is used when a CODE ref is proxied, since you can't tie CODE refs.
-    # It does not have a matching caller in RMI::Client.
-    # The other reference types are handled by "tie" to RMI::ProxyReferecnce.
-
-    # NOTE: It's important to shift these two parameters off since goto must 
-    # pass the remainder of @_ to the subroutine.
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    my $sub_id = shift;
-    my $sub = $self->{_sent_objects}{$sub_id};
-    die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
-    goto $sub;
-}
-
-1;
-
-
-
-sub _delegate_by_remote_language {
-    no warnings;
-    my $self = shift;
-    my $delegate = ((caller(1))[3]);
-    $delegate =~ s/^RMI::Node/$self->{_remote_encoding_namespace}/;
-    $self->$delegate(@_);
-}
-
+# misc base API
 
 sub _create_remote_copy {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub _create_local_copy {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub _is_proxy {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub _has_proxy {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub _remote_node {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub bind_local_var_to_remote {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 sub bind_local_class_to_remote {
-    return shift->_delegate_by_remote_language(@_);
+    return shift->_delegate_by_remote_protocol(@_);
 }
 
 =pod

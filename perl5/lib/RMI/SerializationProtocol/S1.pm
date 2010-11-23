@@ -1,4 +1,4 @@
-package RMI::SerializationProtocol::V1;
+package RMI::SerializationProtocol::S1;
 use strict;
 use warnings;
 
@@ -44,7 +44,7 @@ __END__
 
 =head1 NAME
 
-RMI::SerializationProtocol::V1 - a human-readable JSON serialization protocol
+RMI::SerializationProtocol::S1 - a human-readable JSON serialization protocol
 
 =head1 SYNOPSIS
 

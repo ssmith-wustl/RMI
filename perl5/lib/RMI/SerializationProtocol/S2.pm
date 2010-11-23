@@ -1,4 +1,4 @@
-package RMI::SerializationProtocol::V2;
+package RMI::SerializationProtocol::S2;
 use strict;
 use warnings;
 
@@ -55,7 +55,7 @@ __END__
 
 =head1 NAME
 
-RMI::SerializationProtocol::V2 - a human-readable and depthless serialization protocol
+RMI::SerializationProtocol::S2 - a human-readable and depthless serialization protocol
 
 =head1 SYNOPSIS
 
