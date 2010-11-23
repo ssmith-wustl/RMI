@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer remote_language local_language encoding protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language remote_protocol remote_encoding serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -33,11 +33,14 @@ sub new {
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
-        encoding => 'v1',       # put together with the remote_language, decides encoding
+        remote_protocol => '1',
+        _remote_protocol_namespace => undef,
+        
+        remote_encoding => '1',       # put together with the remote_language, decides encoding
         _encode_method => undef,
         _decode_method => undef,
         
-        protocol => '2',       # the lower level way we stream the encoded array
+        serialization_protocol => '2',       # the lower level way we stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -61,27 +64,35 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language)) . $self->{encoding};
-    $self->{_remote_language_namespace} = $encoding_namespace;
-    eval "no warnings; use $encoding_namespace";
+    my $remote_encoding_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::E' . $self->{remote_encoding};
+    $self->{_remote_encoding_namespace} = $remote_encoding_namespace;
+    
+    eval "no warnings; use $remote_encoding_namespace";
     if ($@) {
-        die "error processing encoding protocol $remote_language: $@"
+        die "error processing encoding protocol $remote_encoding_namespace: $@"
     }
-    $self->{_encode_method} = $encoding_namespace->can('encode');
+    $self->{_encode_method} = $remote_encoding_namespace->can('encode');
     unless ($self->{_encode_method}) {
-        die "no encode method in $encoding_namespace!?!?";
+        die "no encode method in $remote_encoding_namespace!?!?";
     }
-    $self->{_decode_method} = $encoding_namespace->can('decode');    
+    $self->{_decode_method} = $remote_encoding_namespace->can('decode');    
     unless ($self->{_decode_method}) {
-        die "no encode method in $encoding_namespace!?!?";
+        die "no decode method in $remote_encoding_namespace!?!?";
+    }
+
+    my $remote_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::P' . $self->{remote_protocol};
+    $self->{_remote_protocol_namespace} = $remote_protocol_namespace;
+    eval "no warnings; use $remote_protocol_namespace";
+    if ($@) {
+        die "error processing protocol protocol $remote_protocol_namespace: $@"
     }
     
     # serialize/deserialize is the way we transmit the encoded array
-    my $protocol = $self->{protocol};
-    my $serialization_namespace = 'RMI::Protocol::V' . ucfirst(lc($protocol));
+    my $serialization_protocol = $self->serialization_protocol;
+    my $serialization_namespace = 'RMI::SerializationProtocol::V' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
-        die "error processing serialization protocol $protocol: $@"
+        die "error processing serialization protocol $serialization_protocol: $@"
     }
     $self->{_serialize_method} = $serialization_namespace->can('serialize');
     $self->{_deserialize_method} = $serialization_namespace->can('deserialize');
@@ -234,9 +245,15 @@ sub _receive {
 }
 
 
-# Perl 5 
+# these methods depend on the remote language protocol or encoding
 
-# send & receive
+sub _delegate_by_remote_protocol {
+    no warnings;
+    my $self = shift;
+    my $delegate = ((caller(1))[3]);
+    $delegate =~ s/^RMI::Node/$self->{_remote_protocol_namespace}/;
+    $self->$delegate(@_);
+}
 
 sub _capture_context {
     return (caller(1))[5]    
@@ -255,6 +272,11 @@ sub _return_result_in_context {
     }
 }
 
+
+sub X_process_request_in_context_and_return_response {
+    return shift->_delegate_by_remote_protocol(@_);
+}
+
 # recieve & send
 
 sub _process_request_in_context_and_return_response {
@@ -270,7 +292,7 @@ sub _process_request_in_context_and_return_response {
     };
     
     # swap call_ for _respond_to_
-    my $method = '_respond_to_' . substr($call_type,5);
+    my $method = __PACKAGE__ . '::_respond_to_' . substr($call_type,5);
     
     my @result;
 
@@ -410,16 +432,18 @@ sub _respond_to_coderef {
     goto $sub;
 }
 
+1;
 
-# these methods depend on the remote language
+
 
 sub _delegate_by_remote_language {
     no warnings;
     my $self = shift;
     my $delegate = ((caller(1))[3]);
-    $delegate =~ s/^RMI::Node/$self->{_remote_language_namespace}/;
+    $delegate =~ s/^RMI::Node/$self->{_remote_encoding_namespace}/;
     $self->$delegate(@_);
 }
+
 
 sub _create_remote_copy {
     return shift->_delegate_by_remote_language(@_);
