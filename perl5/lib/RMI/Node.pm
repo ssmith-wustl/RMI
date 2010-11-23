@@ -64,7 +64,7 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $remote_encoding_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::E' . $self->{remote_encoding_protocol};
+    my $remote_encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($remote_language)) . 'e' . $self->{remote_encoding_protocol};
     $self->{_remote_encoding_protocol_namespace} = $remote_encoding_protocol_namespace;
     
     eval "no warnings; use $remote_encoding_protocol_namespace";
@@ -80,7 +80,7 @@ sub new {
         die "no decode method in $remote_encoding_protocol_namespace!?!?";
     }
 
-    my $remote_request_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::P' . $self->{remote_request_protocol};
+    my $remote_request_protocol_namespace = 'RMI::RequestProtocol::' . ucfirst(lc($remote_language)) . 'r' . $self->{remote_request_protocol};
     $self->{_remote_request_protocol_namespace} = $remote_request_protocol_namespace;
     eval "no warnings; use $remote_request_protocol_namespace";
     if ($@) {
