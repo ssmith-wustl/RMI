@@ -37,7 +37,7 @@ sub new {
         _encode_method => undef,
         _decode_method => undef,
         
-        serialization_protocol => 'eval',   # the lower level way we stream the encoded array
+        serialization_protocol => 'v2',   # the lower level way we stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
