@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer remote_language local_language encoding_protocol serialization_protocol/);
+_mk_ro_accessors(qw/reader writer remote_language local_language encoding protocol/);
 
 sub new {
     my $class = shift;
@@ -33,11 +33,11 @@ sub new {
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
-        encoding_protocol => 'v1',      # put together with the remote_language, decides encoding
+        encoding => 'v1',       # put together with the remote_language, decides encoding
         _encode_method => undef,
         _decode_method => undef,
         
-        serialization_protocol => 'v2',   # the lower level way we stream the encoded array
+        protocol => '2',       # the lower level way we stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -61,7 +61,7 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language)) . $self->{encoding_protocol};
+    my $encoding_namespace = 'RMI::RemoteLanguage::' . ucfirst(lc($remote_language)) . $self->{encoding};
     $self->{_remote_language_namespace} = $encoding_namespace;
     eval "no warnings; use $encoding_namespace";
     if ($@) {
@@ -77,11 +77,11 @@ sub new {
     }
     
     # serialize/deserialize is the way we transmit the encoded array
-    my $serialization_protocol = $self->{serialization_protocol};
-    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
+    my $protocol = $self->{protocol};
+    my $serialization_namespace = 'RMI::Protocol::V' . ucfirst(lc($protocol));
     eval "use $serialization_namespace";
     if ($@) {
-        die "error processing serialization protocol $serialization_protocol: $@"
+        die "error processing serialization protocol $protocol: $@"
     }
     $self->{_serialize_method} = $serialization_namespace->can('serialize');
     $self->{_deserialize_method} = $serialization_namespace->can('deserialize');

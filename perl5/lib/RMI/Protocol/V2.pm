@@ -1,7 +1,9 @@
-package RMI::SerializationProtocol::V2;
+package RMI::Protocol::V2;
 use strict;
 use warnings;
 
+my $PROTOCOL_VERSION = 2;
+my $PROTOCOL_SYM = chr(2);
 
 sub serialize {
     my ($self, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
@@ -15,11 +17,19 @@ sub serialize {
     
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
     
-    return $serialized_blob;
+    return $PROTOCOL_SYM . $serialized_blob;
 }
 
 sub deserialize {
     my ($self, $serialized_blob) = @_;
+
+    my $sym = substr($serialized_blob, 0, 1);
+    $serialized_blob = substr($serialized_blob, 1);
+
+    unless ($sym eq $PROTOCOL_SYM) {
+        my $version = ($PROTOCOL_SYM eq '[' ? 1 : ord($sym));
+        die "Got message with protocol $version, expected $PROTOCOL_SYM?!?!";
+    }
 
     my $encoded_message_data = eval "no strict; no warnings; $serialized_blob";
     if ($@) {
@@ -45,11 +55,11 @@ __END__
 
 =head1 NAME
 
-RMI::SerializationProtocol::Eval - human-readable serialization protocol
+RMI::Protocol::V2 - a human-readable and depthless serialization protocol
 
 =head1 SYNOPSIS
 
-$c = RMI::Client::ForkedPipes->new(serialization_protocol => 'eval');
+$c = RMI::Client::ForkedPipes->new(serialization_protocol => 'v2');
 
 =head1 DESCRIPTION
 

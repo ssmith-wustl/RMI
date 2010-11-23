@@ -1,4 +1,4 @@
-package RMI::SerializationProtocol::Eval;
+package RMI::Protocol::V1;
 use strict;
 use warnings;
 
@@ -44,11 +44,11 @@ __END__
 
 =head1 NAME
 
-RMI::SerializationProtocol::Eval - human-readable serialization protocol
+RMI::Protocol::V1 - a human-readable JSON serialization protocol
 
 =head1 SYNOPSIS
 
-$c = RMI::Client::ForkedPipes->new(serialization_protocol => 'eval');
+$c = RMI::Client::ForkedPipes->new(serialization_protocol => 'v1');
 
 =head1 DESCRIPTION
 
