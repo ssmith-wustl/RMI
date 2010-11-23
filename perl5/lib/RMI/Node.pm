@@ -184,17 +184,15 @@ sub _send {
     # and will expand what is in _received_and_destroyed_ids...
     @$message_data = (); 
 
-    # reset the received_and_destroyed_ids
+    # reset the received_and_destroyed_ids, but take a copy first so we can send it
     my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
     my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
     @$received_and_destroyed_ids = ();
     print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
     
-    unshift @encoded, $received_and_destroyed_ids_copy;
-
-
+    # send the message, and also the list of received_and_destroyed_ids since the last exchange
     my $serialize_method = $self->{_serialize_method};
-    my $s = $self->$serialize_method($message_type,\@encoded);
+    my $s = $self->$serialize_method($message_type,\@encoded, $received_and_destroyed_ids_copy);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG or $RMI::DUMP;
 
     return $self->{writer}->print($s,"\n");                
@@ -219,11 +217,18 @@ sub _receive {
     
  
     my $deserialize_method = $self->{_deserialize_method};   
-    my ($message_type, $encoded_message_data) = $self->$deserialize_method($serialized_blob);
+    my ($message_type, $encoded_message_data, $received_and_destroyed_ids) = $self->$deserialize_method($serialized_blob);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
     
     my $message_data = $self->{_decode_method}->($self,$encoded_message_data);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n" if $RMI::DEBUG;
+
+    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
+    my $sent_objects = $self->{_sent_objects};
+    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
+    unless (@done == @$received_and_destroyed_ids) {
+        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
+    }
 
     return ($message_type,$message_data);
 }

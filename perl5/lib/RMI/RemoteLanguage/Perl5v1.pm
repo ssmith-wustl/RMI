@@ -74,7 +74,6 @@ sub decode {
 
     my $sent_objects = $self->{_sent_objects};
     my $received_objects = $self->{_received_objects};
-    my $received_and_destroyed_ids = shift @$encoded;
     
     while (@$encoded) { 
         my $type = shift @$encoded;
@@ -167,11 +166,6 @@ sub decode {
         else {
             die "Unknown type $type????"
         }
-    }
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
-    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
-    unless (@done == @$received_and_destroyed_ids) {
-        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
     }
 
     return \@message_data;

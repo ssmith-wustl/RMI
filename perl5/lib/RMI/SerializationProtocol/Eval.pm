@@ -4,9 +4,14 @@ use warnings;
 
 
 sub serialize {
-    my ($self, $message_type, $encoded_message_data) = @_;
+    my ($self, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
     
-    my $serialized_blob = Data::Dumper->new([[$message_type, @$encoded_message_data]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
+    unshift @$encoded_message_data, $received_and_destroyed_ids;
+    
+    my $serialized_blob = Data::Dumper->new([[
+            $message_type,
+            @$encoded_message_data
+    ]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
     
     print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
     
@@ -26,7 +31,9 @@ sub deserialize {
         die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($encoded_message_data);
     }    
 
-    return ($message_type, $encoded_message_data);    
+    my $received_and_destroyed_ids = shift @$encoded_message_data;
+    
+    return ($message_type, $encoded_message_data, $received_and_destroyed_ids);    
 }
 
 1;
