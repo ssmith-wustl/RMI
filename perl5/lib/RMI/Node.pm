@@ -33,14 +33,14 @@ sub new {
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
-        remote_request_protocol => '1',         # define request types and response logic
+        remote_request_protocol => 'perl5r1',           # define request types and response logic
         _remote_request_protocol_namespace => undef,
         
-        remote_encoding_protocol => '1',        # encode the request/response into an array w/o references
+        remote_encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
         _encode_method => undef,
         _decode_method => undef,
         
-        remote_serialization_protocol => '2',   # determine how to stream the encoded array
+        remote_serialization_protocol => 's2',          # determine how to stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -64,7 +64,7 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $remote_encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($remote_language)) . 'e' . $self->{remote_encoding_protocol};
+    my $remote_encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($self->remote_encoding_protocol));
     $self->{_remote_encoding_protocol_namespace} = $remote_encoding_protocol_namespace;
     
     eval "no warnings; use $remote_encoding_protocol_namespace";
@@ -80,7 +80,7 @@ sub new {
         die "no decode method in $remote_encoding_protocol_namespace!?!?";
     }
 
-    my $remote_request_protocol_namespace = 'RMI::RequestProtocol::' . ucfirst(lc($remote_language)) . 'r' . $self->{remote_request_protocol};
+    my $remote_request_protocol_namespace = 'RMI::RequestProtocol::' . ucfirst(lc($self->remote_request_protocol));
     $self->{_remote_request_protocol_namespace} = $remote_request_protocol_namespace;
     eval "no warnings; use $remote_request_protocol_namespace";
     if ($@) {
@@ -89,7 +89,7 @@ sub new {
     
     # serialize/deserialize is the way we transmit the encoded array
     my $remote_serialization_protocol = $self->remote_serialization_protocol;
-    my $serialization_namespace = 'RMI::SerializationProtocol::S' . ucfirst(lc($remote_serialization_protocol));
+    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($remote_serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
         die "error processing serialization protocol $remote_serialization_protocol: $@"
