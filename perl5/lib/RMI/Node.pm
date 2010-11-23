@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer local_language remote_language remote_protocol remote_encoding serialization_protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language remote_request_protocol remote_encoding_protocol remote_serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -33,14 +33,14 @@ sub new {
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
-        remote_protocol => '1',
-        _remote_protocol_namespace => undef,
+        remote_request_protocol => '1',         # define request types and response logic
+        _remote_request_protocol_namespace => undef,
         
-        remote_encoding => '1',       # put together with the remote_language, decides encoding
+        remote_encoding_protocol => '1',        # encode the request/response into an array w/o references
         _encode_method => undef,
         _decode_method => undef,
         
-        serialization_protocol => '2',       # the lower level way we stream the encoded array
+        remote_serialization_protocol => '2',   # determine how to stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -64,35 +64,35 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $remote_encoding_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::E' . $self->{remote_encoding};
-    $self->{_remote_encoding_namespace} = $remote_encoding_namespace;
+    my $remote_encoding_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::E' . $self->{remote_encoding_protocol};
+    $self->{_remote_encoding_protocol_namespace} = $remote_encoding_protocol_namespace;
     
-    eval "no warnings; use $remote_encoding_namespace";
+    eval "no warnings; use $remote_encoding_protocol_namespace";
     if ($@) {
-        die "error processing encoding protocol $remote_encoding_namespace: $@"
+        die "error processing encoding protocol $remote_encoding_protocol_namespace: $@"
     }
-    $self->{_encode_method} = $remote_encoding_namespace->can('encode');
+    $self->{_encode_method} = $remote_encoding_protocol_namespace->can('encode');
     unless ($self->{_encode_method}) {
-        die "no encode method in $remote_encoding_namespace!?!?";
+        die "no encode method in $remote_encoding_protocol_namespace!?!?";
     }
-    $self->{_decode_method} = $remote_encoding_namespace->can('decode');    
+    $self->{_decode_method} = $remote_encoding_protocol_namespace->can('decode');    
     unless ($self->{_decode_method}) {
-        die "no decode method in $remote_encoding_namespace!?!?";
+        die "no decode method in $remote_encoding_protocol_namespace!?!?";
     }
 
-    my $remote_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::P' . $self->{remote_protocol};
-    $self->{_remote_protocol_namespace} = $remote_protocol_namespace;
-    eval "no warnings; use $remote_protocol_namespace";
+    my $remote_request_protocol_namespace = 'RMI::Language::' . ucfirst(lc($remote_language)) . '::P' . $self->{remote_request_protocol};
+    $self->{_remote_request_protocol_namespace} = $remote_request_protocol_namespace;
+    eval "no warnings; use $remote_request_protocol_namespace";
     if ($@) {
-        die "error processing protocol protocol $remote_protocol_namespace: $@"
+        die "error processing protocol protocol $remote_request_protocol_namespace: $@"
     }
     
     # serialize/deserialize is the way we transmit the encoded array
-    my $serialization_protocol = $self->serialization_protocol;
-    my $serialization_namespace = 'RMI::SerializationProtocol::S' . ucfirst(lc($serialization_protocol));
+    my $remote_serialization_protocol = $self->remote_serialization_protocol;
+    my $serialization_namespace = 'RMI::SerializationProtocol::S' . ucfirst(lc($remote_serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
-        die "error processing serialization protocol $serialization_protocol: $@"
+        die "error processing serialization protocol $remote_serialization_protocol: $@"
     }
     $self->{_serialize_method} = $serialization_namespace->can('serialize');
     $self->{_deserialize_method} = $serialization_namespace->can('deserialize');
@@ -253,57 +253,57 @@ sub _receive {
 # it would preclude switching protocols mid-connection which might be nice
 # this could get awkward in non-dynamic languages though
 
-sub _delegate_by_remote_protocol {
+sub _delegate_by_remote_request_protocol {
     my $self = $_[0];
     my $delegate = ((caller(1))[3]);
-    $delegate =~ s/^RMI::Node/$self->{_remote_protocol_namespace}/;
+    $delegate =~ s/^RMI::Node/$self->{_remote_request_protocol_namespace}/;
     goto \&{$delegate};
 }
 
 # send & receive
 
 sub _capture_context {
-    shift->_delegate_by_remote_protocol(@_);
+    shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub _return_result_in_context {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 # recieve & send
 
 sub _process_request_in_context_and_return_response {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 # misc base API
 
 sub _create_remote_copy {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub _create_local_copy {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub _is_proxy {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub _has_proxy {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub _remote_node {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub bind_local_var_to_remote {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 sub bind_local_class_to_remote {
-    return shift->_delegate_by_remote_protocol(@_);
+    return shift->_delegate_by_remote_request_protocol(@_);
 }
 
 =pod
