@@ -2,10 +2,17 @@ package RMI::RequestProtocol::Perl5r1;
 use strict;
 use warnings;
 
+sub new {
+    my ($class, $node) = @_;
+    my $self = bless { node => $node }, $class;
+    Scalar::Util::weaken($self->{node});
+    return $self;
+}
+
 # used by the requestor to capture context
 
 sub _capture_context {
-    return (caller(2))[5]    
+    return (caller(1))[5]    
 }
 
 # used by the requestor to use that context after a result is returned
@@ -27,8 +34,10 @@ sub _return_result_in_context {
 
 sub _process_request_in_context_and_return_response {
     my ($self, $message_data) = @_;
-
+    my $node = $self->{node} || $self;
+    
     my $call_type = shift @$message_data;
+
 
     # for all Perl calls, the context is the value of wantarray(): 1, 0 or undef.
     # we capture this in one place so we don't have redundant code in every
@@ -46,7 +55,7 @@ sub _process_request_in_context_and_return_response {
     
     my @result;
 
-    push @RMI::executing_nodes, $self;
+    push @RMI::executing_nodes, $node;
     eval {
         if (not defined $wantarray) {
             print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
@@ -177,7 +186,9 @@ sub _respond_to_coderef {
     my $dummy_no_class = shift;
     my $dummy_no_method = shift;
     my $sub_id = shift;
-    my $sub = $self->{_sent_objects}{$sub_id};
+    my $node = $self->{node} || $self;
+    my $sub = $node->{_sent_objects}{$sub_id};
+    Carp::confess("no coderef $sub_id in the list of sent CODE refs, but a proxy thinks it has this value?") unless $sub;
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
     goto $sub;
 }
@@ -188,6 +199,8 @@ sub bind_local_var_to_remote {
     # this proxies a single variable
 
     my $self = shift;
+    my $node = $self->{node} || $self;
+    
     my $local_var = shift;
     my $remote_var = (@_ ? shift : $local_var);
     
@@ -212,7 +225,7 @@ sub bind_local_var_to_remote {
     }
     
     my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $self->call_eval($src);
+    my $r = $node->call_eval($src);
     die $@ if $@;
     $src = '*' . $local_var . ' = $r' . ";\n";
     eval $src;
@@ -225,10 +238,12 @@ sub bind_local_class_to_remote {
     # this proxies an entire class instead of just a single object
     
     my $self = shift;
-    my ($class,$module,$path,@exported) = $self->call_use(@_);
+    my $node = $self->{node} || $self;
+    
+    my ($class,$module,$path,@exported) = $node->call_use(@_);
     my $re_bind = 0;
     if (my $prior = $RMI::proxied_classes{$class}) {
-        if ($prior != $self) {
+        if ($prior != $node) {
             die "class $class has already been proxied by another RMI client: $prior!";
         }
         else {
@@ -253,9 +268,9 @@ sub bind_local_class_to_remote {
             $self->bind_local_var_to_remote(@pair);
         }
     }
-    $RMI::proxied_classes{$class} = $self;
-    $INC{$module} = $self;
-    print "$class used remotely via $self.  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+    $RMI::proxied_classes{$class} = $node;
+    $INC{$module} = $node;
+    print "$class used remotely via $self ($node).  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
 }
 
 
@@ -263,14 +278,16 @@ sub bind_local_class_to_remote {
 
 sub _create_remote_copy {
     my ($self,$v) = @_;
+    my $node = $self->{node} || $self;
     my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
-    my $proxy = $self->send_request_and_receive_response('call_eval','','',$serialized);
+    my $proxy = $node->send_request_and_receive_response('call_eval','','',$serialized);
     return $proxy;
 }
 
 sub _create_local_copy {
     my ($self,$v) = @_;
-    my $serialized = $self->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
+    my $node = $self->{node} || $self;
+    my $serialized = $node->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
     my $local = eval('no strict; no warnings; ' . $serialized);
     die 'Failed to serialize!: ' . $@ if $@;
     return $local;    
@@ -281,20 +298,22 @@ sub _create_local_copy {
 
 sub _is_proxy {
     my ($self,$obj) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
+    my $node = $self->{node} || $self;
+    $node->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
 }
 
 sub _has_proxy {
     my ($self,$obj) = @_;
+    my $node = $self->{node} || $self;    
     my $id = "$obj";
-    $self->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
+    $node->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_node {
     my ($self) = @_;
-    $self->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
+    my $node = $self->{node} || $self;    
+    $node->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
 }
-
 
 1;
 

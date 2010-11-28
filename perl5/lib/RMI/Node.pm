@@ -35,6 +35,7 @@ sub new {
         
         remote_request_protocol => 'perl5r1',           # define request types and response logic
         _remote_request_protocol_namespace => undef,
+        request_handler => undef,
         
         remote_encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
         _encode_method => undef,
@@ -86,6 +87,7 @@ sub new {
     if ($@) {
         die "error processing protocol protocol $remote_request_protocol_namespace: $@"
     }
+    $self->{request_handler} = $remote_request_protocol_namespace->new($self);
     
     # serialize/deserialize is the way we transmit the encoded array
     my $remote_serialization_protocol = $self->remote_serialization_protocol;
@@ -115,7 +117,7 @@ sub send_request_and_receive_response {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     # lookup context
-    my $context = $self->_capture_context();
+    my $context = do { no strict 'refs'; &{$self->{_remote_request_protocol_namespace} . '::_capture_context'} };
     
     # send, with context
     $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
@@ -126,7 +128,7 @@ sub send_request_and_receive_response {
             if ($opts and $opts->{copy_results}) {
                 $response_data = $self->_create_local_copy($response_data);
             }
-            return $self->_return_result_in_context($response_data, $context);
+            return do { no strict 'refs'; &{$self->{_remote_request_protocol_namespace} . '::_return_result_in_context'}($self, $response_data, $context) };
         }
         elsif ($response_type eq 'close') {
             return;
@@ -248,62 +250,38 @@ sub _receive {
     return ($message_type,$message_data);
 }
 
-# these methods vary by remote protocol.
-# should we subclas the node by remote protocol?
-# it would preclude switching protocols mid-connection which might be nice
-# this could get awkward in non-dynamic languages though
-
-sub _delegate_by_remote_request_protocol {
-    my $self = $_[0];
-    my $delegate = ((caller(1))[3]);
-    $delegate =~ s/^RMI::Node/$self->{_remote_request_protocol_namespace}/;
-    goto \&{$delegate};
-}
-
-# send & receive
-
-sub _capture_context {
-    shift->_delegate_by_remote_request_protocol(@_);
-}
-
-sub _return_result_in_context {
-    return shift->_delegate_by_remote_request_protocol(@_);
-}
-
-# recieve & send
+# these methods vary by remote request protocol...
 
 sub _process_request_in_context_and_return_response {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_process_request_in_context_and_return_response(@_);
 }
 
-# misc base API
-
 sub _create_remote_copy {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_create_remote_copy(@_);
 }
 
 sub _create_local_copy {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_create_local_copy(@_);
 }
 
 sub _is_proxy {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_is_proxy(@_);
 }
 
 sub _has_proxy {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_has_proxy(@_);
 }
 
 sub _remote_node {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->_remote_node(@_);
 }
 
 sub bind_local_var_to_remote {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->bind_local_var_to_remote(@_);
 }
 
 sub bind_local_class_to_remote {
-    return shift->_delegate_by_remote_request_protocol(@_);
+    return shift->{request_handler}->bind_local_class_to_remote(@_);
 }
 
 =pod
