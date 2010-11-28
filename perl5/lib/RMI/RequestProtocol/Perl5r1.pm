@@ -34,7 +34,7 @@ sub _return_result_in_context {
 
 sub _process_request_in_context_and_return_response {
     my ($self, $message_data) = @_;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     
     my $call_type = shift @$message_data;
 
@@ -199,7 +199,7 @@ sub bind_local_var_to_remote {
     # this proxies a single variable
 
     my $self = shift;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     
     my $local_var = shift;
     my $remote_var = (@_ ? shift : $local_var);
@@ -238,7 +238,7 @@ sub bind_local_class_to_remote {
     # this proxies an entire class instead of just a single object
     
     my $self = shift;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     
     my ($class,$module,$path,@exported) = $node->call_use(@_);
     my $re_bind = 0;
@@ -278,7 +278,7 @@ sub bind_local_class_to_remote {
 
 sub _create_remote_copy {
     my ($self,$v) = @_;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
     my $proxy = $node->send_request_and_receive_response('call_eval','','',$serialized);
     return $proxy;

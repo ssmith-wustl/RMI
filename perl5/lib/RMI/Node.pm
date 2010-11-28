@@ -34,7 +34,6 @@ sub new {
         remote_language => 'perl5',     # may vary,but this is the default
         
         remote_request_protocol => 'perl5r1',           # define request types and response logic
-        _remote_request_protocol_namespace => undef,
         request_handler => undef,
         
         remote_encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
@@ -81,13 +80,12 @@ sub new {
         die "no decode method in $remote_encoding_protocol_namespace!?!?";
     }
 
-    my $remote_request_protocol_namespace = 'RMI::RequestProtocol::' . ucfirst(lc($self->remote_request_protocol));
-    $self->{_remote_request_protocol_namespace} = $remote_request_protocol_namespace;
-    eval "no warnings; use $remote_request_protocol_namespace";
+    my $remote_request_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->remote_request_protocol));
+    eval "no warnings; use $remote_request_protocol_class";
     if ($@) {
-        die "error processing protocol protocol $remote_request_protocol_namespace: $@"
+        die "error processing protocol protocol $remote_request_protocol_class: $@"
     }
-    $self->{request_handler} = $remote_request_protocol_namespace->new($self);
+    $self->{request_handler} = $remote_request_protocol_class->new($self);
     
     # serialize/deserialize is the way we transmit the encoded array
     my $remote_serialization_protocol = $self->remote_serialization_protocol;
@@ -117,7 +115,7 @@ sub send_request_and_receive_response {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     # lookup context
-    my $context = do { no strict 'refs'; &{$self->{_remote_request_protocol_namespace} . '::_capture_context'} };
+    my $context = $self->{request_handler}->_capture_context();
     
     # send, with context
     $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
@@ -128,7 +126,7 @@ sub send_request_and_receive_response {
             if ($opts and $opts->{copy_results}) {
                 $response_data = $self->_create_local_copy($response_data);
             }
-            return do { no strict 'refs'; &{$self->{_remote_request_protocol_namespace} . '::_return_result_in_context'}($self, $response_data, $context) };
+            return $self->{request_handler}->_return_result_in_context($response_data, $context);
         }
         elsif ($response_type eq 'close') {
             return;
