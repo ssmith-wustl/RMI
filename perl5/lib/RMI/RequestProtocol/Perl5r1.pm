@@ -186,7 +186,7 @@ sub _respond_to_coderef {
     my $dummy_no_class = shift;
     my $dummy_no_method = shift;
     my $sub_id = shift;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     my $sub = $node->{_sent_objects}{$sub_id};
     Carp::confess("no coderef $sub_id in the list of sent CODE refs, but a proxy thinks it has this value?") unless $sub;
     die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
@@ -286,7 +286,7 @@ sub _create_remote_copy {
 
 sub _create_local_copy {
     my ($self,$v) = @_;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     my $serialized = $node->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
     my $local = eval('no strict; no warnings; ' . $serialized);
     die 'Failed to serialize!: ' . $@ if $@;
@@ -298,20 +298,20 @@ sub _create_local_copy {
 
 sub _is_proxy {
     my ($self,$obj) = @_;
-    my $node = $self->{node} || $self;
+    my $node = $self->{node};
     $node->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
 }
 
 sub _has_proxy {
     my ($self,$obj) = @_;
-    my $node = $self->{node} || $self;    
+    my $node = $self->{node};    
     my $id = "$obj";
     $node->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
 }
 
 sub _remote_node {
     my ($self) = @_;
-    my $node = $self->{node} || $self;    
+    my $node = $self->{node};    
     $node->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
 }
 
