@@ -203,7 +203,14 @@ sub _send {
     
     # send the message, and also the list of received_and_destroyed_ids since the last exchange
     my $serialize_method = $self->{_serialize_method};
-    my $s = $self->$serialize_method($message_type,\@encoded, $received_and_destroyed_ids_copy);
+    my $s = $self->$serialize_method(
+        $self->remote_serialization_protocol,
+        $self->remote_encoding_protocol,
+        $self->remote_request_protocol,
+        $message_type,
+        \@encoded,
+        $received_and_destroyed_ids_copy
+    );
     print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG or $RMI::DUMP;
 
     return $self->{writer}->print($s,"\n");                
@@ -231,7 +238,7 @@ sub _receive {
     
  
     my $deserialize_method = $self->{_deserialize_method};   
-    my ($message_type, $encoded_message_data, $received_and_destroyed_ids) = $self->$deserialize_method($serialized_blob);
+    my ($sproto,$eproto,$rproto,$message_type, $encoded_message_data, $received_and_destroyed_ids) = $self->$deserialize_method($serialized_blob);
     print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
     
     my $message_data = $self->{_decode_method}->($self,$encoded_message_data);

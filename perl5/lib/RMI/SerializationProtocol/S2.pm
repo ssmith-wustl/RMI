@@ -6,9 +6,10 @@ my $PROTOCOL_VERSION = 2;
 my $PROTOCOL_SYM = chr(2);
 
 sub serialize {
-    my ($self, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
+    my ($self, $sproto, $eproto, $rproto, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
     
     my $serialized_blob = Data::Dumper->new([[
+        $sproto, $eproto, $rproto,
         $message_type,
         scalar(@$received_and_destroyed_ids),
         @$received_and_destroyed_ids,
@@ -36,6 +37,9 @@ sub deserialize {
         die "Exception de-serializing message: $@";
     }        
 
+    my $sproto = shift @$encoded_message_data;
+    my $eproto = shift @$encoded_message_data;
+    my $rproto = shift @$encoded_message_data;
     my $message_type = shift @$encoded_message_data;
     if (! defined $message_type) {
         die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($encoded_message_data);
@@ -44,7 +48,7 @@ sub deserialize {
     my $n_received_and_destroyed_ids = shift @$encoded_message_data;
     my $received_and_destroyed_ids = [ splice(@$encoded_message_data,0,$n_received_and_destroyed_ids) ];
     
-    return ($message_type, $encoded_message_data, $received_and_destroyed_ids);    
+    return ($sproto, $eproto, $rproto, $message_type, $encoded_message_data, $received_and_destroyed_ids);    
 }
 
 1;
