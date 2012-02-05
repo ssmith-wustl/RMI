@@ -117,8 +117,10 @@ sub send_request_and_receive_response {
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
+    my $request_handler = $self->{_request_handler};
+
     # lookup context
-    my $context = $self->{_request_handler}->_capture_context();
+    my $context = $request_handler->_capture_context();
     
     # send, with context
     $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
@@ -127,16 +129,16 @@ sub send_request_and_receive_response {
         my ($response_type, $response_data) = $self->_receive();
         if ($response_type eq 'result') {
             if ($opts and $opts->{copy_results}) {
-                $response_data = $self->_create_local_copy($response_data);
+                $response_data = $request_handler->_create_local_copy($response_data);
             }
-            return $self->{_request_handler}->_return_result_in_context($response_data, $context);
+            return $request_handler->_return_result_in_context($response_data, $context);
         }
         elsif ($response_type eq 'close') {
             return;
         }
         elsif ($response_type eq 'request') {
             # a counter-request, possibly calling a method on an object we sent...
-            my ($counter_response_type, $counter_response_data) = $self->_process_request_in_context_and_return_response($response_data);
+            my ($counter_response_type, $counter_response_data) = $request_handler->_process_request_in_context_and_return_response($response_data);
             $self->_send($counter_response_type, $counter_response_data);   
             redo;
         }
@@ -261,6 +263,7 @@ sub _receive {
 # these methods vary by remote request protocol...
 
 sub _process_request_in_context_and_return_response {
+    #
     return shift->{_request_handler}->_process_request_in_context_and_return_response(@_);
 }
 
@@ -269,6 +272,7 @@ sub _create_remote_copy {
 }
 
 sub _create_local_copy {
+    #
     return shift->{_request_handler}->_create_local_copy(@_);
 }
 
