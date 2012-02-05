@@ -1,4 +1,4 @@
-package RMI::EncodingProtocol::Perl5e1;
+package RMI::Encoder::Perl5e1;
 use strict;
 use warnings;
 
@@ -18,7 +18,7 @@ sub encode {
             if (my $remote_id = $RMI::Node::remote_id_for_object{$o}) { 
                 # this is a proxy object on THIS side: the real object will be used on the remote side
                 print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $remote_id:\n" if $RMI::DEBUG;
-                push @encoded, $RMI::EncodingProtocol::Perl5e1::return_proxy, $remote_id;
+                push @encoded, $RMI::Encoder::Perl5e1::return_proxy, $remote_id;
                 next;
             }
             elsif($opts and ($opts->{copy} or $opts->{copy_params})) {
@@ -40,7 +40,7 @@ sub encode {
                 my $code;
                 if ($base_type ne $type) {
                     # blessed reference
-                    $code = $RMI::EncodingProtocol::Perl5e1::blessed_reference;
+                    $code = $RMI::Encoder::Perl5e1::blessed_reference;
                     if (my $allowed = $self->{allow_packages}) {
                         unless ($allowed->{ref($o)}) {
                             die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
@@ -49,7 +49,7 @@ sub encode {
                 }
                 else {
                     # regular reference
-                    $code = $RMI::EncodingProtocol::Perl5e1::unblessed_reference;
+                    $code = $RMI::Encoder::Perl5e1::unblessed_reference;
                 }
                 
                 push @encoded, $code, $local_id;
@@ -58,7 +58,7 @@ sub encode {
         }
         else {
             # sending a non-reference value
-            push @encoded, $RMI::EncodingProtocol::Perl5e1::value, $o;
+            push @encoded, $RMI::Encoder::Perl5e1::value, $o;
         }
     }
 
@@ -175,11 +175,11 @@ sub decode {
 
 =head1 NAME
 
-RMI::EncodingProtocol::Perl5e1
+RMI::Encoder::Perl5e1
 
 =head1 VERSION
 
-This document describes RMI::EncodingProtocol::Perl5e1 for RMI v0.11.
+This document describes RMI::Encoder::Perl5e1 for RMI v0.11.
 
 =head1 DESCRIPTION
 
@@ -188,7 +188,7 @@ return an array which has no references.  The complimentary decode() method
 must be able to take a copy of the encode() results, in another process on the opposite 
 side of the node pair, and turn it into something which behaves like the original array.
 
-The RMI::EncodingProtocol::Perl5e1 module handles encode/decode for RMI nodes where
+The RMI::Encoder::Perl5e1 module handles encode/decode for RMI nodes where
 the remote node specifies perl5e1 as its encoding.  It uses a simple 4-value system
 of categorizing a data value, and the categorized value, when a reference, embeds both
 the class/package and the object identity.

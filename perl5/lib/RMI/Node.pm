@@ -74,7 +74,7 @@ sub new {
     # it varies by the language on the remote end (and this local end)
     # it is independent of the request/response protocol, though that is also language dependent
     my $remote_language = $self->{remote_language};
-    my $encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($self->encoding_protocol));
+    my $encoding_protocol_namespace = 'RMI::Encoder::' . ucfirst(lc($self->encoding_protocol));
     $self->{_encoding_protocol_namespace} = $encoding_protocol_namespace;
     
     eval "no warnings; use $encoding_protocol_namespace";
@@ -92,7 +92,7 @@ sub new {
     
     # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
     my $serialization_protocol = $self->serialization_protocol;
-    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
+    my $serialization_namespace = 'RMI::Serializer::' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
         die "error processing serialization protocol $serialization_protocol: $@"
