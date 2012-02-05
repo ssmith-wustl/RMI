@@ -1,4 +1,4 @@
-module RMI::Client::ForkedPipes;
+class RMI::Client::ForkedPipes;
 
 =begin
 
