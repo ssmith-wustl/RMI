@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer local_language remote_language remote_request_protocol remote_encoding_protocol remote_serialization_protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol remote_encoding_protocol remote_serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -33,7 +33,7 @@ sub new {
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
-        remote_request_protocol => 'perl5r1',           # define request types and response logic
+        request_response_protocol => 'perl5r1',           # define request types and response logic
         request_handler => undef,
         
         remote_encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
@@ -80,12 +80,12 @@ sub new {
         die "no decode method in $remote_encoding_protocol_namespace!?!?";
     }
 
-    my $remote_request_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->remote_request_protocol));
-    eval "no warnings; use $remote_request_protocol_class";
+    my $request_response_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->request_response_protocol));
+    eval "no warnings; use $request_response_protocol_class";
     if ($@) {
-        die "error processing protocol protocol $remote_request_protocol_class: $@"
+        die "error processing protocol protocol $request_response_protocol_class: $@"
     }
-    $self->{request_handler} = $remote_request_protocol_class->new($self);
+    $self->{request_handler} = $request_response_protocol_class->new($self);
     
     # serialize/deserialize is the way we transmit the encoded array
     my $remote_serialization_protocol = $self->remote_serialization_protocol;
@@ -206,7 +206,7 @@ sub _send {
     my $s = $self->$serialize_method(
         $self->remote_serialization_protocol,
         $self->remote_encoding_protocol,
-        $self->remote_request_protocol,
+        $self->request_response_protocol,
         $message_type,
         \@encoded,
         $received_and_destroyed_ids_copy
