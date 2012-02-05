@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol remote_encoding_protocol remote_serialization_protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol remote_serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -36,7 +36,7 @@ sub new {
         request_response_protocol => 'perl5r1',           # define request types and response logic
         request_handler => undef,
         
-        remote_encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
+        encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
         _encode_method => undef,
         _decode_method => undef,
         
@@ -64,20 +64,20 @@ sub new {
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
     my $remote_language = $self->{remote_language};
-    my $remote_encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($self->remote_encoding_protocol));
-    $self->{_remote_encoding_protocol_namespace} = $remote_encoding_protocol_namespace;
+    my $encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($self->encoding_protocol));
+    $self->{_encoding_protocol_namespace} = $encoding_protocol_namespace;
     
-    eval "no warnings; use $remote_encoding_protocol_namespace";
+    eval "no warnings; use $encoding_protocol_namespace";
     if ($@) {
-        die "error processing encoding protocol $remote_encoding_protocol_namespace: $@"
+        die "error processing encoding protocol $encoding_protocol_namespace: $@"
     }
-    $self->{_encode_method} = $remote_encoding_protocol_namespace->can('encode');
+    $self->{_encode_method} = $encoding_protocol_namespace->can('encode');
     unless ($self->{_encode_method}) {
-        die "no encode method in $remote_encoding_protocol_namespace!?!?";
+        die "no encode method in $encoding_protocol_namespace!?!?";
     }
-    $self->{_decode_method} = $remote_encoding_protocol_namespace->can('decode');    
+    $self->{_decode_method} = $encoding_protocol_namespace->can('decode');    
     unless ($self->{_decode_method}) {
-        die "no decode method in $remote_encoding_protocol_namespace!?!?";
+        die "no decode method in $encoding_protocol_namespace!?!?";
     }
 
     my $request_response_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->request_response_protocol));
@@ -205,7 +205,7 @@ sub _send {
     my $serialize_method = $self->{_serialize_method};
     my $s = $self->$serialize_method(
         $self->remote_serialization_protocol,
-        $self->remote_encoding_protocol,
+        $self->encoding_protocol,
         $self->request_response_protocol,
         $message_type,
         \@encoded,
