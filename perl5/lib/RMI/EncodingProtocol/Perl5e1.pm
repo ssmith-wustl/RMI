@@ -183,14 +183,26 @@ This document describes RMI::EncodingProtocol::Perl5e1 for RMI v0.11.
 
 =head1 DESCRIPTION
 
+All encoding protocol modules have an encode() method which takes an array of values and 
+return an array which has no references.  The complimentary decode() method 
+must be able to take a copy of the encode() results, in another process on the opposite 
+side of the node pair, and turn it into something which behaves like the original array.
+
 The RMI::EncodingProtocol::Perl5e1 module handles encode/decode for RMI nodes where
 the remote node specifies perl5e1 as its encoding.  It uses a simple 4-value system
 of categorizing a data value, and the categorized value, when a reference, embeds both
 the class/package and the object identity.
 
-All encoding protocol modules take an array of values, and return an array which has
-no references, which can be reversed on the opposite side of the node pair into
-something which behaves like the original array.
+This implementation is in Perl, so it is used for Perl processes to talk with each other.
+For a process in another language to talk with a Perl process, it could implement a
+Perl5e1 encoding module.  Alternatively, that process's language could implement an
+encoding module for which there is a Perl implementation.
+
+Currently, each RMI Node knows its encoding protocol, and it is up to the constructor
+of the node to ensure that it is using a protocol which matches the protocol on the other
+side.  In a future release auto-negotiation of protocols could be implemented, but 
+because RMI is meant to be a low-level protocol, behind layers which handle things like
+security and asynchronicity, this may be left out of this layer.
 
 =head1 METHODS
 
