@@ -67,13 +67,26 @@ $c = RMI::Client::ForkedPipes->new(serialization_protocol => 'v2');
 
 =head1 DESCRIPTION
 
+All serialization protocol modules take an array of simple text strings and
+turn them into a blob which can be transmitted to another process and reconstructed.
+It is the lowest-level part of the protocol stack in RMI.  The layer above,
+the encoding, turns complex objects into strings and back.
+
+The serialization protocol version of an RMI blob is identified by the first byte
+of the serialized message.  For this version it is the unprintable ascii value for 2.
+
 This is the default serialization protocol for RMI in Perl.  It uses
 the Data::Dumper module to create a message stream which dumps the arrayref
 of message data onto one line of eval-able text which will reconstitute the
-data structure.
+data structure.  
+
+By using double-quoted strings, newlines are removed from any message, leading 
+to a simple blob format of readable characters with one message per line, and easy 
+debugging.  The message is itself eval-able in Perl, Python, Ruby and JavaScript.
 
 The use of Data::Dumper here is pure laziness.  The encoded message data list
 contains no references, and could be turned into a string with something simpler
 than data dumper.
+
 
 =cut
