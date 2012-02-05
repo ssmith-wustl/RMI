@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol remote_serialization_protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol serialization_protocol/);
 
 sub new {
     my $class = shift;
@@ -40,7 +40,7 @@ sub new {
         _encode_method => undef,
         _decode_method => undef,
         
-        remote_serialization_protocol => 's2',          # determine how to stream the encoded array
+        serialization_protocol => 's2',          # determine how to stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
@@ -88,11 +88,11 @@ sub new {
     $self->{_request_handler} = $request_response_protocol_class->new($self);
     
     # serialize/deserialize is the way we transmit the encoded array
-    my $remote_serialization_protocol = $self->remote_serialization_protocol;
-    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($remote_serialization_protocol));
+    my $serialization_protocol = $self->serialization_protocol;
+    my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
     if ($@) {
-        die "error processing serialization protocol $remote_serialization_protocol: $@"
+        die "error processing serialization protocol $serialization_protocol: $@"
     }
     $self->{_serialize_method} = $serialization_namespace->can('serialize');
     $self->{_deserialize_method} = $serialization_namespace->can('deserialize');
@@ -204,7 +204,7 @@ sub _send {
     # send the message, and also the list of received_and_destroyed_ids since the last exchange
     my $serialize_method = $self->{_serialize_method};
     my $s = $self->$serialize_method(
-        $self->remote_serialization_protocol,
+        $self->serialization_protocol,
         $self->encoding_protocol,
         $self->request_response_protocol,
         $message_type,
