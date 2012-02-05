@@ -15,3 +15,6 @@ $RMI::ProxyObject::DEFAULT_OPTS{"DBI::st"} = {
     
 };        
 
+=end
+
+end

@@ -1,4 +1,6 @@
-module RMI::Node;
+module RMI::Node
+
+=begin
 
 use strict;
 use warnings;
@@ -591,3 +593,6 @@ module.
 
 1;
 
+=end
+
+end

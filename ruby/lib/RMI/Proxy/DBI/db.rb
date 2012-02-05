@@ -20,3 +20,6 @@ $RMI::ProxyObject::DEFAULT_OPTS{"DBI::db"}{"selectcol_arrayref"} = {
 
 1;
 
+=end
+
+end
