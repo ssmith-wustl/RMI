@@ -63,7 +63,7 @@ sub new {
 
     # the request response protocol is the top of the protocol stack for RMI
     # this handler takes requests, acts on them, and sends an appropriate response
-    my $request_response_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->request_response_protocol));
+    my $request_response_protocol_class = 'RMI::RequestResponseProtocol::' . ucfirst(lc($self->request_response_protocol));
     eval "no warnings; use $request_response_protocol_class";
     if ($@) {
         die "error processing protocol protocol $request_response_protocol_class: $@"

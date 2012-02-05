@@ -1,4 +1,4 @@
-package RMI::RequestProtocol::Perl5r1;
+package RMI::RequestResponseProtocol::Perl5r1;
 use strict;
 use warnings;
 
@@ -317,15 +317,15 @@ sub _remote_node {
 
 =head1 NAME
 
-RMI::RequestProtocol::Perl5r1
+RMI::RequestResponseProtocol::Perl5r1
 
 =head1 VERSION
 
-This document describes RMI::RequestProtocol::Perl5r1 for RMI v0.11.
+This document describes RMI::RequestResponseProtocol::Perl5r1 for RMI v0.11.
 
 =head1 DESCRIPTION
 
-The RMI::RequestProtocol::Perl5r1 module handles responding to requests in the
+The RMI::RequestResponseProtocol::Perl5r1 module handles responding to requests in the
 perl5r1 request protocol format.
 
 
