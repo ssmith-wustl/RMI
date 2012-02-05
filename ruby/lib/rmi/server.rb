@@ -1,4 +1,6 @@
-module RMI::Server;
+class RMI::Server
+
+=begin
 
 use strict;
 use warnings;

@@ -8,7 +8,7 @@ module RMI
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
 require 'rmi/node'
 #require 'rmi/client'
-#require 'rmi/server'
+require 'rmi/server'
 #require 'rmi/proxyobject'
 #require 'rmi/proxyreference'
 
