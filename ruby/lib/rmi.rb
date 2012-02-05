@@ -7,7 +7,7 @@ module RMI
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
 require 'rmi/node'
-#require 'rmi/client'
+require 'rmi/client'
 require 'rmi/server'
 #require 'rmi/proxyobject'
 #require 'rmi/proxyreference'

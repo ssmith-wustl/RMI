@@ -1,4 +1,6 @@
-module RMI::Client;
+class RMI::Client;
+
+=begin
 
 use strict;
 use warnings;
@@ -344,4 +346,8 @@ module.
 =cut
 
 1;
+
+=end
+
+end
 
