@@ -61,8 +61,18 @@ sub new {
         }
     }
 
+    # the request response protocol is the top of the protocol stack for RMI
+    # this handler takes requests, acts on them, and sends an appropriate response
+    my $request_response_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->request_response_protocol));
+    eval "no warnings; use $request_response_protocol_class";
+    if ($@) {
+        die "error processing protocol protocol $request_response_protocol_class: $@"
+    }
+    $self->{_request_handler} = $request_response_protocol_class->new($self);
+    
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
+    # it is independent of the request/response protocol, though that is also language dependent
     my $remote_language = $self->{remote_language};
     my $encoding_protocol_namespace = 'RMI::EncodingProtocol::' . ucfirst(lc($self->encoding_protocol));
     $self->{_encoding_protocol_namespace} = $encoding_protocol_namespace;
@@ -79,15 +89,8 @@ sub new {
     unless ($self->{_decode_method}) {
         die "no decode method in $encoding_protocol_namespace!?!?";
     }
-
-    my $request_response_protocol_class = 'RMI::RequestProtocol::' . ucfirst(lc($self->request_response_protocol));
-    eval "no warnings; use $request_response_protocol_class";
-    if ($@) {
-        die "error processing protocol protocol $request_response_protocol_class: $@"
-    }
-    $self->{_request_handler} = $request_response_protocol_class->new($self);
     
-    # serialize/deserialize is the way we transmit the encoded array
+    # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
     my $serialization_protocol = $self->serialization_protocol;
     my $serialization_namespace = 'RMI::SerializationProtocol::' . ucfirst(lc($serialization_protocol));
     eval "use $serialization_namespace";
