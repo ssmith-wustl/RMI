@@ -6,7 +6,6 @@ Gem::Specification.new do |s|
     s.description = "cross-process/language transparent proxying"
     s.authors     = ["Scott Smith"]
     s.email       = 'sakoht@githubm.com'
-    s.files       = ["lib/rmi.rb"]
     s.homepage    = 'http://www.flinkt.org/'
     s.files = %w[
         rmi.gemspec
@@ -43,7 +42,7 @@ Gem::Specification.new do |s|
         tests/12_remote_node.t
         tests/13_refcount.t
         tests/14_copy_results.t
-    ],
+    ]
     s.test_files = s.files.select {|path| path =~ /^tests\/.*.rb/}
 end
 
