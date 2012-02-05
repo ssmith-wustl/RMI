@@ -1,4 +1,5 @@
-module RMI::Node
+
+class RMI::Node
 
 =begin
 
@@ -596,3 +597,4 @@ module.
 =end
 
 end
+

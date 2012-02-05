@@ -1,14 +1,16 @@
+#!/usr/bin/env ruby
+
 module RMI
 
 @@VERSION = 0.11
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
-##require 'rmi/node'
-##require 'rmi/client'
-##require 'rmi/server'
-##require 'rmi/proxyobject'
-##require 'rmi/proxyreference'
+require 'rmi/node'
+#require 'rmi/client'
+#require 'rmi/server'
+#require 'rmi/proxyobject'
+#require 'rmi/proxyreference'
 
 @executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
 @proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
