@@ -34,7 +34,7 @@ sub new {
         remote_language => 'perl5',     # may vary,but this is the default
         
         request_response_protocol => 'perl5r1',           # define request types and response logic
-        request_handler => undef,
+        _request_handler => undef,
         
         encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
         _encode_method => undef,
@@ -85,7 +85,7 @@ sub new {
     if ($@) {
         die "error processing protocol protocol $request_response_protocol_class: $@"
     }
-    $self->{request_handler} = $request_response_protocol_class->new($self);
+    $self->{_request_handler} = $request_response_protocol_class->new($self);
     
     # serialize/deserialize is the way we transmit the encoded array
     my $remote_serialization_protocol = $self->remote_serialization_protocol;
@@ -115,7 +115,7 @@ sub send_request_and_receive_response {
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
     # lookup context
-    my $context = $self->{request_handler}->_capture_context();
+    my $context = $self->{_request_handler}->_capture_context();
     
     # send, with context
     $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
@@ -126,7 +126,7 @@ sub send_request_and_receive_response {
             if ($opts and $opts->{copy_results}) {
                 $response_data = $self->_create_local_copy($response_data);
             }
-            return $self->{request_handler}->_return_result_in_context($response_data, $context);
+            return $self->{_request_handler}->_return_result_in_context($response_data, $context);
         }
         elsif ($response_type eq 'close') {
             return;
@@ -258,35 +258,35 @@ sub _receive {
 # these methods vary by remote request protocol...
 
 sub _process_request_in_context_and_return_response {
-    return shift->{request_handler}->_process_request_in_context_and_return_response(@_);
+    return shift->{_request_handler}->_process_request_in_context_and_return_response(@_);
 }
 
 sub _create_remote_copy {
-    return shift->{request_handler}->_create_remote_copy(@_);
+    return shift->{_request_handler}->_create_remote_copy(@_);
 }
 
 sub _create_local_copy {
-    return shift->{request_handler}->_create_local_copy(@_);
+    return shift->{_request_handler}->_create_local_copy(@_);
 }
 
 sub _is_proxy {
-    return shift->{request_handler}->_is_proxy(@_);
+    return shift->{_request_handler}->_is_proxy(@_);
 }
 
 sub _has_proxy {
-    return shift->{request_handler}->_has_proxy(@_);
+    return shift->{_request_handler}->_has_proxy(@_);
 }
 
 sub _remote_node {
-    return shift->{request_handler}->_remote_node(@_);
+    return shift->{_request_handler}->_remote_node(@_);
 }
 
 sub bind_local_var_to_remote {
-    return shift->{request_handler}->bind_local_var_to_remote(@_);
+    return shift->{_request_handler}->bind_local_var_to_remote(@_);
 }
 
 sub bind_local_class_to_remote {
-    return shift->{request_handler}->bind_local_class_to_remote(@_);
+    return shift->{_request_handler}->bind_local_class_to_remote(@_);
 }
 
 =pod
