@@ -34,7 +34,7 @@ sub new {
         remote_language => 'perl5',     # may vary,but this is the default
         
         request_response_protocol => 'perl5r1',           # define request types and response logic
-        _request_handler => undef,
+        _request_responder => undef,
         
         encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
         _encode_method => undef,
@@ -68,7 +68,7 @@ sub new {
     if ($@) {
         die "error processing protocol protocol $request_response_protocol_class: $@"
     }
-    $self->{_request_handler} = $request_response_protocol_class->new($self);
+    $self->{_request_responder} = $request_response_protocol_class->new($self);
     
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)
@@ -117,10 +117,10 @@ sub send_request_and_receive_response {
     my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
     print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
 
-    my $request_handler = $self->{_request_handler};
+    my $request_responder = $self->{_request_responder};
 
     # lookup context
-    my $context = $request_handler->_capture_context();
+    my $context = $request_responder->_capture_context();
     
     # send, with context
     $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
@@ -129,16 +129,16 @@ sub send_request_and_receive_response {
         my ($response_type, $response_data) = $self->_receive();
         if ($response_type eq 'result') {
             if ($opts and $opts->{copy_results}) {
-                $response_data = $request_handler->_create_local_copy($response_data);
+                $response_data = $request_responder->_create_local_copy($response_data);
             }
-            return $request_handler->_return_result_in_context($response_data, $context);
+            return $request_responder->_return_result_in_context($response_data, $context);
         }
         elsif ($response_type eq 'close') {
             return;
         }
         elsif ($response_type eq 'request') {
             # a counter-request, possibly calling a method on an object we sent...
-            my ($counter_response_type, $counter_response_data) = $request_handler->_process_request_in_context_and_return_response($response_data);
+            my ($counter_response_type, $counter_response_data) = $request_responder->_process_request_in_context_and_return_response($response_data);
             $self->_send($counter_response_type, $counter_response_data);   
             redo;
         }
@@ -264,36 +264,36 @@ sub _receive {
 
 sub _process_request_in_context_and_return_response {
     #
-    return shift->{_request_handler}->_process_request_in_context_and_return_response(@_);
+    return shift->{_request_responder}->_process_request_in_context_and_return_response(@_);
 }
 
 sub _create_remote_copy {
-    return shift->{_request_handler}->_create_remote_copy(@_);
+    return shift->{_request_responder}->_create_remote_copy(@_);
 }
 
 sub _create_local_copy {
     #
-    return shift->{_request_handler}->_create_local_copy(@_);
+    return shift->{_request_responder}->_create_local_copy(@_);
 }
 
 sub _is_proxy {
-    return shift->{_request_handler}->_is_proxy(@_);
+    return shift->{_request_responder}->_is_proxy(@_);
 }
 
 sub _has_proxy {
-    return shift->{_request_handler}->_has_proxy(@_);
+    return shift->{_request_responder}->_has_proxy(@_);
 }
 
 sub _remote_node {
-    return shift->{_request_handler}->_remote_node(@_);
+    return shift->{_request_responder}->_remote_node(@_);
 }
 
 sub bind_local_var_to_remote {
-    return shift->{_request_handler}->bind_local_var_to_remote(@_);
+    return shift->{_request_responder}->bind_local_var_to_remote(@_);
 }
 
 sub bind_local_class_to_remote {
-    return shift->{_request_handler}->bind_local_class_to_remote(@_);
+    return shift->{_request_responder}->bind_local_class_to_remote(@_);
 }
 
 =pod
