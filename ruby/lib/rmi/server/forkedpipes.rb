@@ -1,5 +1,7 @@
 module RMI::Server::ForkedPipes;
 
+=begin
+
 use strict;
 use warnings;
 use version;
