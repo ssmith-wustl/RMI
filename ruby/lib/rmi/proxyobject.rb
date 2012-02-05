@@ -1,4 +1,4 @@
-module RMI::ProxyObject
+class RMI::ProxyObject
 
 =begin
 

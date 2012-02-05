@@ -9,8 +9,7 @@ module RMI
 require 'rmi/node'
 require 'rmi/client'
 require 'rmi/server'
-#require 'rmi/proxyobject'
-#require 'rmi/proxyreference'
+require 'rmi/proxyobject'
 
 @executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
 @proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
@@ -42,20 +41,20 @@ This document describes RMI v0.11.
 
  #process 1: an example server on host "myserver"
 
-    use RMI::Server::Tcp;
+    require 'rmi/server/tcp'
     
-    my $s = RMI::Server::Tcp->new(port => 1234); 
-    $s->run;
+    s = RMI::Server::Tcp.new(:port => 1234)
+    s.run()
 
 
  #process 2: an example client
 
-    use RMI::Client::Tcp;
-    
-    my $c = RMI::Client::Tcp->new(
-       host => "myserver", 
-       port => 1234,
-    );
+    require 'rmi/client/tcp'
+
+    c = RMI::Client::Tcp.new(
+       :host => "myserver", 
+       :port => 1234,
+    )
 
     $c->call_use("IO::File"); 
     $r = $c->call_class_method("IO::File","new","/etc/passwd");
