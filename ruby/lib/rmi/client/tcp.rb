@@ -1,5 +1,7 @@
 module RMI::Client::Tcp;
 
+=begin
+
 use strict;
 use warnings;
 our $VERSION = $RMI::VERSION; 

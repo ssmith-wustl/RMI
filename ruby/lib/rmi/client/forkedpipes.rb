@@ -1,5 +1,7 @@
 module RMI::Client::ForkedPipes;
 
+=begin
+
 use strict;
 use warnings;
 our $VERSION = $RMI::VERSION; 
