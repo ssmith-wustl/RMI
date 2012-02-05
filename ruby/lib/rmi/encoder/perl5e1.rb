@@ -1,4 +1,7 @@
 module RMI::Encoder::Perl5e1;
+
+=begin
+
 use strict;
 use warnings;
 
