@@ -9,46 +9,40 @@ Gem::Specification.new do |s|
     s.files       = ["lib/rmi.rb"]
     s.homepage    = 'http://www.flinkt.org/'
     s.files = %w[
+        rmi.gemspec
         Changes
         INSTALL
         LICENSE
         MANIFEST
         README
-        rmi.gemspec
-
-        lib/RMI.rb
-        lib/RMI/Node.rb
-        lib/RMI/ProxyObject.rb
-        lib/RMI/ProxyReference.rb
-        
-        lib/RMI/RequestResponder/Perl5r1.rb
-        lib/RMI/Encoder/Perl5e1.rb
-        lib/RMI/Serializer/S1.rb
-        
-        lib/RMI/Client.rb
-        lib/RMI/Client/ForkedPipes.rb
-        lib/RMI/Client/Tcp.rb
-        lib/RMI/Serializer/S2.rb
-        
-        lib/RMI/Server.rb
-        lib/RMI/Server/ForkedPipes.rb
-        lib/RMI/Server/Tcp.rb
-        
-        t/00_echo.t
-        t/01_basic.t
-        t/02_unblessed_refs.t
-        t/03_exceptions.t
-        t/04_use_remote.t
-        t/05_use_lib_remote.t
-        t/06_client_server_pairs.t
-        t/07_as_documented.t
-        t/08_wantarray.t
-        t/09_bind_variables.t
-        t/10_opts.t
-        t/11_dbi_special.t
-        t/12_remote_node.t
-        t/13_refcount.t
-        t/14_copy_results.t
+        lib/rmi.rb
+        lib/rmi/client.rb
+        lib/rmi/client/forkedpipes.rb
+        lib/rmi/client/tcp.rb
+        lib/rmi/encoder/perl5e1.rb
+        lib/rmi/node.rb
+        lib/rmi/proxyobject.rb
+        lib/rmi/requestresponder/perl5r1.rb
+        lib/rmi/serializer/s1.rb
+        lib/rmi/serializer/s2.rb
+        lib/rmi/server.rb
+        lib/rmi/server/forkedpipes.rb
+        lib/rmi/server/tcp.rb
+        tests/00_echo.t
+        tests/01_basic.t
+        tests/02_unblessed_refs.t
+        tests/03_exceptions.t
+        tests/04_use_remote.t
+        tests/05_use_lib_remote.t
+        tests/06_client_server_pairs.t
+        tests/07_as_documented.t
+        tests/08_wantarray.t
+        tests/09_bind_variables.t
+        tests/10_opts.t
+        tests/11_dbi_special.t
+        tests/12_remote_node.t
+        tests/13_refcount.t
+        tests/14_copy_results.t
     ],
     s.test_files = s.files.select {|path| path =~ /^t\/.*.rb/}
 end
