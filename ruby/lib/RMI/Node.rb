@@ -1,4 +1,4 @@
-package RMI::Node;
+module RMI::Node;
 
 use strict;
 use warnings;
@@ -51,8 +51,8 @@ sub new {
         @_
     }, $class;
 
-    if (my $p = delete $self->{allow_packages}) {
-        $self->{allow_packages} = { map { $_ => 1 } @$p };
+    if (my $p = delete $self->{allow_modules}) {
+        $self->{allow_modules} = { map { $_ => 1 } @$p };
     }
 
     for my $p (@RMI::Node::properties) {

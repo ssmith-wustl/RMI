@@ -1,4 +1,4 @@
-package RMI::Proxy::DBI::db;
+module RMI::Proxy::DBI::db;
 
 # install overrides to the default proxy options
 

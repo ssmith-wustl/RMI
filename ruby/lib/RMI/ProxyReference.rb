@@ -1,4 +1,4 @@
-package RMI::ProxyReference;
+module RMI::ProxyReference;
 
 use strict;
 use warnings;   
@@ -7,8 +7,8 @@ our $VERSION = $RMI::VERSION;
 
 use RMI;
 
-# When references are "passed" to a remote client/server, the proxy is tied using this package to proxy back all data access.
-# NOTE: if the reference is blessed, the proxy will also be blessed into RMI::ProxyObject, in addition to being _tied_ to this package.
+# When references are "passed" to a remote client/server, the proxy is tied using this module to proxy back all data access.
+# NOTE: if the reference is blessed, the proxy will also be blessed into RMI::ProxyObject, in addition to being _tied_ to this module.
 
 *TIEARRAY   = \&TIE;
 *TIEHASH    = \&TIE;
@@ -54,11 +54,11 @@ sub DESTROY {
 # AUTOLOAD makes a remote function call for every operation to one of the Tie::Std*
 # family of modules.  The code for these modules works by beautiful coincidence
 # on the side which originated the reference, even though that reference is not
-# actually tied to that package in that process (nor in the remote process, b/c
-# there it is tied to _this_ package).
+# actually tied to that module in that process (nor in the remote process, b/c
+# there it is tied to _this_ module).
 #
 # It is not known yet whether this has unseen limitations, and we will eventually
-# need custom packages to manage remote operations on references.
+# need custom modules to manage remote operations on references.
 
 1;
 
@@ -83,7 +83,7 @@ When the remote side recieves the "id", it also recieves an indication
 that this is the id of a proxied reference, an indication of what Perl
 base type it is (SCALAR,ARRAY,HASH,CODE,GLOB/IO), and what class it is
 blessed-into, if any.  The remote side constructs a reference of
-the appropriate type, and uses "tie" to bind it to this package.
+the appropriate type, and uses "tie" to bind it to this module.
 
 All subsequent attempst to use the reference fire AUTOLOAD,
 and result in a request across the "wire" to the other side.
@@ -91,7 +91,7 @@ and result in a request across the "wire" to the other side.
 Note: if the reference is blessed, it also blesses the object as an
 B<RMI::ProxyObject>.  Because bless and tie are independent, a
 single reference can (and will) be blessed and tied to two different
-packages, one for method call resolution, and one for usage of
+modules, one for method call resolution, and one for usage of
 the reference as a HASH ref, ARRAY ref, CODE ref, etc.
 
 Details of Perl tie are somewhat esoteric, but it is worth mentioning

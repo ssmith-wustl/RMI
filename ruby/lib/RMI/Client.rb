@@ -1,4 +1,4 @@
-package RMI::Client;
+module RMI::Client;
 
 use strict;
 use warnings;
@@ -149,7 +149,7 @@ This document describes RMI::Client v0.11.
  print sort keys %$remote_hashref;
  print $c->call_eval('sort keys %$main::h'); # includes changes!
 
- $c->use_remote('Sys::Hostname');   # this whole package is on the other side
+ $c->use_remote('Sys::Hostname');   # this whole module is on the other side
  $host = Sys::Hostname::hostname(); # possibly not this hostname...
 
  our $c;
@@ -177,7 +177,7 @@ Calls "use lib '$path'" on the remote side.
 
 =head2 call_use($class)
 
-Uses the Perl package specified on the remote side, making it available for later
+Uses the Perl module specified on the remote side, making it available for later
 calls to call_class_method() and call_function().
 
  $c->call_use('Some::Package');
@@ -246,7 +246,7 @@ To get the effect of the following (prevents export of the hostame() function).
 =head2 use_lib_remote($path)
 
 Installs a special handler into the local @INC which causes it to check the remote
-side for a package in subsequent use/require calls.  If available, it will do
+side for a module in subsequent use/require calls.  If available, it will do
 use_remote() on that class.
 
  use A;
@@ -258,7 +258,7 @@ use_remote() on that class.
 
 =head2 bind($varname)
 
-Create a local transparent proxy for a package variable on the remote side.
+Create a local transparent proxy for a module variable on the remote side.
 
   $c->bind('$Some::Package::somevar')
   $Some::Package::somevar = 123; # changed remotely

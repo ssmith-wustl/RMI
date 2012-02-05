@@ -1,4 +1,4 @@
-package RMI::RequestResponder::Perl5r1;
+module RMI::RequestResponder::Perl5r1;
 use strict;
 use warnings;
 
@@ -123,15 +123,15 @@ sub _respond_to_use {
     }
     
     my $n = $RMI::Exported::count++;
-    my $tmp_package_to_catch_exports = 'RMI::Exported::P' . $n;
+    my $tmp_module_to_catch_exports = 'RMI::Exported::P' . $n;
     my $src = "
-        package $tmp_package_to_catch_exports;
+        module $tmp_module_to_catch_exports;
         require $class;
         my \@exports = ();
         if (\$has_args) {
             if (\@use_args) {
                 $class->import(\@use_args);
-                \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+                \@exports = grep { ${tmp_module_to_catch_exports}->can(\$_) } keys \%${tmp_module_to_catch_exports}::;
             }
             else {
                 # print qq/no import because of empty list!/;
@@ -139,7 +139,7 @@ sub _respond_to_use {
         }
         else {
             $class->import();
-            \@exports = grep { ${tmp_package_to_catch_exports}->can(\$_) } keys \%${tmp_package_to_catch_exports}::;
+            \@exports = grep { ${tmp_module_to_catch_exports}->can(\$_) } keys \%${tmp_module_to_catch_exports}::;
         }
         return (\$INC{'$module'}, \@exports);
     ";

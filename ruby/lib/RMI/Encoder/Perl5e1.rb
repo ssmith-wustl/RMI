@@ -1,4 +1,4 @@
-package RMI::Encoder::Perl5e1;
+module RMI::Encoder::Perl5e1;
 use strict;
 use warnings;
 
@@ -41,7 +41,7 @@ sub encode {
                 if ($base_type ne $type) {
                     # blessed reference
                     $code = $RMI::Encoder::Perl5e1::blessed_reference;
-                    if (my $allowed = $self->{allow_packages}) {
+                    if (my $allowed = $self->{allow_modules}) {
                         unless ($allowed->{ref($o)}) {
                             die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
                         }
@@ -191,7 +191,7 @@ side of the node pair, and turn it into something which behaves like the origina
 The RMI::Encoder::Perl5e1 module handles encode/decode for RMI nodes where
 the remote node specifies perl5e1 as its encoding.  It uses a simple 4-value system
 of categorizing a data value, and the categorized value, when a reference, embeds both
-the class/package and the object identity.
+the class/module and the object identity.
 
 This implementation is in Perl, so it is used for Perl processes to talk with each other.
 For a process in another language to talk with a Perl process, it could implement a

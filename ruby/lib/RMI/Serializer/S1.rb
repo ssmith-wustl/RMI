@@ -1,4 +1,4 @@
-package RMI::Serializer::S1;
+module RMI::Serializer::S1;
 use strict;
 use warnings;
 

@@ -1,4 +1,4 @@
-package RMI::Server::ForkedPipes;
+module RMI::Server::ForkedPipes;
 
 use strict;
 use warnings;

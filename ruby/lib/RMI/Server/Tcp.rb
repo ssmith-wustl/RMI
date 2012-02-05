@@ -1,4 +1,4 @@
-package RMI::Server::Tcp;
+module RMI::Server::Tcp;
 use base 'RMI::Server';
 
 use strict;

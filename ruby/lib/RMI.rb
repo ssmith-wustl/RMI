@@ -1,28 +1,30 @@
-package RMI;
+module RMI
 
-use strict;
-use warnings;
-our $VERSION = '0.11';
+@@VERSION = 0.11
 
 # the whole base set of classes which make general RMI work
 # (sub-classes of RMI Server & Client provide specific implementations such as sockets, etc.)
-use RMI::Node;
-use RMI::Client;
-use RMI::Server;
-use RMI::ProxyObject;
-use RMI::ProxyReference;
+##require 'rmi/node'
+##require 'rmi/client'
+##require 'rmi/server'
+##require 'rmi/proxyobject'
+##require 'rmi/proxyreference'
 
-our @executing_nodes; # required for some methods on the remote side to find the RMI node acting upon them
-our %proxied_classes; # tracks classes which have been fully proxied into this process by some client
+@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
+@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
 # turn on debug messages if an environment variable is set
-our $DEBUG;
-BEGIN { $RMI::DEBUG = $ENV{RMI_DEBUG}; $RMI::DUMP = $ENV{RMI_DUMP} };
+@@DEBUG = (ENV['RMI_DEBUG'] ? true : false) 
+@@DUMP  = (ENV['RMI_DUMP'] ? true : false)
 
 # this is used at the beginning of each debug message
 # setting it to a single space for a server makes server/client distinction
 # more readable in combined output.
-our $DEBUG_MSG_PREFIX = '';
+@@DEBUG_MSG_PREFIX = '';
+
+end
+
+=begin
 
 =pod
 
@@ -49,23 +51,23 @@ This document describes RMI v0.11.
     use RMI::Client::Tcp;
     
     my $c = RMI::Client::Tcp->new(
-       host => 'myserver', 
+       host => "myserver", 
        port => 1234,
     );
 
-    $c->call_use('IO::File'); 
-    $r = $c->call_class_method('IO::File','new','/etc/passwd');
+    $c->call_use("IO::File"); 
+    $r = $c->call_class_method("IO::File","new","/etc/passwd");
 
     $line1 = $r->getline;           # works as an object
 
     $line2 = <$r>;                  # works as a file handle
     @rest  = <$r>;                  # detects scalar/list context correctly
 
-    $r->isa('IO::File');            # transparent in standard ways
-    $r->can('getline');
+    $r->isa("IO::File");            # transparent in standard ways
+    $r->can("getline");
     
-    ref($r) eq 'RMI::ProxyObject';  # the only sign this isn't a real IO::File...
-				    # (see RMI::Client's use_remote() to fix this)
+    ref($r) eq "RMI::ProxyObject";  # the only sign this isn"t a real IO::File...
+				    # (see RMI::Client"s use_remote() to fix this)
 
 =head1 DESCRIPTION
 
@@ -136,7 +138,7 @@ Remote objects which implement AUTOLOAD for their API will still work correctly.
 Plain proxied references, and as well as objects, are "tied" so as to
 operate as the correct type of Perl primitive.  SCALAR, ARRAY, HASH, CODE and
 GLOB/IO references, blessed or otherwise, will be proxied as the same type of
-reference on the other side.  The RMI system uses Perl's "tie" functionality to
+reference on the other side.  The RMI system uses Perl"s "tie" functionality to
 do this.
 
 =head1 GARBAGE COLLECTION
@@ -156,9 +158,9 @@ inherits from RMI::Node.
 
 This value is available inside the application as $RMI::DEBUG.
 
-The package variable $RMI::DEBUG_MSG_PREFIX will be printed at the beginning of
+The module variable $RMI::DEBUG_MSG_PREFIX will be printed at the beginning of
 each message.  Changing this value allows the viewer to separate both halves of
-a conversation.  (The test suite for RMI sets this value to ' ' for the server
+a conversation.  (The test suite for RMI sets this value to " " for the server
 side, causing server activity to be indented relative to client activity in
 the debug output.)
 
@@ -179,7 +181,7 @@ This is wise whenever the server is exposed to an untrusted network.
 =head2 calls to ref($my_proxy) reveal the true class RMI::ProxyObject
 
 Proxied objects/references reveal that they are proxies when ref($o) is
-called on them, unless the entire package is proxied with ->use_remote.
+called on them, unless the entire module is proxied with ->use_remote.
 
 Calls to ->isa() still operate as though the proxy were the object it
 represents, but code which goes around the isa() override to UNIVERSAL::isa()
@@ -190,9 +192,9 @@ will circumvent the illusion.
 Like ref(), this reveals the actual reference (and possibly class) of the proxy,
 not the object which is proxied.
 
-=head2 calls to use_remote() does not auto-proxy all package variables
+=head2 calls to use_remote() does not auto-proxy all module variables
 
-Calls to "use_remote" will proxy subroutine calls, but not package variable
+Calls to "use_remote" will proxy subroutine calls, but not module variable
 access automatically, besides @ISA.  If necessary, it must be done explicitly
 with a call to bind().
 
@@ -209,7 +211,7 @@ still technically a hole in transparency.
 =head2 change to $_[N] values will not affect the original variable
 
 Remote calls to subroutines/methods which modify aliases in @_ directly to tamper
-with the caller's variables will not work as it would with a local method
+with the caller"s variables will not work as it would with a local method
 call.
 
 This is supportable, but adds considerable overhead to support modules which
@@ -240,7 +242,7 @@ as intended.
 
 This problem is prevented in one place automatically by the current RMI
 implementation: there is custom code to handle exporting of methods into the
-caller's namespace inside "use_remote".
+caller"s namespace inside "use_remote".
 
 =head1 BUGS AND KNOWN ISSUES
 
@@ -251,7 +253,7 @@ in an unambiguous way.
 
 =head2 the wire protocol is inefficient
 
-It's basically Data::Dumper, which is unfortunate because the structures are not
+It"s basically Data::Dumper, which is unfortunate because the structures are not
 complex and it could be more terse.  It will be modularized and switchable
 in a later version.
 
@@ -264,7 +266,7 @@ in Ruby, "PYRO" in Python, "Remoting" in .NET.
 It is similar in functionality to architectures such as CORBA, SOAP, RPC and
 DCOM.
 
-None of the above use the same protocols (except Java's RMI has an optional
+None of the above use the same protocols (except Java"s RMI has an optional
 CORBA-related implementation).  This module is no exception, sadly.  Patches 
 are welcome.
 
@@ -292,3 +294,6 @@ module.
 =cut
 
 1;
+
+=end
+

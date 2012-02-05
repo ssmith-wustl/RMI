@@ -1,4 +1,4 @@
-package RMI::Client::Tcp;
+module RMI::Client::Tcp;
 
 use strict;
 use warnings;

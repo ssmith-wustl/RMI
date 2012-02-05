@@ -1,4 +1,4 @@
-package RMI::ProxyObject;
+module RMI::ProxyObject;
 
 use strict;
 use warnings;
@@ -114,7 +114,7 @@ between client and server.  Any time an RMI::Client or RMI::Server
 "passes" an object as a parameter or a return value, an RMI::ProxyObject 
 is created on the other side.  
 
-Note that RMI::ProxyObjects are also "tied" to the package 
+Note that RMI::ProxyObjects are also "tied" to the module 
 B<RMI::ProxyReference>, which handles attempts to use the reference 
 as a plain Perl reference.
 
