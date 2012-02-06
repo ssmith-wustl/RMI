@@ -11,7 +11,7 @@ end
 # used by the requestor to use that context after a result is returned
 
 def _return_result_in_context(response_data, context) 
-    RMI::DEBUG && print("x #{$RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n");
+    $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n");
     return response_data;
 end
 
@@ -34,7 +34,7 @@ sub _process_request_in_context_and_return_response {
     
     do {    
         no warnings;
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ processing request $call_type in wantarray context $wantarray with : @$message_data\n" if $RMI::DEBUG;
+        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} processing request $call_type in wantarray context $wantarray with : @$message_data\n")
     };
     
     # swap call_ for _respond_to_
@@ -45,15 +45,15 @@ sub _process_request_in_context_and_return_response {
     push @RMI::executing_nodes, $node;
     eval {
         if (not defined $wantarray) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with undef wantarray\n" if $RMI::DEBUG;
+            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with undef wantarray\n")
             $self->$method(@$message_data);
         }
         elsif ($wantarray) {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with true wantarray\n" if $RMI::DEBUG;
+            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with true wantarray\n")
             @result = $self->$method(@$message_data);
         }
         else {
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ object call with false wantarray\n" if $RMI::DEBUG;
+            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with false wantarray\n")
             my $result = $self->$method(@$message_data);
             @result = ($result);
         }
@@ -66,11 +66,11 @@ sub _process_request_in_context_and_return_response {
     
     my ($return_type, $return_data);
     if ($@) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with EXCEPTION (unserialized): $@\n" if $RMI::DEBUG;
+        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} executed with EXCEPTION (unserialized): $@\n")
         ($return_type, $return_data) = ('exception',[$@]);
     }
     else {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ executed with result (unserialized): @result\n" if $RMI::DEBUG;
+        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} executed with result (unserialized): @result\n")
         ($return_type, $return_data) =  ('result',\@result);
     }
      
@@ -251,13 +251,13 @@ sub bind_local_class_to_remote {
         if (substr($caller,0,5) eq 'RMI::') { $caller = caller(2) }  # change this num as we move this method
         for my $sub (@exported) {
             my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ bind pair $pair[0] $pair[1]\n" if $RMI::DEBUG;
+            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} bind pair $pair[0] $pair[1]\n")
             $self->bind_local_var_to_remote(@pair);
         }
     }
     $RMI::proxied_classes{$class} = $node;
     $INC{$module} = $node;
-    print "$class used remotely via $self ($node).  Module $module found at $path remotely.\n" if $RMI::DEBUG;    
+    #{RMI_DEBUG} && print("$class used remotely via $self ($node).  Module $module found at $path remotely.\n")    
 }
 
 
