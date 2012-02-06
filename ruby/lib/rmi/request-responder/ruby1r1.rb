@@ -2,38 +2,20 @@ require 'rmi'
 
 class RMI::RequestResponder::Ruby1r1 < RMI::RequestResponder
 
-=begin
-
-use strict;
-use warnings;
-
-sub new {
-    my ($class, $node) = @_;
-    my $self = bless { node => $node }, $class;
-    Scalar::Util::weaken($self->{node});
-    return $self;
-}
-
 # used by the requestor to capture context
 
-sub _capture_context {
-    return (caller(1))[5]    
-}
+def _capture_context 
+    return 1 
+end
 
 # used by the requestor to use that context after a result is returned
 
-sub _return_result_in_context {
-    my ($self, $response_data, $context) = @_;
+def _return_result_in_context(response_data, context) 
+    RMI::DEBUG && print("x #{$RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n");
+    return response_data;
+end
 
-    if ($context) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning list @$response_data\n" if $RMI::DEBUG;
-        return @$response_data;
-    }
-    else {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ returning scalar $response_data->[0]\n" if $RMI::DEBUG;
-        return $response_data->[0];
-    }
-}
+=begin
 
 # used by the responder to process the message data, with embedded context
 
