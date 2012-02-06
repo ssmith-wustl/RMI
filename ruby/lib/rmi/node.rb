@@ -41,6 +41,13 @@ class RMI::Node
                 raise ArgumentError, 'bad parameter ' + name.to_s
             end
         }
+    
+        # the request response protocol is the top of the protocol stack for RMI
+        # this handler takes requests, acts on them, and sends an appropriate response
+        require "rmi/request-responder/" + @request_response_protocol
+        #request_responder_class = Object.const_get("RMI").const_get("RequestResponder").const_get(@request_response_protocol.capitalize)
+        #@_request_responder = request_responder_class.new(self);
+        
     end
 
 =begin
@@ -50,14 +57,6 @@ class RMI::Node
 sub new {
     ...
 
-    # the request response protocol is the top of the protocol stack for RMI
-    # this handler takes requests, acts on them, and sends an appropriate response
-    my $request_response_protocol_class = 'RMI::RequestResponder::' . ucfirst(lc($self->request_response_protocol));
-    eval "no warnings; use $request_response_protocol_class";
-    if ($@) {
-        die "error processing protocol protocol $request_response_protocol_class: $@"
-    }
-    $self->{_request_responder} = $request_response_protocol_class->new($self);
     
     # encode/decode is the way we turn a set of values into a message without references
     # it varies by the language on the remote end (and this local end)

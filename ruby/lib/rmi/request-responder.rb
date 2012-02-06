@@ -1,0 +1,4 @@
+class RMI::RequestResponder
+
+end
+
