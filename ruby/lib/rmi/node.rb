@@ -1,31 +1,48 @@
+require 'rmi'
 
 class RMI::Node
 
+    # public API
+    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol
+
+    def initialize(params = {})
+        @reader = nil
+        @writer = nil
+        
+        @local_language = 'ruby'                # always (since this is the Ruby module)
+        @remote_language = 'ruby'               # may vary but this is the default
+        
+        @request_response_protocol = 'ruby1r1'  # define request types and response logic
+        @_request_responder = nil
+        
+        @encoding_protocol = 'ruby1e1'          # encode the request/response into an array w/o references
+        @_encode_method = nil
+        @_decode_method = nil
+        
+        @serialization_protocol = 's2'          # determine how to stream the encoded array
+        @_serialize_method = nil
+        @_deserialize_method = nil        
+        
+        @_sent_objects = {}
+        @_received_objects = {}
+        @_received_and_destroyed_ids = []
+        @_tied_objects_for_tied_refs = {}
+        
+        params.each { |name,value|
+            if self.respond_to? name 
+                if name.to_s == 'local_language'
+                    raise ArgumentError, 'cannot change the local language'
+                end
+                self.instance_variable_set('@' + name.to_s,value)
+            else
+                raise ArgumentError, 'bad parameter ' + name.to_s
+            end
+        }
+    end
+
 =begin
 
-use strict;
-use warnings;
-use version;
-our $VERSION = $RMI::VERSION;
 
-# Note: if any of these get proxied as full classes, we'd have issues.
-# Since it's impossible to proxy a class which has already been "used",
-# we use them at compile time...
-
-use RMI;
-use Tie::Array;
-use Tie::Hash;
-use Tie::Scalar;
-use Tie::Handle;
-use Data::Dumper;
-use Scalar::Util;
-use Carp;
-require 'Config_heavy.pl'; 
-
-
-# public API
-
-_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol serialization_protocol/);
 
 sub new {
     my $class = shift;
