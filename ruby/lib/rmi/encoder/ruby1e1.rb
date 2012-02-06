@@ -2,21 +2,28 @@ require 'rmi'
 
 module RMI::Encoder::Ruby1e1
 
-def encode
+@@value = 0
+@@object_reference = 1
+@@return_proxy = 3
+
+def encode(message_data,opts)
+    encoded = []
+    message_data.each { |v|
+        encoded.push(@@value)
+        encoded.push(v)
+    }
+    return encoded
 end
 
-def decode
+def decode(encoded)
+    decoded = []
+    encoded.each { |type,value|
+        decoded.push(value)
+    }
+    return decoded
 end
 
 =begin
-
-use strict;
-use warnings;
-
-our $value = 0;
-our $blessed_reference = 1;
-our $unblessed_reference = 2;
-our $return_proxy = 3;
 
 sub encode {
     my ($self, $message_data, $opts) = @_;
@@ -51,7 +58,7 @@ sub encode {
                 my $code;
                 if ($base_type ne $type) {
                     # blessed reference
-                    $code = $RMI::Encoder::Perl5e1::blessed_reference;
+                    $code = $RMI::Encoder::Perl5e1::object_reference;
                     if (my $allowed = $self->{allow_modules}) {
                         unless ($allowed->{ref($o)}) {
                             die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
@@ -60,7 +67,7 @@ sub encode {
                 }
                 else {
                     # regular reference
-                    $code = $RMI::Encoder::Perl5e1::unblessed_reference;
+                    $code = $RMI::Encoder::Perl5e1::unobject_reference;
                 }
                 
                 push @encoded, $code, $local_id;

@@ -32,7 +32,7 @@ sub call_object_method {
 =end
 
 
-def call_eval(src,params) 
+def call_eval(src,params=[]) 
     return self.send_request_and_receive_response('call_eval', '', '', src, params);    
 end
 
