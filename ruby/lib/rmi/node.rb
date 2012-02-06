@@ -3,7 +3,7 @@ require 'rmi'
 class RMI::Node
 
     # public API
-    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol
+    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules
 
     def initialize(params = {})
         @reader = nil
@@ -27,7 +27,10 @@ class RMI::Node
         @_received_objects = {}
         @_received_and_destroyed_ids = []
         @_tied_objects_for_tied_refs = {}
-        
+    
+        module_list = params.delete(:allow_modules) || []
+        @allow_modules = Set.new module_list
+
         params.each { |name,value|
             if self.respond_to? name 
                 if name.to_s == 'local_language'
@@ -45,41 +48,7 @@ class RMI::Node
 
 
 sub new {
-    my $class = shift;
-    my $self = bless {
-        reader => undef,
-        writer => undef,
-        
-        local_language => 'perl5',      # always (since this is the Perl5 module)
-        remote_language => 'perl5',     # may vary,but this is the default
-        
-        request_response_protocol => 'perl5r1',           # define request types and response logic
-        _request_responder => undef,
-        
-        encoding_protocol => 'perl5e1',          # encode the request/response into an array w/o references
-        _encode_method => undef,
-        _decode_method => undef,
-        
-        serialization_protocol => 's2',          # determine how to stream the encoded array
-        _serialize_method => undef,
-        _deserialize_method => undef,        
-        
-        _sent_objects => {},
-        _received_objects => {},
-        _received_and_destroyed_ids => [],
-        _tied_objects_for_tied_refs => {},
-        @_
-    }, $class;
-
-    if (my $p = delete $self->{allow_modules}) {
-        $self->{allow_modules} = { map { $_ => 1 } @$p };
-    }
-
-    for my $p (@RMI::Node::properties) {
-        unless (exists $self->{$p}) {
-            die "no $p on object!"
-        }
-    }
+    ...
 
     # the request response protocol is the top of the protocol stack for RMI
     # this handler takes requests, acts on them, and sends an appropriate response
