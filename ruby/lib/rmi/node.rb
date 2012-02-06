@@ -45,8 +45,8 @@ class RMI::Node
         # the request response protocol is the top of the protocol stack for RMI
         # this handler takes requests, acts on them, and sends an appropriate response
         require "rmi/request-responder/" + @request_response_protocol
-        #request_responder_class = Object.const_get("RMI").const_get("RequestResponder").const_get(@request_response_protocol.capitalize)
-        #@_request_responder = request_responder_class.new(self);
+        request_responder_class = Object.const_get("RMI").const_get("RequestResponder").const_get(@request_response_protocol.capitalize)
+        @_request_responder = request_responder_class.new(self);
         
     end
 
