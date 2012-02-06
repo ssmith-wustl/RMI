@@ -1,11 +1,22 @@
-#!/usr/bin/env perl
+#!/usr/bin/env ruby 
 
-use strict;
-use warnings;
-use Test::More tests => 84;
-use FindBin;
-use lib $FindBin::Bin;
-use RMI::TestClass1;
+require 'test/unit'
+require 'rmi/client/forked-pipes'
+
+class Test01 < Test::Unit::TestCase
+    def setup 
+        @c = RMI::Client::ForkedPipes.new()
+        assert(@c, "created an RMI::Client")
+    end
+  
+    def test_1
+        assert(@c, "hi")
+    end 
+
+        
+end
+
+=begin
 
 use_ok("RMI::Client::ForkedPipes");
 my $c = RMI::Client::ForkedPipes->new();
@@ -137,4 +148,5 @@ sub f1 {
 sub f2 {
     my ($v1, $v2, $s, $r) = @_;
 }
+=end
 

@@ -4,7 +4,7 @@ require 'set'
 class RMI::Node
 
     # public API
-    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_module, :is_closed
+    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules, :is_closed
 
     def initialize(params = {})
         @reader = nil
@@ -80,23 +80,21 @@ class RMI::Node
         print "initializing node #{self}\n"
     end
 
+    def close 
+        if @reader != @writer
+            @writer.close 
+        end
+        @reader.close
+    end 
+
+    def send_request_and_receive_response(call_type, pkg, sub, *params)
+    end
+
+    def receive_request_and_send_response()
+    end
+
 =begin
 
-
-
-sub new {
-    ...
-
-    
-    
-    return $self;
-}
-
-sub close {
-    my $self = $_[0];
-    $self->{writer}->close unless $self->{reader} == $self->{writer};
-    $self->{reader}->close;
-}
 
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
