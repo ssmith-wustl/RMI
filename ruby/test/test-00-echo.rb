@@ -31,7 +31,7 @@ class Test00 < Test::Unit::TestCase
         o2 = @c.call_function('Test1::echo', @o1)
         assert_equal(o2, @o1, "the returned object is the same as the sent one")
 
-        @h1 = { foo => 111 }
+        @h1 = { :foo => 111 }
         h2 = @c.call_function('Test1::echo',@h1)
         assert_equal(h2, @h1, "the returned reference is the same as the sent one")
     end

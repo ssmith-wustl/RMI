@@ -1,4 +1,6 @@
-class RMI::Client::ForkedPipes;
+require 'rmi'
+
+class RMI::Client::ForkedPipes < RMI::Client
 
 =begin
 

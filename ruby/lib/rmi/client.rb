@@ -1,14 +1,12 @@
-class RMI::Client;
+class RMI::Client < RMI::Node
+
+    # all methods in this module are convenience wrappers for RMI::Node generic methods.
+
+    def call_function(fname,*params) 
+        params[0]
+    end
 
 =begin
-
-use strict;
-use warnings;
-our $VERSION = $RMI::VERSION; 
-
-use base 'RMI::Node';
-
-# all methods in this module are convenience wrappers for RMI::Node generic methods.
 
 *call_sub = \&call_function;
 

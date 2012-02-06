@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
         README
         lib/rmi.rb
         lib/rmi/client.rb
-        lib/rmi/client/forkedpipes.rb
+        lib/rmi/client/forked-pipes.rb
         lib/rmi/client/tcp.rb
         lib/rmi/encoder/perl5e1.rb
         lib/rmi/node.rb
@@ -25,24 +25,24 @@ Gem::Specification.new do |s|
         lib/rmi/serializer/s1.rb
         lib/rmi/serializer/s2.rb
         lib/rmi/server.rb
-        lib/rmi/server/forkedpipes.rb
+        lib/rmi/server/forked-pipes.rb
         lib/rmi/server/tcp.rb
-        tests/00_echo.t
-        tests/01_basic.t
-        tests/02_unblessed_refs.t
-        tests/03_exceptions.t
-        tests/04_use_remote.t
-        tests/05_use_lib_remote.t
-        tests/06_client_server_pairs.t
-        tests/07_as_documented.t
-        tests/08_wantarray.t
-        tests/09_bind_variables.t
-        tests/10_opts.t
-        tests/11_dbi_special.t
-        tests/12_remote_node.t
-        tests/13_refcount.t
-        tests/14_copy_results.t
+        test/test-00-echo.rb
+        test/01_basic.t
+        test/02_unblessed_refs.t
+        test/03_exceptions.t
+        test/04_use_remote.t
+        test/05_use_lib_remote.t
+        test/06_client_server_pairs.t
+        test/07_as_documented.t
+        test/08_wantarray.t
+        test/09_bind_variables.t
+        test/10_opts.t
+        test/11_dbi_special.t
+        test/12_remote_node.t
+        test/13_refcount.t
+        test/14_copy_results.t
     ]
-    s.test_files = s.files.select {|path| path =~ /^tests\/.*.rb/}
+    s.test_files = s.files.select {|path| path =~ /^test\/test-.*.rb/}
 end
 
