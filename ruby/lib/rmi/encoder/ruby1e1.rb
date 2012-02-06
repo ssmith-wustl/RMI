@@ -1,12 +1,12 @@
 require 'rmi'
 
-module RMI::Encoder::Ruby1e1
+class RMI::Encoder::Ruby1e1 < RMI::Encoder
 
 @@value = 0
 @@object_reference = 1
 @@return_proxy = 3
 
-def encode(message_data,opts)
+def encode(message_data,opts=nil)
     encoded = []
     message_data.each { |v|
         encoded.push(@@value)

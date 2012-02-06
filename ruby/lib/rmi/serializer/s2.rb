@@ -1,6 +1,35 @@
-module RMI::Serializer::S2;
+class RMI::Serializer::S2 < RMI::Serializer
 
-def serialize
+@@PROTOCOL_VERSION = 2
+@@PROTOCOL_SYM = @@PROTOCOL_VERSION.chr
+
+def serialize(sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids)
+    a = [ 
+        sproto, eproto, rproto,
+        message_type,
+        received_and_destroyed_ids.length,
+        received_and_destroyed_ids,
+        encoded_message_data,
+    ];
+
+    s = ''
+    a.each do |v|
+        if s == ''
+            s = '['
+        else
+            s += ', '
+        end
+        if v.kind_of(String)
+            s += "'" + v + "'"
+        else
+            s += v
+        end
+    end
+    serialized_blob = s
+
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} #{message_type} serialized as #{serialized_blob}\n") 
+    
+    return @@PROTOCOL_SYM + serialized_blob
 end
 
 def deserialize
@@ -11,24 +40,6 @@ end
 use strict;
 use warnings;
 
-my $PROTOCOL_VERSION = 2;
-my $PROTOCOL_SYM = chr(2);
-
-sub serialize {
-    my ($self, $sproto, $eproto, $rproto, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
-    
-    my $serialized_blob = Data::Dumper->new([[
-        $sproto, $eproto, $rproto,
-        $message_type,
-        scalar(@$received_and_destroyed_ids),
-        @$received_and_destroyed_ids,
-        @$encoded_message_data,
-    ]])->Terse(1)->Indent(0)->Useqq(1)->Dump;
-    
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type serialized as $serialized_blob\n" if $RMI::DEBUG;    
-    
-    return $PROTOCOL_SYM . $serialized_blob;
-}
 
 sub deserialize {
     my ($self, $serialized_blob) = @_;

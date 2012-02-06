@@ -17,12 +17,10 @@ class RMI::Node
         @_request_responder = nil
         
         @encoding_protocol = 'ruby1e1'          # encode the request/response into an array w/o references
-        @_encode_method = nil
-        @_decode_method = nil
+        @_encoder = nil
         
         @serialization_protocol = 's2'          # determine how to stream the encoded array
-        @_serialize_method = nil
-        @_deserialize_method = nil        
+        @_serializer = nil
         
         @_sent_objects = {}
         @_received_objects = {}
@@ -53,29 +51,13 @@ class RMI::Node
         # it varies by the language on the remote end (and this local end)
         # it is independent of the request/response protocol, though that is also language dependent
         require "rmi/encoder/" + @encoding_protocol
-        encoding_protocol_namespace = Object.const_get("RMI").const_get("Encoder").const_get(@encoding_protocol.capitalize)
-
-        @_encode_method = encoding_protocol_namespace.instance_method(:encode);
-        if (@_encode_method == nil) 
-            raise AttributeError, "no encode method in encoding_protocol_namespace!?!?"
-        end
-        @_decode_method = encoding_protocol_namespace.instance_method(:decode)
-        if (@_decode_method == nil) 
-            raise AttributeError, "no decode method in encoding_protocol_namespace!?!?"
-        end
+        encoder_class = Object.const_get("RMI").const_get("Encoder").const_get(@encoding_protocol.capitalize)
+        @_encoder = encoder_class.new(self)
         
         # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
         require "rmi/serializer/" + @serialization_protocol
-        serialization_protocol_namespace = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
-        @_serialization_method = serialization_protocol_namespace.instance_method(:serialize);
-        if (@_serialization_method == nil) 
-            raise AttributeError, "no serialize method in serialization_protocol_namespace!?!?"
-        end
-        @_deserialize_method = serialization_protocol_namespace.instance_method(:deserialize)
-        if (@_deserialize_method == nil) 
-            raise AttributeError, "no deserialize method in serialization_protocol_namespace!?!?"
-        end
-        
+        serializer_class = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
+        @_serializer = serializer_class.new(self)
         
         print "initializing node #{self}\n"
     end
@@ -87,56 +69,49 @@ class RMI::Node
         @reader.close
     end 
 
-    def send_request_and_receive_response(call_type, pkg, sub, *params)
-    end
+    def send_request_and_receive_response(call_type,pkg,sub,*params)
+        $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N:  calling #{pkg} #{sub} #{params}\n")
+        
+        #opts = RMI::ProxyObject::DEFAULT_OPTS[pkg][sub]
+        opts = nil
+        $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N:  request call_type on pkg sub has default opts #{opts}\n")    
 
+        request_responder = @_request_responder
+
+        # lookup context
+        context = request_responder._capture_context()
+        
+        # send, with context
+        msg = [call_type, context, pkg, sub].push(params)
+        self._send('request', [call_type, msg, opts]) # || raise(IOError, "failed to send!")
+        
+        1.times do 
+            (response_type, response_data) = self._receive()
+            if (response_type == 'result') 
+                if (opts and opts.copy_resultsend) 
+                    response_data = request_responder._create_local_copy(response_data)
+                end
+                return request_responder._return_result_in_context(response_data, context)
+            elsif (response_type == 'close') 
+                return
+            elsif (response_type == 'request') 
+                # a counter-request, possibly calling a method on an object we sent...
+                (counter_response_type, counter_response_data) = request_responder._process_request_in_context_and_return_response(response_data)
+                self._send(counter_response_type, counter_response_data)   
+                redo
+            elsif (response_type == 'exception') 
+                raise response_data[0]
+            else 
+                raise "unexpected message type from RMI message: #{response_type}"
+            end
+        end 
+
+    end
+    
     def receive_request_and_send_response()
     end
 
 =begin
-
-
-sub send_request_and_receive_response {
-    my ($self,$call_type,$pkg,$sub,@params) = @_;
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
-    
-    use Carp;
-    my $opts = $RMI::ProxyObject::DEFAULT_OPTS{$pkg}{$sub};
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ request $call_type on $pkg $sub has default opts " . Data::Dumper::Dumper($opts) . "\n" if $RMI::DEBUG;    
-
-    my $request_responder = $self->{_request_responder};
-
-    # lookup context
-    my $context = $request_responder->_capture_context();
-    
-    # send, with context
-    $self->_send('request', [$call_type, $context, $pkg, $sub, @params], $opts) or die "failed to send! $!";
-    
-    for (1) {
-        my ($response_type, $response_data) = $self->_receive();
-        if ($response_type eq 'result') {
-            if ($opts and $opts->{copy_results}) {
-                $response_data = $request_responder->_create_local_copy($response_data);
-            }
-            return $request_responder->_return_result_in_context($response_data, $context);
-        }
-        elsif ($response_type eq 'close') {
-            return;
-        }
-        elsif ($response_type eq 'request') {
-            # a counter-request, possibly calling a method on an object we sent...
-            my ($counter_response_type, $counter_response_data) = $request_responder->_process_request_in_context_and_return_response($response_data);
-            $self->_send($counter_response_type, $counter_response_data);   
-            redo;
-        }
-        elsif ($response_type eq 'exception') {
-            die $response_data->[0];
-        }
-        else {
-            die "unexpected message type from RMI message: $response_type";
-        }
-    }    
-}
 
 sub receive_request_and_send_response {
     my ($self) = @_;
@@ -158,55 +133,41 @@ sub receive_request_and_send_response {
     }        
 }
 
-# private API
+=end
 
-_mk_ro_accessors(qw/_sent_objects _received_objects _received_and_destroyed_ids _tied_objects_for_tied_refs/);
+    # private API
 
-sub _mk_ro_accessors {
-    # this generate basic accessors w/o using any other Perl modules which might have proxy effects
+    attr_accessor :_sent_objects, :_received_objects, :_received_and_destroyed_ids, :_tied_objects_for_tied_refs
 
-    no strict 'refs';
-    my $class = caller();
-    for my $p (@_) {
-        my $pname = $p;
-        *{$class . '::' . $pname} = sub { die "$pname is read-only!" if @_ > 1; $_[0]->{$pname} };
-    }
-    no warnings;
-    push @{ $class . '::properties'}, @_;
-}
+    def _send(message_type, message_data, opts = {})
 
+        encoded_message = @_encoder.encode(message_data, opts);
+        $RMI_DEBUG && print("RMI_DEBUG_MSG_PREFIX N:  message_type translated for serialization to #{encoded_message}\n") 
 
-sub _send {
-    my ($self, $message_type, $message_data, $opts) = @_;
+        # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
+        # and will expand what is in _received_and_destroyed_ids...
+        message_data.clear 
 
-    my @encoded = $self->{_encode_method}->($self,$message_data, $opts);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ $message_type translated for serialization to @encoded\n" if $RMI::DEBUG;
+        # reset the received_and_destroyed_ids, but take a copy first so we can send it
+        received_and_destroyed_ids_copy = @_received_and_destroyed_ids.copy;
+        @_received_and_destroyed_ids = ();
+        $RMI_DEBUG && print("RMI_DEBUG_MSG_PREFIX N:  destroyed proxies: @received_and_destroyed_ids_copy\n")
+        
+        # send the message, and also the list of received_and_destroyed_ids since the last exchange
+        s = @_serializer.serialize(
+            @serialization_protocol,
+            @encoding_protocol,
+            @request_response_protocol,
+            message_type,
+            encoded_message,
+            received_and_destroyed_ids_copy
+        );
+        ($RMI_DEBUG || $RMI_DUMP) && print("#{RMI_DEBUG_MSG_PREFIX} N:  sending: #{s}\n")
+        return @writer.print(s,"\n");                
 
- 
-    # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
-    # and will expand what is in _received_and_destroyed_ids...
-    @$message_data = (); 
+    end
 
-    # reset the received_and_destroyed_ids, but take a copy first so we can send it
-    my $received_and_destroyed_ids = $self->{_received_and_destroyed_ids};
-    my $received_and_destroyed_ids_copy = [@$received_and_destroyed_ids];
-    @$received_and_destroyed_ids = ();
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ destroyed proxies: @$received_and_destroyed_ids_copy\n" if $RMI::DEBUG;
-    
-    # send the message, and also the list of received_and_destroyed_ids since the last exchange
-    my $serialize_method = $self->{_serialize_method};
-    my $s = $self->$serialize_method(
-        $self->serialization_protocol,
-        $self->encoding_protocol,
-        $self->request_response_protocol,
-        $message_type,
-        \@encoded,
-        $received_and_destroyed_ids_copy
-    );
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ sending: $s\n" if $RMI::DEBUG or $RMI::DUMP;
-
-    return $self->{writer}->print($s,"\n");                
-}
+=begin
 
 sub _receive {
     my ($self) = @_;
