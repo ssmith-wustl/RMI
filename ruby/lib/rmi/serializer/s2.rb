@@ -1,5 +1,11 @@
 module RMI::Serializer::S2;
 
+def serialize
+end
+
+def deserialize
+end
+
 =begin
 
 use strict;

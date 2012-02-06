@@ -1,0 +1,2 @@
+module RMI::Encoder
+end

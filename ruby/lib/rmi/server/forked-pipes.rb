@@ -1,15 +1,7 @@
-module RMI::Server::ForkedPipes;
+class RMI::Server::ForkedPipes < RMI::Server
+    attr_accessor :peer_pid
 
 =begin
-
-use strict;
-use warnings;
-use version;
-our $VERSION = $RMI::VERSION;
-
-use base 'RMI::Server';
-
-RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
 
 =pod
 

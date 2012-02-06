@@ -11,6 +11,8 @@ require 'rmi/client'
 require 'rmi/server'
 require 'rmi/proxyobject'
 require 'rmi/request-responder'
+require 'rmi/encoder'
+require 'rmi/serializer'
 
 @executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
 @proxied_classes = {} # tracks classes which have been fully proxied into this process by some client

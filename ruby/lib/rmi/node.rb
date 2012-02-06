@@ -1,9 +1,10 @@
 require 'rmi'
+require 'set'
 
 class RMI::Node
 
     # public API
-    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules
+    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_module, :is_closed
 
     def initialize(params = {})
         @reader = nil
@@ -47,7 +48,36 @@ class RMI::Node
         require "rmi/request-responder/" + @request_response_protocol
         request_responder_class = Object.const_get("RMI").const_get("RequestResponder").const_get(@request_response_protocol.capitalize)
         @_request_responder = request_responder_class.new(self);
+
+        # encode/decode is the way we turn a set of values into a message without references
+        # it varies by the language on the remote end (and this local end)
+        # it is independent of the request/response protocol, though that is also language dependent
+        require "rmi/encoder/" + @encoding_protocol
+        encoding_protocol_namespace = Object.const_get("RMI").const_get("Encoder").const_get(@encoding_protocol.capitalize)
+
+        @_encode_method = encoding_protocol_namespace.instance_method(:encode);
+        if (@_encode_method == nil) 
+            raise AttributeError, "no encode method in encoding_protocol_namespace!?!?"
+        end
+        @_decode_method = encoding_protocol_namespace.instance_method(:decode)
+        if (@_decode_method == nil) 
+            raise AttributeError, "no decode method in encoding_protocol_namespace!?!?"
+        end
         
+        # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
+        require "rmi/serializer/" + @serialization_protocol
+        serialization_protocol_namespace = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
+        @_serialization_method = serialization_protocol_namespace.instance_method(:serialize);
+        if (@_serialization_method == nil) 
+            raise AttributeError, "no serialize method in serialization_protocol_namespace!?!?"
+        end
+        @_deserialize_method = serialization_protocol_namespace.instance_method(:deserialize)
+        if (@_deserialize_method == nil) 
+            raise AttributeError, "no deserialize method in serialization_protocol_namespace!?!?"
+        end
+        
+        
+        print "initializing node #{self}\n"
     end
 
 =begin
@@ -58,35 +88,6 @@ sub new {
     ...
 
     
-    # encode/decode is the way we turn a set of values into a message without references
-    # it varies by the language on the remote end (and this local end)
-    # it is independent of the request/response protocol, though that is also language dependent
-    my $remote_language = $self->{remote_language};
-    my $encoding_protocol_namespace = 'RMI::Encoder::' . ucfirst(lc($self->encoding_protocol));
-    $self->{_encoding_protocol_namespace} = $encoding_protocol_namespace;
-    
-    eval "no warnings; use $encoding_protocol_namespace";
-    if ($@) {
-        die "error processing encoding protocol $encoding_protocol_namespace: $@"
-    }
-    $self->{_encode_method} = $encoding_protocol_namespace->can('encode');
-    unless ($self->{_encode_method}) {
-        die "no encode method in $encoding_protocol_namespace!?!?";
-    }
-    $self->{_decode_method} = $encoding_protocol_namespace->can('decode');    
-    unless ($self->{_decode_method}) {
-        die "no decode method in $encoding_protocol_namespace!?!?";
-    }
-    
-    # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
-    my $serialization_protocol = $self->serialization_protocol;
-    my $serialization_namespace = 'RMI::Serializer::' . ucfirst(lc($serialization_protocol));
-    eval "use $serialization_namespace";
-    if ($@) {
-        die "error processing serialization protocol $serialization_protocol: $@"
-    }
-    $self->{_serialize_method} = $serialization_namespace->can('serialize');
-    $self->{_deserialize_method} = $serialization_namespace->can('deserialize');
     
     return $self;
 }

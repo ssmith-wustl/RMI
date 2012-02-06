@@ -29,10 +29,14 @@ sub call_object_method {
     return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
 }
 
-sub call_eval {
-    my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response('call_eval', '', '', $src, @params);    
-}
+=end
+
+
+def call_eval(src,params) 
+    return self.send_request_and_receive_response('call_eval', '', '', src, params);    
+end
+
+=begin
 
 sub call_use {
     my ($self,$class,$module,$use_args) = @_;

@@ -1,72 +1,57 @@
 require 'rmi'
+require 'rmi/server/forked-pipes'
 
 class RMI::Client::ForkedPipes < RMI::Client
+    attr_accessor :peer_pid
+
+    def initialize(params = {}) 
+        parent_reader = nil
+        parent_writer = nil
+        child_reader = nil
+        child_writer = nil
+
+        parent_reader, child_writer = IO.pipe
+        child_reader, parent_writer = IO.pipe 
+        child_writer.sync
+        parent_writer.sync
+
+        parent_pid = $$
+        child_pid = fork {
+            # child process acts as a server for this test and then exits...
+            child_reader.close 
+            child_writer.close
+            
+            # if a command was passed to the constructor, we exec() it.
+            # this allows us to use a custom server, possibly one
+            # in a different language..
+            ##if (@_) {
+            ##    exec(@_);   
+            ##}
+            
+            # otherwise, we do the servicing in Perl
+            $RMI_DEBUG_MSG_PREFIX = '  '
+            server = RMI::Server::ForkedPipes.new(
+                :peer_pid => parent_pid,
+                :writer => parent_writer,
+                :reader => parent_reader
+            )
+            server.run; 
+            parent_reader.close 
+            parent_writer.close
+        }
+
+        # parent/original process is the client which does tests
+        parent_reader.close 
+        parent_writer.close
+
+        super
+        @writer = child_writer
+        @reader = child_reader
+    end 
+
+end
 
 =begin
-
-use strict;
-use warnings;
-our $VERSION = $RMI::VERSION; 
-
-use base 'RMI::Client';
-
-use RMI::Server::ForkedPipes;
-use IO::Handle;     # "thousands of lines just for autoflush" :(
-
-RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
-
-sub new {
-    my $class = shift;
-    
-    my $parent_reader;
-    my $parent_writer;
-    my $child_reader;
-    my $child_writer;
-    pipe($parent_reader, $child_writer);  
-    pipe($child_reader,  $parent_writer); 
-    $child_writer->autoflush(1);
-    $parent_writer->autoflush(1);
-    
-    my $parent_pid = $$;
-    my $child_pid = fork();
-    die "cannot fork: $!" unless defined $child_pid;
-    unless ($child_pid) {
-        # child process acts as a server for this test and then exits...
-        close $child_reader; close $child_writer;
-        
-        # if a command was passed to the constructor, we exec() it.
-        # this allows us to use a custom server, possibly one
-        # in a different language..
-        if (@_) {
-            exec(@_);   
-        }
-        
-        # otherwise, we do the servicing in Perl
-        $RMI::DEBUG_MSG_PREFIX = '  ';
-        my $server = RMI::Server::ForkedPipes->new(
-            peer_pid => $parent_pid,
-            writer => $parent_writer,
-            reader => $parent_reader,
-        );
-        $server->run; 
-        close $parent_reader; close $parent_writer;
-        exit;
-    }
-
-    # parent/original process is the client which does tests
-    close $parent_reader; close $parent_writer;
-
-    my $self = $class->SUPER::new(
-        peer_pid => $child_pid,
-        writer => $child_writer,
-        reader => $child_reader,
-    );
-
-    return $self;    
-}
-
-1;
-
 
 =pod
 
@@ -128,4 +113,3 @@ module.
 
 =end
 
-end

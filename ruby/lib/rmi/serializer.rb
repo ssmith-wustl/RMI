@@ -1,0 +1,2 @@
+module RMI::Serializer
+end
