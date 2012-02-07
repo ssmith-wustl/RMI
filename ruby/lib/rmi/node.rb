@@ -107,31 +107,24 @@ class RMI::Node
 
     end
     
-    def receive_request_and_send_response()
+
+    def receive_request_and_send_response
+        (message_type, message_data) = self._receive()
+        if (message_type == 'request')
+            # processing the request may involve calling a method and returning a result,
+            # or perhaps returning an exception.
+            (response_type, response_data) = self._process_request_in_context_and_return_response(message_data)
+            self._send(response_type, response_data)         
+
+            # the return value is mostly incidental, in case the server logic wants to log what just happened...
+            return message_type, message_data, response_type, response_data
+        elsif (message_type == 'close')
+            return nil, nil, nil, nil
+        else
+            raise IOError, "Unexpected message type message_type!  message_data was: #{message_data}"
+        end        
     end
 
-=begin
-
-def receive_request_and_send_response
-    (message_type, message_data) = self._receive()
-    if(message_type == 'request')
-        # processing the request may involve calling a method and returning a result,
-        # or perhaps returning an exception.
-        (response_type, response_data) = self._process_request_in_context_and_return_response(message_data)
-        self._send(response_type, response_data)         
-
-        # the return value is mostly incidental, in case the server logic wants to log what just happened...
-        return (message_type, message_data, response_type, response_data)
-    }
-    elsif(message_type == 'close')
-        return
-    }
-    else(
-)        die "Unexpected message type message_type!  message_data was:" . Dumper::Dumper(message_data)
-    }        
-end
-
-=end
 
     # private API
 
@@ -165,45 +158,50 @@ end
 
     end
 
+    def _receive()
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} receiving\n")
+
+        serialized_blob = @reader.gets
+        
+        # TODO: figure out why not having this breaks test 11...
+        print ""
+
+        if serialized_blob == nil
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} connection closed\n")
+            @is_closed = 1
+            return 'close', nil
+        end
+        
+        no warnings # undef in messages below...
+
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got blob: $serialized_blob")
+        if $RMI_DEBUG and not defined $serialized_blob
+            print "\n"
+        end
+        
+        (sproto,eproto,rproto,message_type, encoded_message_data, received_and_destroyed_ids) = @serializer.deserialize(serialized_blob)
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got encoded message: #{encoded_message_data}\n")
+        
+        message_data = @encoder.decode(encoded_message_data)
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got decoded message: #{message_data}\n")
+
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} remote side destroyed: #{received_and_destroyed_ids}\n")
+        done = []
+        received_and_destroyed_ids.each { |id|
+            if (removed = @_sent_objects.delete(id) != nil) 
+                done.push(removed)
+            end 
+        }
+        
+        unless done.length == received_and_destroyed_ids.length
+            print "Some IDS not found in the sent list: done: @done, expected: @received_and_destroyed_ids\n"
+        end 
+
+        return message_type, message_data
+    end
+
 =begin
 
-def _receive
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} receiving\n")
-
-    serialized_blob = .getline
-    
-    # TODO: figure out why not having this breaks test 11...
-    print ""
-
-    if(not defined serialized_blob)
-        $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} connection closed\n")
-         = 1
-        return ('close',undef)
-    }
-    
-    no warnings # undef in messages below...
-
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got blob: $serialized_blob")
-    print "\n" if $RMI_DEBUG and not defined $serialized_blob
-    
- 
-    deserialize_method =    
-    (sproto,eproto,rproto,message_type, encoded_message_data, received_and_destroyed_ids) = self.deserialize_method(serialized_blob)
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got encoded message: @$encoded_message_data\n")
-    
-    message_data = .(self,encoded_message_data)
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got decoded message: @$message_data\n")
-
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} remote side destroyed: @$received_and_destroyed_ids\n")
-    sent_objects = 
-    done = grep { defined _ } delete @sent_objects{@received_and_destroyed_ids}
-    
-    unless(@done == @received_and_destroyed_ids)
-        print "Some IDS not found in the sent list: done: @done, expected: @received_and_destroyed_ids\n"
-    }
-
-    return (message_type,message_data)
-end
 
 # these methods vary by remote request protocol...
 
