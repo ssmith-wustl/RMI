@@ -172,17 +172,15 @@ class RMI::Node
             return 'close', nil
         end
         
-        no warnings # undef in messages below...
-
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got blob: $serialized_blob")
-        if $RMI_DEBUG and not defined $serialized_blob
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got blob: #{serialized_blob}")
+        if $RMI_DEBUG and serialized_blob != nil
             print "\n"
         end
         
-        (sproto,eproto,rproto,message_type, encoded_message_data, received_and_destroyed_ids) = @serializer.deserialize(serialized_blob)
+        (sproto,eproto,rproto,message_type, encoded_message_data, received_and_destroyed_ids) = @_serializer.deserialize(serialized_blob)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got encoded message: #{encoded_message_data}\n")
         
-        message_data = @encoder.decode(encoded_message_data)
+        message_data = @_encoder.decode(encoded_message_data)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} got decoded message: #{message_data}\n")
 
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} remote side destroyed: #{received_and_destroyed_ids}\n")

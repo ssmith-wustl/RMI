@@ -33,48 +33,36 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
     return @@PROTOCOL_SYM + serialized_blob
 end
 
-def deserialize
+def deserialize(serialized_blob) 
+
+    sym = serialized_blob[0, 1]
+    serialized_blob = serialized_blob[1,]
+
+    unless sym == $PROTOCOL_SYM
+        version = ($PROTOCOL_SYM  == '[' ? 1 : ord(sym))
+        raise IOError, "Got message with protocol #{version}, expected PROTOCOL_SYM?!?!"
+    end
+
+    encoded_message_data = eval serialized_blob;
+    #if(@)
+    #    die "Exception de-serializing message: @"
+    #}        
+
+    sproto = encoded_message_data.shift
+    eproto = encoded_message_data.shift
+    rproto = encoded_message_data.shift
+    message_type = encoded_message_data.shift
+    if message_type = nil
+        raise IOError, "unexpected undef type from incoming message:" . Data::Dumper::Dumper(encoded_message_data)
+    end
+
+    n_received_and_destroyed_ids = encoded_message_data.shift
+    received_and_destroyed_ids = [] # [ splice(@encoded_message_data,0,n_received_and_destroyed_ids) ]
+    
+    return sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids
 end
 
 =begin
-
-use strict;
-use warnings;
-
-
-sub deserialize {
-    my ($self, $serialized_blob) = @_;
-
-    my $sym = substr($serialized_blob, 0, 1);
-    $serialized_blob = substr($serialized_blob, 1);
-
-    unless ($sym eq $PROTOCOL_SYM) {
-        my $version = ($PROTOCOL_SYM eq '[' ? 1 : ord($sym));
-        die "Got message with protocol $version, expected $PROTOCOL_SYM?!?!";
-    }
-
-    my $encoded_message_data = eval "no strict; no warnings; $serialized_blob";
-    if ($@) {
-        die "Exception de-serializing message: $@";
-    }        
-
-    my $sproto = shift @$encoded_message_data;
-    my $eproto = shift @$encoded_message_data;
-    my $rproto = shift @$encoded_message_data;
-    my $message_type = shift @$encoded_message_data;
-    if (! defined $message_type) {
-        die "unexpected undef type from incoming message:" . Data::Dumper::Dumper($encoded_message_data);
-    }    
-
-    my $n_received_and_destroyed_ids = shift @$encoded_message_data;
-    my $received_and_destroyed_ids = [ splice(@$encoded_message_data,0,$n_received_and_destroyed_ids) ];
-    
-    return ($sproto, $eproto, $rproto, $message_type, $encoded_message_data, $received_and_destroyed_ids);    
-}
-
-1;
-
-__END__
 
 =pod
 
@@ -84,7 +72,7 @@ RMI::Serializer::S2 - a human-readable and depthless serialization protocol
 
 =head1 SYNOPSIS
 
-$c = RMI::Client::ForkedPipes->new(serialization_protocol => 'v2');
+c = RMI::Client::ForkedPipes.new(serialization_protocol => 'v2')
 
 =head1 DESCRIPTION
 
