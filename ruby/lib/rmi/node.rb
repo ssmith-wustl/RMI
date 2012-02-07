@@ -45,7 +45,7 @@ class RMI::Node
         # this handler takes requests, acts on them, and sends an appropriate response
         require "rmi/request-responder/" + @request_response_protocol
         request_responder_class = Object.const_get("RMI").const_get("RequestResponder").const_get(@request_response_protocol.capitalize)
-        @_request_responder = request_responder_class.new(self);
+        @_request_responder = request_responder_class.new(self)
 
         # encode/decode is the way we turn a set of values into a message without references
         # it varies by the language on the remote end (and this local end)
@@ -112,25 +112,24 @@ class RMI::Node
 
 =begin
 
-sub receive_request_and_send_response {
-    my ($self) = @_;
-    my ($message_type, $message_data) = $self->_receive();
-    if ($message_type eq 'request') {
+def receive_request_and_send_response
+    (message_type, message_data) = self._receive()
+    if(message_type == 'request')
         # processing the request may involve calling a method and returning a result,
         # or perhaps returning an exception.
-        my ($response_type, $response_data) = $self->_process_request_in_context_and_return_response($message_data);
-        $self->_send($response_type, $response_data);         
+        (response_type, response_data) = self._process_request_in_context_and_return_response(message_data)
+        self._send(response_type, response_data)         
 
         # the return value is mostly incidental, in case the server logic wants to log what just happened...
-        return ($message_type, $message_data, $response_type, $response_data);
+        return (message_type, message_data, response_type, response_data)
     }
-    elsif ($message_type eq 'close') {
-        return;
+    elsif(message_type == 'close')
+        return
     }
-    else {
-        die "Unexpected message type $message_type!  message_data was:" . Dumper::Dumper($message_data);
+    else(
+)        die "Unexpected message type message_type!  message_data was:" . Dumper::Dumper(message_data)
     }        
-}
+end
 
 =end
 
@@ -140,7 +139,7 @@ sub receive_request_and_send_response {
 
     def _send(message_type, message_data, opts = {})
 
-        encoded_message = @_encoder.encode(message_data, opts);
+        encoded_message = @_encoder.encode(message_data, opts)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  message_type translated for serialization to #{encoded_message}\n") 
 
         # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
@@ -148,8 +147,8 @@ sub receive_request_and_send_response {
         message_data.clear 
 
         # reset the received_and_destroyed_ids, but take a copy first so we can send it
-        received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids;
-        @_received_and_destroyed_ids = ();
+        received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids
+        @_received_and_destroyed_ids = ()
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
         
         # send the message, and also the list of received_and_destroyed_ids since the last exchange
@@ -160,88 +159,87 @@ sub receive_request_and_send_response {
             message_type,
             encoded_message,
             received_and_destroyed_ids_copy
-        );
+        )
         ($RMI_DEBUG || $RMI_DUMP) && print("#{$RMI_DEBUG_MSG_PREFIX} N:  sending: #{s}\n")
-        return @writer.print(s,"\n");                
+        return @writer.print(s,"\n")                
 
     end
 
 =begin
 
-sub _receive {
-    my ($self) = @_;
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ receiving\n" if $RMI::DEBUG;
+def _receive
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} receiving\n")
 
-    my $serialized_blob = $self->{reader}->getline;
+    serialized_blob = .getline
     
     # TODO: figure out why not having this breaks test 11...
-    print "";
+    print ""
 
-    if (not defined $serialized_blob) {
-        print "$RMI::DEBUG_MSG_PREFIX N: $$ connection closed\n" if $RMI::DEBUG;
-        $self->{is_closed} = 1;
-        return ('close',undef);
+    if(not defined serialized_blob)
+        $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} connection closed\n")
+         = 1
+        return ('close',undef)
     }
     
-    no warnings; # undef in messages below...
+    no warnings # undef in messages below...
 
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got blob: $serialized_blob" if $RMI::DEBUG;
-    print "\n" if $RMI::DEBUG and not defined $serialized_blob;
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got blob: $serialized_blob")
+    print "\n" if $RMI_DEBUG and not defined $serialized_blob
     
  
-    my $deserialize_method = $self->{_deserialize_method};   
-    my ($sproto,$eproto,$rproto,$message_type, $encoded_message_data, $received_and_destroyed_ids) = $self->$deserialize_method($serialized_blob);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got encoded message: @$encoded_message_data\n" if $RMI::DEBUG;
+    deserialize_method =    
+    (sproto,eproto,rproto,message_type, encoded_message_data, received_and_destroyed_ids) = self.deserialize_method(serialized_blob)
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got encoded message: @$encoded_message_data\n")
     
-    my $message_data = $self->{_decode_method}->($self,$encoded_message_data);
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ got decoded message: @$message_data\n" if $RMI::DEBUG;
+    message_data = .(self,encoded_message_data)
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} got decoded message: @$message_data\n")
 
-    print "$RMI::DEBUG_MSG_PREFIX N: $$ remote side destroyed: @$received_and_destroyed_ids\n" if $RMI::DEBUG;
-    my $sent_objects = $self->{_sent_objects};
-    my @done = grep { defined $_ } delete @$sent_objects{@$received_and_destroyed_ids};
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} remote side destroyed: @$received_and_destroyed_ids\n")
+    sent_objects = 
+    done = grep { defined _ } delete @sent_objects{@received_and_destroyed_ids}
     
-    unless (@done == @$received_and_destroyed_ids) {
-        print "Some IDS not found in the sent list: done: @done, expected: @$received_and_destroyed_ids\n";
+    unless(@done == @received_and_destroyed_ids)
+        print "Some IDS not found in the sent list: done: @done, expected: @received_and_destroyed_ids\n"
     }
 
-    return ($message_type,$message_data);
-}
+    return (message_type,message_data)
+end
 
 # these methods vary by remote request protocol...
 
-sub _process_request_in_context_and_return_response {
+def _process_request_in_context_and_return_response
     #
-    return shift->{_request_responder}->_process_request_in_context_and_return_response(@_);
-}
+    return shift.{_request_responder}._process_request_in_context_and_return_response(@_)
+end
 
-sub _create_remote_copy {
-    return shift->{_request_responder}->_create_remote_copy(@_);
-}
+def _create_remote_copy
+    return shift.{_request_responder}._create_remote_copy(@_)
+end
 
-sub _create_local_copy {
+def _create_local_copy
     #
-    return shift->{_request_responder}->_create_local_copy(@_);
-}
+    return shift.{_request_responder}._create_local_copy(@_)
+end
 
-sub _is_proxy {
-    return shift->{_request_responder}->_is_proxy(@_);
-}
+def _is_proxy
+    return shift.{_request_responder}._is_proxy(@_)
+end
 
-sub _has_proxy {
-    return shift->{_request_responder}->_has_proxy(@_);
-}
+def _has_proxy
+    return shift.{_request_responder}._has_proxy(@_)
+end
 
-sub _remote_node {
-    return shift->{_request_responder}->_remote_node(@_);
-}
+def _remote_node
+    return shift.{_request_responder}._remote_node(@_)
+end
 
-sub bind_local_var_to_remote {
-    return shift->{_request_responder}->bind_local_var_to_remote(@_);
-}
+def bind_local_var_to_remote
+    return shift.{_request_responder}.bind_local_var_to_remote(@_)
+end
 
-sub bind_local_class_to_remote {
-    return shift->{_request_responder}->bind_local_class_to_remote(@_);
-}
+def bind_local_class_to_remote
+    return shift.{_request_responder}.bind_local_class_to_remote(@_)
+end
 
 =pod
 
@@ -258,38 +256,38 @@ This document describes RMI::Node v0.11.
     # applications should use B<RMI::Client> and B<RMI::Server>
     # this example is for new client/server implementors
     
-    pipe($client_reader, $server_writer);  
-    pipe($server_reader,  $client_writer);     
-    $server_writer->autoflush(1);
-    $client_writer->autoflush(1);
+    pipe(client_reader, server_writer)  
+    pipe(server_reader,  client_writer)     
+    server_writer.autoflush(1)
+    client_writer.autoflush(1)
     
     $c = RMI::Node->new(
         reader => $client_reader,
         writer => $client_writer,
-    );
+    )
     
     $s = RMI::Node->new(
         writer => $server_reader,
         reader => $server_writer,
-    );
+    )
     
-    sub main::add { return $_[0] + $_[1] }
+def main::add return $_[0] + $_[1] }
     
-    if (fork()) {
+    if(fork())
         # service one request and exit
-        require IO::File;
-        $s->receive_request_and_send_response();
-        exit;
+        require IO::File
+        s.receive_request_and_send_response()
+        exit
     }
     
     # send one request and get the result
-    $sum = $c->send_request_and_receive_response('call_function', 'main', 'add', 5, 6);
+    sum = c.send_request_and_receive_response('call_function', 'main', 'add', 5, 6)
     
     # we might have also done..
-    $robj = $c->send_request_and_receive_response('call_class_method', 'IO::File', 'new', '/my/file');
+    robj = c.send_request_and_receive_response('call_class_method', 'IO::File', 'new', '/my/file')
     
     # this only works on objects which are remote proxies:
-    $txt = $c->send_request_and_receive_response('call_object_method', $robj, 'getline');
+    txt = c.send_request_and_receive_response('call_object_method', robj, 'getline')
     
 =head1 DESCRIPTION
 
@@ -318,22 +316,22 @@ indefinitely. :)
 
 =head2 new()
   
- $n = RMI::Node->new(reader => $fh1, writer => $fh2);
+ n = RMI::Node.new(reader => fh1, writer => fh2)
 
 The constructor for RMI::Node objects requires that a reader and writer handle be provided.  They
 can be the same handle if the handle is bi-directional (as with TCP sockets, see L<RMI::Client::Tcp>).
 
 =head2 close()
 
- $n->close();
+ n.close()
 
 Closes handles, and does any additional required bookeeping.
  
 =head2 send_request_and_recieve_response()
 
- @result = $n->send_request_and_recieve_response($call_type,@data);
+ @result = n.send_request_and_recieve_response(call_type,@data)
 
- @result = $n->send_request_and_recieve_response($opts_hashref, $call_type, @data);
+ @result = n.send_request_and_recieve_response(opts_hashref, call_type, @data)
 
  This is the method behind all of the call_* methods on RMI::Client objects.
  It is also the method behind the proxied objects themselves (in AUTOLOAD).
@@ -367,7 +365,7 @@ This method returns an anonymous subroutine which can be used in a "use lib $mys
 call, to cause subsequent "use" statements to go through this node to its partner.
  
  e.x.:
-    use lib RMI::Client::Tcp->new(host=>'myserver',port=>1234)->virtual_lib;
+    use lib RMI::Client::Tcp.new(host=>'myserver',port=>1234).virtual_lib
  
 If a client is constructed for other purposes in the application, the above
 can also be accomplished with: $client->use_lib_remote().  (See L<RMI::Client>)
@@ -528,7 +526,7 @@ Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Perl itself.
 
 The full text of the license can be found in the LICENSE file included with this
@@ -536,7 +534,7 @@ module.
 
 =cut
 
-1;
+1
 
 =end
 
