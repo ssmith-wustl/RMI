@@ -19,15 +19,13 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
         else
             s += ', '
         end
-        if v.class.kind_of?(String)
+        if v.kind_of?(String)
             s += "'" + v + "'"
         else
             s += v.to_s
         end
     end
     s += ']'
-    print "#{a}\n#{s}\n"
-    print YAML::dump(a)
     serialized_blob = s
 
     $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} #{message_type} serialized as #{serialized_blob}\n") 

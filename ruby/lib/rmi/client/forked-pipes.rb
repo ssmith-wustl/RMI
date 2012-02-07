@@ -38,6 +38,7 @@ class RMI::Client::ForkedPipes < RMI::Client
             server.run; 
             parent_reader.close 
             parent_writer.close
+            exit
         }
 
         # parent/original process is the client which does tests
@@ -47,9 +48,20 @@ class RMI::Client::ForkedPipes < RMI::Client
         super
         @writer = child_writer
         @reader = child_reader
+
+        # ensure we call the finalizer to 
+        ObjectSpace.define_finalizer(self, self.class.method(:finalize).to_proc)
+
     end 
 
+    cls = RMI::Client::ForkedPipes
+    def cls.finalize(id)
+        puts "Object #{id} dying at #{Time.new}"
+        @writer.close
+        @reader.close
+    end
 end
+
 
 =begin
 

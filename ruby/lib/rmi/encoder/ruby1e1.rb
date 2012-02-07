@@ -12,7 +12,6 @@ def encode(message_data,opts=nil)
         encoded.push(@@value)
         encoded.push(v)
     }
-    print "ENCODED: ", YAML::dump(encoded)
     return encoded
 end
 

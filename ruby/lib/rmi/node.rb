@@ -58,7 +58,7 @@ class RMI::Node
         require "rmi/serializer/" + @serialization_protocol
         serializer_class = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
         @_serializer = serializer_class.new(self)
-        
+       
         print "initializing node #{self}\n"
     end
 
@@ -74,7 +74,7 @@ class RMI::Node
         
         #opts = RMI::ProxyObject::DEFAULT_OPTS[pkg][sub]
         opts = nil
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  request call_type on pkg sub has default opts #{opts}\n")    
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  request #{call_type} on #{pkg} #{sub} has default opts #{opts}\n")    
 
         request_responder = @_request_responder
 
