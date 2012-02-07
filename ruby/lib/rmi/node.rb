@@ -70,11 +70,11 @@ class RMI::Node
     end 
 
     def send_request_and_receive_response(call_type,pkg,sub,*params)
-        $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N:  calling #{pkg} #{sub} #{params}\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  calling #{pkg} #{sub} #{params}\n")
         
         #opts = RMI::ProxyObject::DEFAULT_OPTS[pkg][sub]
         opts = nil
-        $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N:  request call_type on pkg sub has default opts #{opts}\n")    
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  request call_type on pkg sub has default opts #{opts}\n")    
 
         request_responder = @_request_responder
 
@@ -82,8 +82,7 @@ class RMI::Node
         context = request_responder._capture_context()
         
         # send, with context
-        msg = [call_type, context, pkg, sub].push(params)
-        self._send('request', [call_type, msg, opts]) # || raise(IOError, "failed to send!")
+        self._send('request', [call_type, context, pkg, sub, *params], opts) # || raise(IOError, "failed to send!")
         
         1.times do 
             (response_type, response_data) = self._receive()
@@ -142,16 +141,16 @@ sub receive_request_and_send_response {
     def _send(message_type, message_data, opts = {})
 
         encoded_message = @_encoder.encode(message_data, opts);
-        $RMI_DEBUG && print("RMI_DEBUG_MSG_PREFIX N:  message_type translated for serialization to #{encoded_message}\n") 
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  message_type translated for serialization to #{encoded_message}\n") 
 
         # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
         # and will expand what is in _received_and_destroyed_ids...
         message_data.clear 
 
         # reset the received_and_destroyed_ids, but take a copy first so we can send it
-        received_and_destroyed_ids_copy = @_received_and_destroyed_ids.copy;
+        received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids;
         @_received_and_destroyed_ids = ();
-        $RMI_DEBUG && print("RMI_DEBUG_MSG_PREFIX N:  destroyed proxies: @received_and_destroyed_ids_copy\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
         
         # send the message, and also the list of received_and_destroyed_ids since the last exchange
         s = @_serializer.serialize(
@@ -162,7 +161,7 @@ sub receive_request_and_send_response {
             encoded_message,
             received_and_destroyed_ids_copy
         );
-        ($RMI_DEBUG || $RMI_DUMP) && print("#{RMI_DEBUG_MSG_PREFIX} N:  sending: #{s}\n")
+        ($RMI_DEBUG || $RMI_DUMP) && print("#{$RMI_DEBUG_MSG_PREFIX} N:  sending: #{s}\n")
         return @writer.print(s,"\n");                
 
     end

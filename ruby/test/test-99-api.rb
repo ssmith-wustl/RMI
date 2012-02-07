@@ -33,9 +33,9 @@ class Test99 < Test::Unit::TestCase
     def test_eval 
         require "rmi/client/forked-pipes"
         n5 = RMI::Client::ForkedPipes.new()
-        #a = n5.call_eval("2+3")
-        #print "ANSWER: #{a}\n" 
-        #assert_equal(a, 5, "basic eval w/o objects works")
+        a = n5.call_eval("2+3")
+        print "ANSWER: #{a}\n" 
+        assert_equal(a, 5, "basic eval w/o objects works")
     end
 end
 

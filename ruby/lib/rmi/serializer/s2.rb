@@ -3,14 +3,14 @@ class RMI::Serializer::S2 < RMI::Serializer
 @@PROTOCOL_VERSION = 2
 @@PROTOCOL_SYM = @@PROTOCOL_VERSION.chr
 
+require "yaml"
+
 def serialize(sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids)
     a = [ 
         sproto, eproto, rproto,
         message_type,
-        received_and_destroyed_ids.length,
-        received_and_destroyed_ids,
-        encoded_message_data,
-    ];
+        received_and_destroyed_ids.length
+    ] + received_and_destroyed_ids + encoded_message_data
 
     s = ''
     a.each do |v|
@@ -19,12 +19,15 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
         else
             s += ', '
         end
-        if v.kind_of(String)
+        if v.class.kind_of?(String)
             s += "'" + v + "'"
         else
-            s += v
+            s += v.to_s
         end
     end
+    s += ']'
+    print "#{a}\n#{s}\n"
+    print YAML::dump(a)
     serialized_blob = s
 
     $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} #{message_type} serialized as #{serialized_blob}\n") 
