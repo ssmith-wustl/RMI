@@ -54,8 +54,7 @@ class RMI::Client::ForkedPipes < RMI::Client
 
     end 
 
-    cls = RMI::Client::ForkedPipes
-    def cls.finalize(id)
+    def self.finalize(id)
         puts "Object #{id} dying at #{Time.new}"
         @writer.close
         @reader.close
