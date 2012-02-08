@@ -6,6 +6,13 @@ class RMI::Client::ForkedPipes < RMI::Client
 
     @@rw = {}
 
+    @@finalizer = Proc.new do |id|
+        puts "Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}"
+        @@rw.each do |handle| 
+            handle.close
+        end
+    end
+
     def initialize(params = {}) 
         parent_reader = nil
         parent_writer = nil
@@ -54,15 +61,9 @@ class RMI::Client::ForkedPipes < RMI::Client
         @@rw[self.__id__] = [ @reader, @writer ]
         
         # ensure we call the finalizer to 
-        ObjectSpace.define_finalizer(self, self.class.method(:finalize).to_proc)
+        # ObjectSpace.define_finalizer(self, self.class.method(:finalize).to_proc)
+        ObjectSpace.define_finalizer(self, @@finalizer)
     end 
-
-    def self.finalize(id)
-        puts "Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}"
-        @@rw.each do |handle| 
-            handle.close
-        end
-    end
 end
 
 
