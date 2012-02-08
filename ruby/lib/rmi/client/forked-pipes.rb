@@ -4,6 +4,8 @@ require 'rmi/server/forked-pipes'
 class RMI::Client::ForkedPipes < RMI::Client
     attr_accessor :peer_pid
 
+    @@rw = {}
+
     def initialize(params = {}) 
         parent_reader = nil
         parent_writer = nil
@@ -49,15 +51,17 @@ class RMI::Client::ForkedPipes < RMI::Client
         @writer = child_writer
         @reader = child_reader
 
+        @@rw[self.__id__] = [ @reader, @writer ]
+        
         # ensure we call the finalizer to 
         ObjectSpace.define_finalizer(self, self.class.method(:finalize).to_proc)
-
     end 
 
     def self.finalize(id)
-        puts "Object #{id} dying at #{Time.new}"
-        @writer.close
-        @reader.close
+        puts "Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}"
+        @@rw.each do |handle| 
+            handle.close
+        end
     end
 end
 
