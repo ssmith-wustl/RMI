@@ -1,0 +1,8 @@
+The Perl source and tests were copied to this tree, renamed, and are being gradually converted to work in Ruby.
+
+Most of them then had =begin and =end put around all of the code so they would compile as Ruby.
+As I move through each module, I pull chunks out of that block, and covert them to function in Ruby.  
+There is a util/pl2rb script which does a lot of simple find-replace.
+I am also uncommenting tests as they pass, but so far the only passing is happeninging in the new test, 99, 
+where basic object construction is tested.
+
