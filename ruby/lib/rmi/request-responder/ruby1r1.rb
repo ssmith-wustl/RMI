@@ -2,14 +2,15 @@ require 'rmi'
 
 class RMI::RequestResponder::Ruby1r1 < RMI::RequestResponder
 
-# used by the requestor to capture context
+@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
+@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
+# used by the requestor to capture context
 def _capture_context 
     return 1 
 end
 
 # used by the requestor to use that context after a result is returned
-
 def _return_result_in_context(response_data, context) 
     $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n");
     return response_data;
@@ -18,7 +19,6 @@ end
 =begin
 
 # used by the responder to process the message data, with embedded context
-
 sub _process_request_in_context_and_return_response {
     my ($self, $message_data) = @_;
     my $node = $self->{node};
