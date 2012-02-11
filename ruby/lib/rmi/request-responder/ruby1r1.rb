@@ -12,293 +12,262 @@ end
 
 # used by the requestor to use that context after a result is returned
 def _return_result_in_context(response_data, context) 
-    $RMI_DEBUG && print("#{RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n");
-    return response_data;
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n")
+    return response_data
+end
+
+# used by the responder to process the message data, with embedded context
+def _process_request_in_context_and_return_response(message_data) 
+    call_type = message_data.shift
+
+    # Ruby does not do context-specific returns (like languages like Perl do)
+    context = message_data.shift
+  
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} processing request #{call_type} with : #{message_data}\n")
+    
+    # swap call_ for _respond_to_
+    method = '_respond_to_' + call_type[5..-1]
+   
+    result = nil
+    exception = nil
+    @@executing_nodes.push node
+    begin
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} object call with undef wantarray\n")
+        result = self.send(method, message_data)
+    rescue e
+        exception = e
+    end
+    @@executing_nodes.pop
+
+    # we MUST undef these in case they are the only references to remote objects which need to be destroyed
+    # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
+    message_data.clear
+    
+    if (exception)
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with EXCEPTION (unserialized): #{exception}\n")
+        return :exception, []
+    else 
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with result (unserialized): #{result}\n")
+        return :result, result
+    end
 end
 
 =begin
 
-# used by the responder to process the message data, with embedded context
-sub _process_request_in_context_and_return_response {
-    my ($self, $message_data) = @_;
-    my $node = $self->{node};
-    
-    my $call_type = shift @$message_data;
+def _respond_to_function
+    (self, pkg, sub, params) = _
+    no strict 'refs'
+    fname = pkg + '::' + sub
+    fname.(params)
+end
 
+def _respond_to_class_method
+    (self, class, method, params) = _
+    class.method(params)
+end
 
-    # for all Perl calls, the context is the value of wantarray(): 1, 0 or undef.
-    # we capture this in one place so we don't have redundant code in every
-    # responder method
-    my $context = shift @$message_data;
-    my $wantarray = $context;
-    
-    do {    
-        no warnings;
-        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} processing request $call_type in wantarray context $wantarray with : @$message_data\n")
-    };
-    
-    # swap call_ for _respond_to_
-    my $method = __PACKAGE__ . '::_respond_to_' . substr($call_type,5);
-    
-    my @result;
+def _respond_to_object_method
+    (self, class, method, object, params) = _
+    object.method(params)
+end
 
-    push @RMI::executing_nodes, $node;
-    eval {
-        if (not defined $wantarray) {
-            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with undef wantarray\n")
-            $self->$method(@$message_data);
-        }
-        elsif ($wantarray) {
-            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with true wantarray\n")
-            @result = $self->$method(@$message_data);
-        }
-        else {
-            #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} object call with false wantarray\n")
-            my $result = $self->$method(@$message_data);
-            @result = ($result);
-        }
-    };
-    pop @RMI::executing_nodes;
+def _respond_to_use
+    (self,class,dummy_no_method,module,has_args,use_args) = _
 
-    # we MUST undef these in case they are the only references to remote objects which need to be destroyed
-    # the DESTROY handler will queue them for deletion, and _send() will include them in the message to the other side
-    @$message_data = ();
-    
-    my ($return_type, $return_data);
-    if ($@) {
-        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} executed with EXCEPTION (unserialized): $@\n")
-        ($return_type, $return_data) = ('exception',[$@]);
+    no strict 'refs'
+    if (class and not module)
+        module = class
+        module =~ s/::/\//g
+        module .= '.pm'
     }
-    else {
-        #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} executed with result (unserialized): @result\n")
-        ($return_type, $return_data) =  ('result',\@result);
-    }
-     
-    return ($return_type, $return_data);
-}
-
-sub _respond_to_function {
-    my ($self, $pkg, $sub, @params) = @_;
-    no strict 'refs';
-    my $fname = $pkg . '::' . $sub;
-    $fname->(@params);
-}
-
-sub _respond_to_class_method {
-    my ($self, $class, $method, @params) = @_;
-    $class->$method(@params);
-}
-
-sub _respond_to_object_method {
-    my ($self, $class, $method, $object, @params) = @_;
-    $object->$method(@params);
-}
-
-sub _respond_to_use {
-    my ($self,$class,$dummy_no_method,$module,$has_args,@use_args) = @_;
-
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
-    }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
+    elsif (module and not class)
+        class = module
+        class =~ s/\//::/g
+        class =~ s/.pm// 
     }
     
-    my $n = $RMI::Exported::count++;
-    my $tmp_module_to_catch_exports = 'RMI::Exported::P' . $n;
+    n = RMI::Exported::count++
+    tmp_module_to_catch_exports = 'RMI::Exported::P' + n
     my $src = "
-        module $tmp_module_to_catch_exports;
-        require $class;
-        my \@exports = ();
-        if (\$has_args) {
-            if (\@use_args) {
-                $class->import(\@use_args);
-                \@exports = grep { ${tmp_module_to_catch_exports}->can(\$_) } keys \%${tmp_module_to_catch_exports}::;
+        module tmp_module_to_catch_exports
+        require class
+        \exports = ()
+        if (\has_args)
+            if (\@use_args)
+                class.import(\use_args)
+                \exports = grep { {tmp_module_to_catch_exports}.can(\_) } keys \%{tmp_module_to_catch_exports}::
             }
-            else {
-                # print qq/no import because of empty list!/;
+            else 
+                # print qq/no import because of empty list!/
             }
         }
-        else {
-            $class->import();
-            \@exports = grep { ${tmp_module_to_catch_exports}->can(\$_) } keys \%${tmp_module_to_catch_exports}::;
+        else 
+            class.import()
+            \exports = grep { {tmp_module_to_catch_exports}.can(\_) } keys \%{tmp_module_to_catch_exports}::
         }
-        return (\$INC{'$module'}, \@exports);
-    ";
-    my ($path, @exported) = eval($src);
-    die $@ if $@;
-    return ($class,$module,$path,@exported);
-}
+        return (\INC{'module'}, \exports)
+    "
+    (path, exported) = eval(src)
+    die  if 
+    return (class,module,path,exported)
+end
 
-sub _respond_to_use_lib {
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    my @libs = @_;
-    require lib;
-    return lib->import(@libs);
-}
+def _respond_to_use_lib
+    self = shift
+    dummy_no_class = shift
+    dummy_no_method = shift
+    libs = _
+    require lib
+    return lib.import(libs)
+end
 
-sub _respond_to_eval {
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    
-    my $src = shift;
-    if (wantarray) {
-        my @result = eval $src;
-        die $@ if $@;
-        return @result;        
-    }
-    else {
-        my $result = eval $src;
-        die $@ if $@;
-        return $result;
-    }
-}
+=end
 
-sub _respond_to_coderef {
+
+def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
+    result = eval src
+    return result
+end
+
+=begin
+
+def _respond_to_coderef
     # This is used when a CODE ref is proxied, since you can't tie CODE refs.
     # It does not have a matching caller in RMI::Client.
     # The other reference types are handled by "tie" to RMI::ProxyReferecnce.
 
     # NOTE: It's important to shift these two parameters off since goto must 
     # pass the remainder of @_ to the subroutine.
-    my $self = shift;
-    my $dummy_no_class = shift;
-    my $dummy_no_method = shift;
-    my $sub_id = shift;
-    my $node = $self->{node};
-    my $sub = $node->{_sent_objects}{$sub_id};
-    Carp::confess("no coderef $sub_id in the list of sent CODE refs, but a proxy thinks it has this value?") unless $sub;
-    die "$sub is not a CODE ref.  came from $sub_id\n" unless $sub and ref($sub) eq 'CODE';
-    goto $sub;
-}
+    self = shift
+    dummy_no_class = shift
+    dummy_no_method = shift
+    sub_id = shift
+    node = node
+    sub = node.{_sent_objects}{sub_id}
+    Carp::confess("no coderef sub_id in the list of sent CODE refs, but a proxy thinks it has this value?") unless sub
+    die "sub is not a CODE ref.  came from sub_id\n" unless sub and ref(sub) eq 'CODE'
+    goto sub
+end
 
 # BASIC API -- implemented by all protocols --
 
-sub bind_local_var_to_remote {
+def bind_local_var_to_remote
     # this proxies a single variable
 
-    my $self = shift;
-    my $node = $self->{node};
+    self = shift
+    node = node
     
-    my $local_var = shift;
-    my $remote_var = (@_ ? shift : $local_var);
+    local_var = shift
+    remote_var = (_ ? :.shift local_var)
     
-    my $type = substr($local_var,0,1);
-    if (index($local_var,'::')) {
-        $local_var = substr($local_var,1);
+    type = substr(local_var,0,1)
+    if (index(local_var,'::'))
+        local_var = substr(local_var,1)
     }
-    else {
-        my $caller = caller();
-        $local_var = $caller . '::' . substr($local_var,1);
+    else 
+        caller = caller()
+        local_var = caller + '::' + substr(local_var,1)
     }
 
-    unless ($type eq substr($remote_var,0,1)) {
-        die "type mismatch: local var $local_var has type $type, while remote is $remote_var!";
+    unless (type == substr(remote_var,0,1))
+        die "type mismatch: local var local_var has type type, while remote is remote_var!"
     }
-    if (index($remote_var,'::')) {
-        $remote_var = substr($remote_var,1);
+    if (index(remote_var,'::'))
+        remote_var = substr(remote_var,1)
     }
-    else {
-        my $caller = caller();
-        $remote_var = $caller . '::' . substr($remote_var,1);
+    else 
+        caller = caller()
+        remote_var = caller + '::' + substr(remote_var,1)
     }
     
-    my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $node->call_eval($src);
-    die $@ if $@;
-    $src = '*' . $local_var . ' = $r' . ";\n";
-    eval $src;
-    die $@ if $@;
-    return 1;
-}
+    src = '\\' + type + remote_var + "\n";
+    r = node.call_eval(src)
+    die  if 
+    src = '*' + local_var + ' = r' + "\n";
+    eval src
+    die  if 
+    return 1
+end
 
 
-sub bind_local_class_to_remote {
+def bind_local_class_to_remote
     # this proxies an entire class instead of just a single object
     
-    my $self = shift;
-    my $node = $self->{node};
+    self = shift
+    node = node
     
-    my ($class,$module,$path,@exported) = $node->call_use(@_);
-    my $re_bind = 0;
-    if (my $prior = $RMI::proxied_classes{$class}) {
-        if ($prior != $node) {
-            die "class $class has already been proxied by another RMI client: $prior!";
+    (class,module,path,exported) = node.call_use(_)
+    re_bind = 0
+    if (my prior = RMI::proxied_classes{class})
+        if (prior != node)
+            die "class class has already been proxied by another RMI client: prior!"
         }
-        else {
+        else 
             # re-binding a class to the same remote side doesn't hurt,
             # and allowing it allows the effect of export to occur
             # in multiple places on the client side.
         }
     }
-    elsif (my $path = $INC{$module}) {
-        die "module $module has already been used locally from path: $path";
+    elsif (my path = INC{module})
+        die "module module has already been used locally from path: path"
     }
-    no strict 'refs';
+    no strict 'refs'
     for my $sub (qw/AUTOLOAD DESTROY can isa/) {
         *{$class . '::' . $sub} = \&{ 'RMI::ProxyObject::' . $sub }
     }
-    if (@exported) {
-        my $caller ||= caller(0);
-        if (substr($caller,0,5) eq 'RMI::') { $caller = caller(2) }  # change this num as we move this method
+    if (@exported)
+        caller ||= caller(0)
+        if (substr(caller,0,5) == 'RMI::') caller = caller(2) }  # change this num as we move this method
         for my $sub (@exported) {
-            my @pair = ('&' . $caller . '::' . $sub => '&' . $class . '::' . $sub);
+            pair = ('&' + caller + '::' + sub => '&' + class + '::' + sub)
             #{RMI_DEBUG} && print("$RMI_DEBUG_MSG_PREFIX N: #{$$} bind pair $pair[0] $pair[1]\n")
-            $self->bind_local_var_to_remote(@pair);
+            self.bind_local_var_to_remote(pair)
         }
     }
-    $RMI::proxied_classes{$class} = $node;
-    $INC{$module} = $node;
+    RMI::proxied_classes{class} = node
+    INC{module} = node
     #{RMI_DEBUG} && print("$class used remotely via $self ($node).  Module $module found at $path remotely.\n")    
-}
+end
 
 
 # for cases where we really do want to transfer the original data...
 
-sub _create_remote_copy {
-    my ($self,$v) = @_;
-    my $serialized = 'no strict; no warnings; ' . Data::Dumper->new([$v])->Terse(1)->Indent(0)->Useqq(1)->Dump();
-    my $proxy = $self->{node}->send_request_and_receive_response('call_eval','','',$serialized);
-    return $proxy;
-}
+def _create_remote_copy
+    (self,v) = _
+    serialized = '  ' + Data::Dumper.new([v]).Terse(1).Indent(0).Useqq(1).Dump()
+    proxy = node.send_request_and_receive_response('call_eval','','',serialized)
+    return proxy
+end
 
-sub _create_local_copy {
-    my ($self,$v) = @_;
-    my $serialized = $self->{node}->send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper($_[0])',$v);
-    my $local = eval('no strict; no warnings; ' . $serialized);
-    die 'Failed to serialize!: ' . $@ if $@;
-    return $local;    
-}
+def _create_local_copy
+    (self,v) = _
+    serialized = node.send_request_and_receive_response('call_eval','','','Data::Dumper::Dumper(_[0])',v)
+    local = eval('  ' + serialized)
+    die 'Failed to serialize!: ' +  if 
+    return local    
+end
 
 # interrogate the remote side
 # TODO: this should be part of the node API and accessing the remote node should provide an answer
 
-sub _is_proxy {
-    my ($self,$obj) = @_;
-    my $node = $self->{node};
-    $self->{node}->send_request_and_receive_response('call_eval', '', '', 'my $id = "$_[0]"; my $r = exists $RMI::executing_nodes[-1]->{_sent_objects}{$id}; return $r', $obj);
-}
+def _is_proxy
+    (self,obj) = _
+    node = node
+    node.send_request_and_receive_response('call_eval', '', '', 'id = "_[0]" r = exists RMI::executing_nodes[-1].{_sent_objects}{id}; return r', obj);
+end
 
-sub _has_proxy {
-    my ($self,$obj) = @_;
-    my $id = "$obj";
-    $self->{node}->send_request_and_receive_response('call_eval', '', '', 'exists $RMI::executing_nodes[-1]->{_received_objects}{"' . $id . '"}');
-}
+def _has_proxy
+    (self,obj) = _
+    id = "obj"
+    node.send_request_and_receive_response('call_eval', '', '', 'exists RMI::executing_nodes[-1].{_received_objects}{"' + id + '"}')
+end
 
-sub _remote_node {
-    my ($self) = @_;
-    $self->{node}->send_request_and_receive_response('call_eval', '', '', '$RMI::executing_nodes[-1]');
-}
+def _remote_node
+    (self) = _
+    node.send_request_and_receive_response('call_eval', '', '', 'RMI::executing_nodes[-1]')
+end
 
-1;
+1
 
 =pod
 
@@ -330,7 +299,7 @@ Copyright (c) 2008 - 2010 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Perl itself.
 
 The full text of the license can be found in the LICENSE file included with this
