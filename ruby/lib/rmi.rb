@@ -14,8 +14,9 @@ require 'rmi/request-responder'
 require 'rmi/encoder'
 require 'rmi/serializer'
 
-@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
-@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
+# these have been moved into the request-responder/ruby1r1.rb file
+#@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
+#@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
 # turn on debug messages if an environment variable is set
 $RMI_DEBUG = (ENV['RMI_DEBUG'] == '1' ? true : false) 
