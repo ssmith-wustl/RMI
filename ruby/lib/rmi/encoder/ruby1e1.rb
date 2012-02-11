@@ -17,9 +17,12 @@ end
 
 def decode(encoded)
     decoded = []
-    encoded.each { |type,value|
+    while encoded.length
+        type = encoded.shift
+        value = encoded.shift
         decoded.push(value)
-    }
+    end 
+    print "encoded #{encoded} decoded #{decoded}\n"
     return decoded
 end
 

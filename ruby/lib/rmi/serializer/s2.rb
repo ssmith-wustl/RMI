@@ -39,8 +39,8 @@ def deserialize(serialized_blob)
     serialized_blob = serialized_blob[1,]
 
     unless sym == $PROTOCOL_SYM
-        version = ($PROTOCOL_SYM  == '[' ? 1 : ord(sym))
-        raise IOError, "Got message with protocol #{version}, expected PROTOCOL_SYM?!?!"
+        version = ($PROTOCOL_SYM  == '[' ? 1 : sym[0])
+        raise IOError, "Got message with protocol #{version}, expected #{$PROTOCOL_SYM}?!?!"
     end
 
     encoded_message_data = eval serialized_blob;
@@ -49,7 +49,7 @@ def deserialize(serialized_blob)
     #}        
 
     sproto = encoded_message_data.shift
-    eproto = encoded_message_data.shift
+    eproto = encoded_message_data.shif
     rproto = encoded_message_data.shift
     message_type = encoded_message_data.shift
     if message_type = nil

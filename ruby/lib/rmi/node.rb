@@ -19,7 +19,7 @@ class RMI::Node
         @encoding_protocol = 'ruby1e1'          # encode the request/response into an array w/o references
         @_encoder = nil
         
-        @serialization_protocol = 's2'          # determine how to stream the encoded array
+        @serialization_protocol = 's1'          # determine how to stream the encoded array
         @_serializer = nil
         
         @_sent_objects = {}
@@ -70,16 +70,14 @@ class RMI::Node
     end 
 
     def send_request_and_receive_response(call_type,pkg,sub,*params)
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  calling #{pkg} #{sub} #{params}\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} calling #{call_type} using ns #{pkg} method #{sub} with params #{params}\n")
         
         #opts = RMI::ProxyObject::DEFAULT_OPTS[pkg][sub]
         opts = nil
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  request #{call_type} on #{pkg} #{sub} has default opts #{opts}\n")    
-
-        request_responder = @_request_responder
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} request #{call_type} on #{pkg} #{sub} has default opts #{opts}\n")    
 
         # lookup context
-        context = request_responder._capture_context()
+        context = @_request_responder._capture_context()
         
         # send, with context
         self._send('request', [call_type, context, pkg, sub, *params], opts) # || raise(IOError, "failed to send!")
@@ -88,14 +86,14 @@ class RMI::Node
             (response_type, response_data) = self._receive()
             if (response_type == 'result') 
                 if (opts and opts.copy_resultsend) 
-                    response_data = request_responder._create_local_copy(response_data)
+                    response_data = @_request_responder._create_local_copy(response_data)
                 end
-                return request_responder._return_result_in_context(response_data, context)
+                return @_request_responder._return_result_in_context(response_data, context)
             elsif (response_type == 'close') 
                 return
             elsif (response_type == 'request') 
                 # a counter-request, possibly calling a method on an object we sent...
-                (counter_response_type, counter_response_data) = request_responder._process_request_in_context_and_return_response(response_data)
+                (counter_response_type, counter_response_data) = @_request_responder._process_request_in_context_and_return_response(response_data)
                 self._send(counter_response_type, counter_response_data)   
                 redo
             elsif (response_type == 'exception') 
@@ -133,7 +131,7 @@ class RMI::Node
     def _send(message_type, message_data, opts = {})
 
         encoded_message = @_encoder.encode(message_data, opts)
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  message_type translated for serialization to #{encoded_message}\n") 
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} #{message_type} translated for serialization to #{encoded_message}\n") 
 
         # this will cause the DESTROY handler to fire on remote proxies which have only one reference,
         # and will expand what is in _received_and_destroyed_ids...
@@ -142,7 +140,7 @@ class RMI::Node
         # reset the received_and_destroyed_ids, but take a copy first so we can send it
         received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids
         @_received_and_destroyed_ids = ()
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
         
         # send the message, and also the list of received_and_destroyed_ids since the last exchange
         s = @_serializer.serialize(
@@ -153,7 +151,7 @@ class RMI::Node
             encoded_message,
             received_and_destroyed_ids_copy
         )
-        ($RMI_DEBUG || $RMI_DUMP) && print("#{$RMI_DEBUG_MSG_PREFIX} N:  sending: #{s}\n")
+        ($RMI_DEBUG || $RMI_DUMP) && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} sending: #{s}\n")
         return @writer.print(s,"\n")                
 
     end
@@ -198,15 +196,15 @@ class RMI::Node
         return message_type, message_data
     end
 
+    def _process_request_in_context_and_return_response(*args)
+        return @_request_responder._process_request_in_context_and_return_response(*args)
+    end
+
 =begin
 
 
 # these methods vary by remote request protocol...
 
-def _process_request_in_context_and_return_response
-    #
-    return shift.{_request_responder}._process_request_in_context_and_return_response(@_)
-end
 
 def _create_remote_copy
     return shift.{_request_responder}._create_remote_copy(@_)
