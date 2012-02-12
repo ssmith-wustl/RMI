@@ -84,8 +84,9 @@ class RMI::Node
         
         1.times do 
             (response_type, response_data) = self._receive()
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} recieved #{response_type} with data #{response_data}\n")    
             if (response_type == 'result') 
-                if (opts and opts.copy_resultsend) 
+                if (opts and opts.copy_results == true) 
                     response_data = @_request_responder._create_local_copy(response_data)
                 end
                 return @_request_responder._return_result_in_context(response_data, context)
@@ -108,6 +109,7 @@ class RMI::Node
 
     def receive_request_and_send_response
         (message_type, message_data) = self._receive()
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} message type #{message_type} with data #{message_data}\n") 
         if (message_type == 'request')
             # processing the request may involve calling a method and returning a result,
             # or perhaps returning an exception.
@@ -119,7 +121,7 @@ class RMI::Node
         elsif (message_type == 'close')
             return nil, nil, nil, nil
         else
-            raise IOError, "Unexpected message type message_type!  message_data was: #{message_data}"
+            raise IOError, "Unexpected message type #{message_type}!  message_data was: #{message_data}"
         end        
     end
 

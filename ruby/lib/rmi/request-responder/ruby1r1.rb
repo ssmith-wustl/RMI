@@ -2,8 +2,8 @@ require 'rmi'
 
 class RMI::RequestResponder::Ruby1r1 < RMI::RequestResponder
 
-@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
-@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
+@@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
+@@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
 # used by the requestor to capture context
 def _capture_context 
@@ -28,13 +28,15 @@ def _process_request_in_context_and_return_response(message_data)
     # swap call_ for _respond_to_
     method = '_respond_to_' + call_type[5..-1]
    
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} method is #{method} with params #{message_data} count #{message_data.length}\n")
+    
     result = nil
     exception = nil
-    @@executing_nodes.push node
+    @@executing_nodes.push @node
     begin
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} object call with undef wantarray\n")
-        result = self.send(method, message_data)
-    rescue e
+        result = self.send(method, *message_data)
+    rescue Exception => e 
         exception = e
     end
     @@executing_nodes.pop
@@ -45,10 +47,10 @@ def _process_request_in_context_and_return_response(message_data)
     
     if (exception)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with EXCEPTION (unserialized): #{exception}\n")
-        return :exception, []
+        return 'exception', [exception] 
     else 
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with result (unserialized): #{result}\n")
-        return :result, result
+        return 'result', [result]
     end
 end
 

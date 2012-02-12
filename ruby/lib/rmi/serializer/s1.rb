@@ -44,22 +44,30 @@ def deserialize(serialized_blob)
         raise IOError, "Got message with sym #{sym} protocol #{version} (symbol #{version_sym}), expected #{@@PROTOCOL_VERSION} (symbol #{@@PROTOCOL_SYM}) !!"
     end
 
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} serialized blob is #{serialized_blob}\n") 
+    
     encoded_message_data = eval serialized_blob
 
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} encoded data #{encoded_message_data}\n") 
+    
     sproto = encoded_message_data.shift
     eproto = encoded_message_data.shift
     rproto = encoded_message_data.shift
-    
-    received_and_destroyed_ids_count = encoded_message_data.shift.to_i
-    received_and_destroyed_ids = []
-    received_and_destroyed_ids_count.times do |id|
-        received_and_destroyed_ids.push(id)
-    end
-
+   
     message_type = encoded_message_data.shift
     if message_type == nil
         raise IOError, "unexpected undef type from incoming message:" . Data::Dumper::Dumper(encoded_message_data)
     end
+
+    received_and_destroyed_ids_count = encoded_message_data.shift.to_i
+    received_and_destroyed_ids = []
+    received_and_destroyed_ids_count.times do 
+        id = encoded_message_data.shift
+        received_and_destroyed_ids.push(id)
+    end
+
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} encoded data after shifting #{encoded_message_data}\n") 
+    
 
     return sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids
 end

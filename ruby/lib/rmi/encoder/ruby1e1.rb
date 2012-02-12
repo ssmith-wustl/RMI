@@ -17,12 +17,11 @@ end
 
 def decode(encoded)
     decoded = []
-    while encoded.length
+    while encoded.length > 0
         type = encoded.shift
         value = encoded.shift
         decoded.push(value)
     end 
-    print "encoded #{encoded} decoded #{decoded}\n"
     return decoded
 end
 
