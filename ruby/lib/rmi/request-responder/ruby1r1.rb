@@ -13,7 +13,7 @@ end
 # used by the requestor to use that context after a result is returned
 def _return_result_in_context(response_data, context) 
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} returning #{response_data} w/o context consideration\n")
-    return response_data
+    return response_data[0]
 end
 
 # used by the responder to process the message data, with embedded context
