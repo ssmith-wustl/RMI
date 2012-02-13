@@ -40,7 +40,7 @@ sub new {
         _encode_method => undef,
         _decode_method => undef,
         
-        serialization_protocol => 's2',          # determine how to stream the encoded array
+        serialization_protocol => 's1',          # determine how to stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
         
