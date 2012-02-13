@@ -3,30 +3,33 @@ class RMI::Serializer::S1 < RMI::Serializer
 @@PROTOCOL_VERSION = 1
 @@PROTOCOL_SYM = '[' 
 
-require "yaml"
-
 def serialize(sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids)
     a = [ 
-        sproto, eproto, rproto,
-        message_type,
-        received_and_destroyed_ids.length
-    ] + received_and_destroyed_ids + encoded_message_data
+            sproto, 
+            eproto, 
+            rproto,
+            message_type,
+            received_and_destroyed_ids.length
+        ]  + 
+        received_and_destroyed_ids +
+        encoded_message_data
 
-    s = ''
+    # TODO: this is turning the array "a" into a string eval-able in Ruby, JSON, Perl and Python
+    # a built-in dumper may be faster, but the structure is so simple it may not be.  Test it.
+    serialized_blob = ''
     a.each do |v|
-        if s == ''
-            s = '['
+        if serialized_blob == ''
+            serialized_blob = '['
         else
-            s += ', '
+            serialized_blob += ', '
         end
         if v.kind_of?(String)
-            s += "'" + v + "'"
+            serialized_blob += "'" + v + "'"
         else
-            s += v.to_s
+            serialized_blob += v.to_s
         end
     end
-    s += ']'
-    serialized_blob = s
+    serialized_blob += ']'
 
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} #{message_type} serialized as #{serialized_blob}\n") 
     
@@ -68,7 +71,6 @@ def deserialize(serialized_blob)
 
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} encoded data after shifting #{encoded_message_data}\n") 
     
-
     return sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids
 end
 
@@ -78,37 +80,31 @@ end
 
 =head1 NAME
 
-RMI::Serializer::S2 - a human-readable and depthless serialization protocol
+RMI::Serializer::S1 - a human-readable, eval-able, depthless serialization protocol
 
 =head1 SYNOPSIS
 
-c = RMI::Client::ForkedPipes.new(serialization_protocol => 'v2')
+c = RMI::Client::ForkedPipes.new(serialization_protocol => 'v1')
 
 =head1 DESCRIPTION
 
 All serialization protocol modules take an array of simple text strings and
 turn them into a blob which can be transmitted to another process and reconstructed.
 It is the lowest-level part of the protocol stack in RMI.  The layer above,
-the encoding, turns complex objects into strings and back.
+the encoding, turns complex objects into strings (identity values, not data) and back.
 
 The serialization protocol version of an RMI blob is identified by the first byte
-of the serialized message.  For this version it is the unprintable ascii value for 2.
+of the serialized message.  For version 1 is the exception, it is the ascii value for '[',
+which happens to be the first character of an eval-able array in several languages.
 
-This is the default serialization protocol for RMI in Perl.  It uses
-the Data::Dumper module to create a message stream which dumps the arrayref
-of message data onto one line of eval-able text which will reconstitute the
-data structure.  
+This is the default serialization protocol for RMI in Ruby.
 
 By using double-quoted strings, newlines are removed from any message, leading 
 to a simple blob format of readable characters with one message per line, and easy 
-debugging.  The message is itself eval-able in Perl, Python, Ruby and JavaScript.
-
-The use of Data::Dumper here is pure laziness.  The encoded message data list
-contains no references, and could be turned into a string with something simpler
-than data dumper.
-
+debugging.  The message is itself eval-able in Ruby, JavaScript, Perl, Python.
 
 =cut
+
 =end
 
 end
