@@ -2,8 +2,8 @@ package RMI::Serializer::S1;
 use strict;
 use warnings;
 
-my $PROTOCOL_VERSION = 2;
-my $PROTOCOL_SYM = chr(2);
+my $PROTOCOL_VERSION = 1;
+my $PROTOCOL_SYM = chr(1);
 
 sub serialize {
     my ($self, $sproto, $eproto, $rproto, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
@@ -28,7 +28,7 @@ sub deserialize {
     $serialized_blob = substr($serialized_blob, 1);
 
     unless ($sym eq $PROTOCOL_SYM) {
-        my $version = ($PROTOCOL_SYM eq '[' ? 1 : ord($sym));
+        my $version = ($PROTOCOL_SYM eq '[' ? 0 : ord($sym));
         die "Got message with protocol $version, expected $PROTOCOL_SYM?!?!";
     }
 
