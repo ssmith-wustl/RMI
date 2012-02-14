@@ -1,7 +1,7 @@
 class RMI::Serializer::S1 < RMI::Serializer
 
 @@PROTOCOL_VERSION = 1
-@@PROTOCOL_SYM = '[' 
+@@PROTOCOL_SYM = @@PROTOCOL_VERSION.chr # ASCII value of the protocol version 
 
 def serialize(sproto, eproto, rproto, message_type, encoded_message_data, received_and_destroyed_ids)
     a = [ 
@@ -16,10 +16,10 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
 
     # TODO: this is turning the array "a" into a string eval-able in Ruby, JSON, Perl and Python
     # a built-in dumper may be faster, but the structure is so simple it may not be.  Test it.
-    serialized_blob = ''
+    serialized_blob = '' 
     a.each do |v|
         if serialized_blob == ''
-            serialized_blob = '['
+            serialized_blob = @@PROTOCOL_SYM + '['
         else
             serialized_blob += ', '
         end
@@ -38,13 +38,13 @@ end
 
 def deserialize(serialized_blob) 
 
-    sym = serialized_blob[0..0]
-    #serialized_blob = serialized_blob[1..-1]
-
-    unless sym == @@PROTOCOL_SYM
-        version = (@@PROTOCOL_SYM  == '[' ? 1 : sym[0])
-        version_sym = version[0];
-        raise IOError, "Got message with sym #{sym} protocol #{version} (symbol #{version_sym}), expected #{@@PROTOCOL_VERSION} (symbol #{@@PROTOCOL_SYM}) !!"
+    # the first byte of the message is the ascii value for the protocol version
+    message_protocol_sym = serialized_blob[0..0]
+    serialized_blob = serialized_blob[1..-1]
+    
+    unless message_protocol_sym == @@PROTOCOL_SYM
+        message_protocol_version = message_protocol_sym[0]
+        raise IOError, "Got message with protocol #{message_protocol_version} (symbol #{message_protocol_sym}), expected #{@@PROTOCOL_VERSION} (symbol #{@@PROTOCOL_SYM}) !!"
     end
 
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} serialized blob is #{serialized_blob}\n") 
