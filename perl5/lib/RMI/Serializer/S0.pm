@@ -2,7 +2,6 @@ package RMI::Serializer::S0;
 use strict;
 use warnings;
 
-
 sub serialize {
     my ($self, $message_type, $encoded_message_data, $received_and_destroyed_ids) = @_;
     
