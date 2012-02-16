@@ -7,8 +7,6 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 @@return_proxy = 3
 
 @@remote_id_for_object = {}
-@@sent_objects = {}
-@@received_objects = {}
 @@node_for_object = {}
 
 def _is_primitive(v)
@@ -52,7 +50,7 @@ def encode(message_data, opts)
                 #end
                 
                 encoded.push(@@object_reference, local_id)
-                @@sent_objects[local_id] = o
+                @sent_objects[local_id] = o
             end
         else 
             # sending a non-reference value
@@ -76,9 +74,18 @@ def decode(encoded)
             # primitive value
             $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - primitive #{value}\n")
             message_data.push(value)
+        elsif type == @@return_proxy
+            # exists on this side, and was a proxy on the other side: get the real reference by id
+            o = @sent_objects[value]
+            if o == nil
+                msg = "#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} reconstituting local object #{value}, but not found in sent objects!\n"
+                raise IOError, msg
+            end
+            message_data.push(o)
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - resolved local object for #{value}\n")
         elsif type == @@object_reference
             # exists on the other side: we need a proxy for it
-            o = @@received_objects[value]
+            o = @received_objects[value]
             if o == nil
                 # it is not already proxied on this side
                 #if (RMI::proxied_classes{remote_class})
@@ -101,23 +108,14 @@ def decode(encoded)
                 #    }
                 #    bless o, target_class    
                 #end 
-                o = RMI::ProxyObject.new()
+                o = RMI::ProxyObject.new(@node,value)
                 o_id = o.__id__
-                @@received_objects[value] = WeakRef.new(o)
+                @received_objects[value] = WeakRef.new(o)
                 @@node_for_object[o_id] = @node
                 @@remote_id_for_object[o_id] = value
             end 
             message_data.push(o)
             $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value}\n")
-        elsif type == @@return_proxy
-            # exists on this side, and was a proxy on the other side: get the real reference by id
-            o = @@sent_objects[value]
-            if o == nil
-                msg = "#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} reconstituting local object #{value}, but not found in sent objects!\n"
-                raise IOError, msg
-            end
-            message_data.push(o)
-            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - resolved local object for #{value}\n")
         else 
             raise ArgumentError, "Unknown type #{type}????"
         end
