@@ -107,7 +107,6 @@ def decode(encoded)
                 @@node_for_object[o_id] = @node
                 @@remote_id_for_object[o_id] = value
             end 
-            
             message_data.push(o)
             $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value}\n")
         elsif type == @@return_proxy
@@ -133,7 +132,7 @@ end
 
 =head1 NAME
 
-RMI::Encoder::ruby1e1
+RMI::Encoder::Ruby1e1
 
 =head1 VERSION
 
