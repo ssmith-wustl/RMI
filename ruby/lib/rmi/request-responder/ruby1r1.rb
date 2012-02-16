@@ -54,7 +54,24 @@ def _process_request_in_context_and_return_response(message_data)
     end
 end
 
+def call_eval(src,*params) 
+    return @node.send_request_and_receive_response('call_eval', '', '', src, *params);    
+end
+
+def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
+    result = eval src
+    return result
+end
+
 =begin
+
+*call_sub = \&call_function;
+
+sub call_function {
+    my ($self,$fname,@params) = @_;
+    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
+    return $self->send_request_and_receive_response('call_function', $pkg, $sub, @params);
+}
 
 def _respond_to_function
     (self, pkg, sub, params) = _
@@ -68,10 +85,48 @@ def _respond_to_class_method
     class.method(params)
 end
 
+sub call_object_method {
+    # called rarely, since the stub AUTOLOAD actually calls the method transparently
+    my ($self,$object,$method,@params) = @_;
+    my $class = ref($object);
+    $class =~ s/RMI::Proxy:://;
+    return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
+}
+
 def _respond_to_object_method
     (self, class, method, object, params) = _
     object.method(params)
 end
+
+sub call_use {
+    my ($self,$class,$module,$use_args) = @_;
+
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
+    }
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+
+    my @exported;
+    my $path;
+    ($class,$module,$path, @exported) = 
+        $self->send_request_and_receive_response(
+            'call_use',
+            $class,
+            '',
+            $module,
+            defined($use_args),
+            ($use_args ? @$use_args : ())
+        );
+        
+    return ($class,$module,$path,@exported);
+}
 
 def _respond_to_use
     (self,class,dummy_no_method,module,has_args,use_args) = _
@@ -114,6 +169,11 @@ def _respond_to_use
     return (class,module,path,exported)
 end
 
+sub call_use_lib {
+    my ($self,$lib, @other) = @_;
+    return $self->send_request_and_receive_response('call_use_lib', '', '', $lib);
+}
+
 def _respond_to_use_lib
     self = shift
     dummy_no_class = shift
@@ -123,15 +183,48 @@ def _respond_to_use_lib
     return lib.import(libs)
 end
 
-=end
+sub use_lib_remote {
+    my $self = shift;
+    unshift @INC, $self->virtual_lib;
+}
 
+sub virtual_lib {
+    my $self = shift;
+    my $virtual_lib = sub {
+        my $module = pop;
+        $self->bind_local_class_to_remote(undef,$module);
+        my $sym = Symbol::gensym();
+        my $done = 0;
+        return $sym, sub {
+            if (! $done) {
+                $_ = '1;';
+                $done++;
+                return 1;
+            }
+            else {
+                return 0;
+            }
+        };
+    }
+}
 
-def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
-    result = eval src
-    return result
-end
+sub bind {
+    my $self = shift;
+    if (substr($_[0],0,1) =~ /\w/) {
+        $self->bind_local_class_to_remote(@_);
+    }
+    else {
+        $self->bind_local_var_to_remote(@_);
+    }
+}
 
-=begin
+sub use_remote {
+    my $self = shift;
+    my $class = shift;
+    $self->bind_local_class_to_remote($class, undef, @_);
+    $self->bind_local_var_to_remote('@' . $class . '::ISA');
+    return 1;
+}
 
 def _respond_to_coderef
     # This is used when a CODE ref is proxied, since you can't tie CODE refs.

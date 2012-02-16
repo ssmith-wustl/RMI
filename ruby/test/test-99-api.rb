@@ -33,7 +33,7 @@ class Test99 < Test::Unit::TestCase
     def test_eval 
         require "rmi/client/forked-pipes"
         n5 = RMI::Client::ForkedPipes.new()
-        a = n5.call_eval("2+3")
+        a = n5.call('eval',"2+3")
         assert_equal(a, 5, "basic eval returning primitives works")
     end
 end

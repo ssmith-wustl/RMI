@@ -1,121 +1,13 @@
 class RMI::Client < RMI::Node
 
-    # all methods in this module are convenience wrappers for RMI::Node generic methods.
+# all methods in this module are convenience wrappers for RMI::Node generic methods.
 
-    def call_function(fname,*params) 
-        params[0]
-    end
-
-=begin
-
-*call_sub = \&call_function;
-
-sub call_function {
-    my ($self,$fname,@params) = @_;
-    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
-    return $self->send_request_and_receive_response('call_function', $pkg, $sub, @params);
-}
-
-sub call_class_method {
-    my ($self,$class,$method,@params) = @_;
-    return $self->send_request_and_receive_response('call_class_method', $class, $method, @params);
-}
-
-sub call_object_method {
-    # called rarely, since the stub AUTOLOAD actually calls the method transparently
-    my ($self,$object,$method,@params) = @_;
-    my $class = ref($object);
-    $class =~ s/RMI::Proxy:://;
-    return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
-}
-
-=end
-
-
-def call_eval(src,*params) 
-    return self.send_request_and_receive_response('call_eval', '', '', src, *params);    
+def call(type,*params)
+    method = 'call_' + type
+    @_request_responder.send(method,*params)
 end
 
 =begin
-
-sub call_use {
-    my ($self,$class,$module,$use_args) = @_;
-
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
-    }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
-    }
-
-    my @exported;
-    my $path;
-    ($class,$module,$path, @exported) = 
-        $self->send_request_and_receive_response(
-            'call_use',
-            $class,
-            '',
-            $module,
-            defined($use_args),
-            ($use_args ? @$use_args : ())
-        );
-        
-    return ($class,$module,$path,@exported);
-}
-
-sub call_use_lib {
-    my ($self,$lib, @other) = @_;
-    return $self->send_request_and_receive_response('call_use_lib', '', '', $lib);
-}
-
-sub use_remote {
-    my $self = shift;
-    my $class = shift;
-    $self->bind_local_class_to_remote($class, undef, @_);
-    $self->bind_local_var_to_remote('@' . $class . '::ISA');
-    return 1;
-}
-
-sub use_lib_remote {
-    my $self = shift;
-    unshift @INC, $self->virtual_lib;
-}
-
-sub virtual_lib {
-    my $self = shift;
-    my $virtual_lib = sub {
-        my $module = pop;
-        $self->bind_local_class_to_remote(undef,$module);
-        my $sym = Symbol::gensym();
-        my $done = 0;
-        return $sym, sub {
-            if (! $done) {
-                $_ = '1;';
-                $done++;
-                return 1;
-            }
-            else {
-                return 0;
-            }
-        };
-    }
-}
-
-sub bind {
-    my $self = shift;
-    if (substr($_[0],0,1) =~ /\w/) {
-        $self->bind_local_class_to_remote(@_);
-    }
-    else {
-        $self->bind_local_var_to_remote(@_);
-    }
-}
-
 
 =pod
 
