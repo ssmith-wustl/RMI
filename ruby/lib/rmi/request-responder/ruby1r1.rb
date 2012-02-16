@@ -63,22 +63,40 @@ def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
     return result
 end
 
-=begin
-
-*call_sub = \&call_function;
-
-sub call_function {
-    my ($self,$fname,@params) = @_;
-    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
-    return $self->send_request_and_receive_response('call_function', $pkg, $sub, @params);
-}
-
-def _respond_to_function
-    (self, pkg, sub, params) = _
-    no strict 'refs'
-    fname = pkg + '::' + sub
-    fname.(params)
+def call_function(fname,*params)
+    (namespace, name) = /^(.*)::([^\:]*)$/.match(fname)[1,2]
+    print "ns #{namespace} n #{name}\n";
+    return @node.send_request_and_receive_response('call_function', namespace, name, *params);
 end
+
+def _respond_to_function(pkg, sub, *params)
+    ns = _resolve_namespace(pkg)
+    m = ns.method(sub)
+    return m.call(*params)
+
+    print ns.methods.join("\n")
+    exit
+    method = ns.instance_method(sub)
+    print method.methods.join("\n")
+    exit
+    method.call(*params)
+end
+
+def _resolve_namespace(text)
+    words = text.split('::')
+    ns = Object
+    while (words.length > 0) 
+        next_ns = ns.const_get(words[0])
+        if next_ns == nil
+            raise IOError, "no #{words[0]} in #{ns}\n"
+        end
+        ns = next_ns
+        words.shift()
+    end
+    return ns
+end
+
+=begin
 
 def _respond_to_class_method
     (self, class, method, params) = _

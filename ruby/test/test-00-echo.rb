@@ -4,8 +4,8 @@ require 'rmi'
 require 'rmi/client/forked-pipes'
 require 'test/unit'
 
-class Test1
-    def echo(s)
+module Test1
+    def self.echo(s)
         return s
     end
 end
@@ -28,12 +28,16 @@ class Test00 < Test::Unit::TestCase
     end
 
     def test_calls
-        o2 = @c.call_function('Test1::echo', @o1)
-        assert_equal(o2, @o1, "the returned object is the same as the sent one")
+        v = '12345';
+        v2 = @c.call('function','Test1::echo', v)
+        assert_equal(v2,v)
 
-        @h1 = { :foo => 111 }
-        h2 = @c.call_function('Test1::echo',@h1)
-        assert_equal(h2, @h1, "the returned reference is the same as the sent one")
+        #o2 = @c.call('function','Test1::echo', @o1)
+        #assert_equal(o2, @o1, "the returned object is the same as the sent one")
+
+        #@h1 = { :foo => 111 }
+        #h2 = @c.call('function','Test1::echo',@h1)
+        #assert_equal(h2, @h1, "the returned reference is the same as the sent one")
     end
 end
 
