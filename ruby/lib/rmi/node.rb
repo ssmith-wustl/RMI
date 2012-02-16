@@ -52,7 +52,7 @@ class RMI::Node
         # it is independent of the request/response protocol, though that is also language dependent
         require "rmi/encoder/" + @encoding_protocol
         encoder_class = Object.const_get("RMI").const_get("Encoder").const_get(@encoding_protocol.capitalize)
-        @_encoder = encoder_class.new(self)
+        @_encoder = encoder_class.new(self,@_sent_objects,@_received_objects)
         
         # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
         require "rmi/serializer/" + @serialization_protocol
