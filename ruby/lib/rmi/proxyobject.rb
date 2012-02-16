@@ -1,98 +1,96 @@
 class RMI::ProxyObject
+require "rmi"
+
+Object.methods.each do |name|
+    next
+    define_method name do |*args|
+        print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
+        #super(*args)
+        @@node.send_request_and_receive_response('call_object_method', @@class, name, self, *p)        
+    end
+end
+
+def initialize(node,remote_id) 
+    @@node = node
+    @@remote_id = remote_id
+    @@class = 'blah'
+end
+
+def method_missing(name, *p)
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) with #{params} redirecting to node #{@@node}\n")
+    @@node.send_request_and_receive_response('call_object_method', @@class, name, self, *p)        
+end
+
+def self.method_missing(*p)
+    print "UNK CLASS METHOD #{p}\n"
+end
 
 =begin
 
-use strict;
-use warnings;
 
-use RMI;
-our $VERSION = $RMI::VERSION;
-our %OPTS;
-
-sub AUTOLOAD {
-    no strict;
-    my $object = shift;
-    my $subname = $AUTOLOAD;
-    my ($class,$method) = ($subname =~ /^(.*)::(.*?)$/);
-    $class =~ s/RMI::Proxy:://;
-    no warnings;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
-    unless ($node) {
-        die "no node for object $object: cannot call $method(@_)?" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+def can
+    object = shift
+    class = ref(object) || object
+    class =~ s/RMI::Proxy:://
+    node = RMI::Node::node_for_object{object} || RMI::proxied_classes{class}
+    unless (node)
+        die "no node for object object: cannot call can (_)" + Data::Dumper::Dumper(\%RMI::Node::node_for_object)
     }
-    print "$RMI::DEBUG_MSG_PREFIX O: $$ $class $method ($object) with @_ redirecting to node $node\n" if $RMI::DEBUG;
-    if (ref($object)) {
-        $node->send_request_and_receive_response('call_object_method', $class, $method, $object, @_);        
-    }
-    else {
-        $node->send_request_and_receive_response('call_class_method', $class, $method, @_);        
-    }
-
-}
-
-sub can {
-    my $object = shift;
-    my $class = ref($object) || $object;
-    $class =~ s/RMI::Proxy:://;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
-    unless ($node) {
-        die "no node for object $object: cannot call can (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
-    }
-    print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'can' redirecting to node $node\n" if $RMI::DEBUG;
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} $object 'can' redirecting to node $node\n")
     
 
-    if (ref($object)) {
-        $node->send_request_and_receive_response('call_object_method', $class, 'can', $object, @_);        
+    if (ref(object))
+        node.send_request_and_receive_response('call_object_method', class, 'can', object, _)        
     }
-    else {
-        $node->send_request_and_receive_response('call_class_method', $class, 'can', @_);        
+    else 
+        node.send_request_and_receive_response('call_class_method', class, 'can', _)        
     }
 
-}
+end
 
-sub isa {
-    my $object = shift;
-    my $class = ref($object) || $object;
-    $class =~ s/RMI::Proxy:://;
-    my $node = $RMI::Node::node_for_object{$object} || $RMI::proxied_classes{$class};
-    unless ($node) {
-        die "no node for object $object: cannot call isa (@_)" . Data::Dumper::Dumper(\%RMI::Node::node_for_object);
+def isa
+    object = shift
+    class = ref(object) || object
+    class =~ s/RMI::Proxy:://
+    node = RMI::Node::node_for_object{object} || RMI::proxied_classes{class}
+    unless (node)
+        die "no node for object object: cannot call isa (_)" + Data::Dumper::Dumper(\%RMI::Node::node_for_object)
     }
-    print "$RMI::DEBUG_MSG_PREFIX O: $$ $object 'isa' redirecting to node $node\n" if $RMI::DEBUG;
-    if (ref($object)) {
-        $node->send_request_and_receive_response('call_object_method', $class, 'isa', $object, @_);        
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} $object 'isa' redirecting to node $node\n")
+    if (ref(object))
+        node.send_request_and_receive_response('call_object_method', class, 'isa', object, _)        
     }
-    else {
-        $node->send_request_and_receive_response('call_class_method', $class, 'isa', @_);        
+    else 
+        node.send_request_and_receive_response('call_class_method', class, 'isa', _)        
     }
-}
+end
 
 END {
-    $RMI::process_is_ending = 1;
-}
+    RMI::process_is_ending = 1
+end
 
-sub DESTROY {
-    my $self = $_[0];
-    my $id = "$self";
-    my $node = delete $RMI::Node::node_for_object{$id};
-    my $remote_id = delete $RMI::Node::remote_id_for_object{$id};
-    if (not defined $remote_id) {
-        if ($RMI::DEBUG) {
+def DESTROY
+    self = _[0]
+    id = "self"
+    node = delete RMI::Node::node_for_object{id}
+    remote_id = delete RMI::Node::remote_id_for_object{id}
+    if (not defined remote_id)
+        if (RMI::DEBUG)
             warn "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $node but NO REMOTE ID FOUND DURING DESTRUCTION?!\n"
-                . Data::Dumper::Dumper($node->{_received_objects});
+                + Data::Dumper::Dumper(node.{_received_objects})
         }
-        return;
+        return
     }
-    print "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $remote_id from $node\n" if $RMI::DEBUG;
-    my $other_ref = delete $node->{_received_objects}{$remote_id};
-    if (!$other_ref and !$RMI::process_is_ending) {
+    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} DESTROYING $id wrapping $remote_id from $node\n")
+    other_ref = delete node.{_received_objects}{remote_id}
+    if (!other_ref and !RMI::process_is_ending)
         warn "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
-            . Data::Dumper::Dumper($node->{_received_objects});
+            + Data::Dumper::Dumper(node.{_received_objects})
     }
-    push @{ $node->{_received_and_destroyed_ids} }, $remote_id;
-}
+    push { node.{_received_and_destroyed_ids} }, remote_id
+end
 
-1;
+1
 
 =pod
 
@@ -182,7 +180,7 @@ Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Perl itself.
 
 The full text of the license can be found in the LICENSE file included with this

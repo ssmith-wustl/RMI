@@ -7,36 +7,38 @@ class Test01 < Test::Unit::TestCase
     def setup 
         @c = RMI::Client::ForkedPipes.new()
         assert(@c, "created an RMI::Client")
+        @sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
+        @received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
     end
   
-    def test_1
-        assert(@c, "hi")
-    end 
+    def expect_counts(expected_sent, expected_received)
+        actual_sent = @sent.length
+        actual_received = @received.length
+        assert_equals(actual_sent, expected_sent, "  count of sent objects #{actual_sent} is #{expected_sent}, as expected");
+        assert_equals(actual_received, expected_received, "  count of received objects #{actual_received} is #{expected_received}, as expected");    
+        remote_received = @c.call_eval('scalar(keys(%{#{RMI::executing_nodes[-1]->{_received_objects}}))');
+        remote_sent = @c.call_eval('scalar(keys(%{#{RMI::executing_nodes[-1]->{_sent_objects}}))');
+        assert_equals(remote_received,actual_sent, "  count of remote received objects #{remote_received} matches actual sent count #{actual_sent}");
+        assert_equals(remote_sent,actual_received, "  count of remote received objects #{remote_sent} matches actual sent count #{actual_received}");
+    end
 
+    def test_counts
+        # check the count of objects sent and received after each call
+        o1 = { :foo => 11, :bar => 22}
+        r1 = @c.call('eval', "[*args]", o1)
+        print "result #{r1}\n"
+        #print "#{r1[0]}\n"
+        #@sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
+        #@received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
+        print "S #{@sent}\n"
+        print "R #{@received}\n"
+    end 
         
 end
 
 =begin
 
-use_ok("RMI::Client::ForkedPipes");
-my $c = RMI::Client::ForkedPipes->new();
-ok($c, "created an RMI::Client");
 
-
-# check the count of objects sent and received after each call
-my $sent = $c->_sent_objects;
-my $received = $c->_received_objects;
-sub expect_counts {
-    my ($expected_sent, $expected_received) = @_;
-    my $actual_sent = scalar(keys(%$sent));
-    my $actual_received = scalar(keys(%$received));
-    is($actual_sent, $expected_sent, "  count of sent objects $actual_sent is $expected_sent, as expected");
-    is($actual_received, $expected_received, "  count of received objects $actual_received is $expected_received, as expected");    
-    my ($remote_received) = $c->call_eval('scalar(keys(%{$RMI::executing_nodes[-1]->{_received_objects}}))');
-    my ($remote_sent) = $c->call_eval('scalar(keys(%{$RMI::executing_nodes[-1]->{_sent_objects}}))');
-    is($remote_received,$actual_sent, "  count of remote received objects $remote_received matches actual sent count $actual_sent");
-    is($remote_sent,$actual_received, "  count of remote received objects $remote_sent matches actual sent count $actual_received");
-}
 
 my @result;
 my $result;
