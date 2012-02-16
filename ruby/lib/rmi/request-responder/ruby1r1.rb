@@ -54,34 +54,6 @@ def _process_request_in_context_and_return_response(message_data)
     end
 end
 
-def call_eval(src,*params) 
-    return @node.send_request_and_receive_response('call_eval', '', '', src, *params);    
-end
-
-def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
-    result = eval src
-    return result
-end
-
-def call_function(fname,*params)
-    (namespace, name) = /^(.*)::([^\:]*)$/.match(fname)[1,2]
-    print "ns #{namespace} n #{name}\n";
-    return @node.send_request_and_receive_response('call_function', namespace, name, *params);
-end
-
-def _respond_to_function(pkg, sub, *params)
-    ns = _resolve_namespace(pkg)
-    m = ns.method(sub)
-    return m.call(*params)
-
-    print ns.methods.join("\n")
-    exit
-    method = ns.instance_method(sub)
-    print method.methods.join("\n")
-    exit
-    method.call(*params)
-end
-
 def _resolve_namespace(text)
     words = text.split('::')
     ns = Object
@@ -96,12 +68,46 @@ def _resolve_namespace(text)
     return ns
 end
 
+##
+
+def call_eval(src,*params) 
+    return @node.send_request_and_receive_response('call_eval', '', '', src, *params);    
+end
+
+def _respond_to_eval(dummy_no_class, dummy_no_method, src, *args)
+    result = eval src
+    return result
+end
+
+##
+
+def call_function(fname,*params)
+    (namespace, name) = /^(.*)::([^\:]*)$/.match(fname)[1,2]
+    return @node.send_request_and_receive_response('call_function', namespace, name, *params);
+end
+
+def _respond_to_function(pkg, sub, *params)
+    ns = _resolve_namespace(pkg)
+    m = ns.method(sub)
+    return m.call(*params)
+end
+
+##
+
+def call_class_method(klass, method, *params)
+    return @node.send_request_and_receive_response('call_class_method', klass, method, *params);
+end
+
+def _respond_to_class_method(klass, method, *params)
+    ns = _resolve_namespace(klass)
+    m = ns.method(method)
+    return m.call(*params)
+end
+
+##
+
 =begin
 
-def _respond_to_class_method
-    (self, class, method, params) = _
-    class.method(params)
-end
 
 sub call_object_method {
     # called rarely, since the stub AUTOLOAD actually calls the method transparently

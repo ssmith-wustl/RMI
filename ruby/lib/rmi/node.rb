@@ -59,7 +59,7 @@ class RMI::Node
         serializer_class = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
         @_serializer = serializer_class.new(self)
        
-        print "initializing node #{self}\n"
+        #print "initializing node #{self}\n"
     end
 
     def close 
@@ -141,7 +141,7 @@ class RMI::Node
 
         # reset the received_and_destroyed_ids, but take a copy first so we can send it
         received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids
-        @_received_and_destroyed_ids = ()
+        @_received_and_destroyed_ids.clear
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
         
         # send the message, and also the list of received_and_destroyed_ids since the last exchange

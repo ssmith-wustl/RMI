@@ -6,197 +6,134 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 @@object_reference = 1
 @@return_proxy = 3
 
-def encode(message_data,opts=nil)
+@@remote_id_for_object = {}
+@@sent_objects = {}
+@@received_objects = {}
+@@node_for_object = {}
+
+def _is_primitive(v)
+    if v.kind_of?(String)
+        return true
+    elsif v.kind_of?(Fixnum)
+        return true
+    else
+        return false
+    end
+end
+
+def encode(message_data, opts) 
     encoded = []
-    message_data.each { |v|
-        encoded.push(@@value)
-        encoded.push(v)
-    }
-    return encoded
-end
-
-def decode(encoded)
-    decoded = []
-    while encoded.length > 0
-        type = encoded.shift
-        value = encoded.shift
-        decoded.push(value)
-    end 
-    return decoded
-end
-
-=begin
-
-sub encode {
-    my ($self, $message_data, $opts) = @_;
-      
-    my $sent_objects = $self->{_sent_objects};    
-    my @encoded;
-    for my $o (@$message_data) {
-        if (my $type = ref($o)) {
+    message_data.each { |o|
+        klass = o.class
+        if ! _is_primitive(o)
             # sending some sort of reference
-            if (my $remote_id = $RMI::Node::remote_id_for_object{$o}) { 
+            remote_id = @@remote_id_for_object[o.__id__] 
+            if remote_id != nil
                 # this is a proxy object on THIS side: the real object will be used on the remote side
-                print "$RMI::DEBUG_MSG_PREFIX N: $$ proxy $o references remote $remote_id:\n" if $RMI::DEBUG;
-                push @encoded, $RMI::Encoder::Perl5e1::return_proxy, $remote_id;
-                next;
-            }
-            elsif($opts and ($opts->{copy} or $opts->{copy_params})) {
+                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} proxy #{o} references remote #{remote_id}\n")
+                encoded.push(@@return_proxy, remote_id)
+                next
+            elsif (opts != nil and (opts['copy'] == true or opts['copy_params'] == true))
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
                 # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
-                $o = $self->_create_remote_copy($o);
-                redo;
-            }
-            else {
+                o = _create_remote_copy(o)
+                redo
+            else 
                 # a reference originating on this side: send info so the remote side can create a proxy
 
                 # TODO: use something better than stringification since this can be overridden!!!
-                my $local_id = "$o";
+                local_id = o.__id__
                 
-                # TODO: handle extracting the base type for tying for regular objects which does not involve parsing
-                my $base_type = substr($local_id,index($local_id,'=')+1);
-                $base_type = substr($base_type,0,index($base_type,'('));
-                my $code;
-                if ($base_type ne $type) {
-                    # blessed reference
-                    $code = $RMI::Encoder::Perl5e1::object_reference;
-                    if (my $allowed = $self->{allow_modules}) {
-                        unless ($allowed->{ref($o)}) {
-                            die "objects of type " . ref($o) . " cannot be passed from this RMI node!";
-                        }
-                    }
-                }
-                else {
-                    # regular reference
-                    $code = $RMI::Encoder::Perl5e1::unobject_reference;
-                }
+                #if (allowed = self->{allow_modules})
+                #    unless (allowed->{ref(o)})
+                #        die "objects of type " + ref(o) + " cannot be passed from this RMI node!"
+                #    end 
+                #end
                 
-                push @encoded, $code, $local_id;
-                $sent_objects->{$local_id} = $o;
-            }
-        }
-        else {
+                encoded.push(@@object_reference, local_id)
+                @@sent_objects[local_id] = o
+            end
+        else 
             # sending a non-reference value
-            push @encoded, $RMI::Encoder::Perl5e1::value, $o;
-        }
-    }
+            encoded.push(@@value, o)
+        end 
+    } 
 
-    return @encoded;
-}
+    return encoded
+end
 
 
 # decode from a Perl5::E1 remote node
-sub decode {
-    my ($self, $encoded) = @_;
+def decode(encoded)
     
-    my @message_data;
+    message_data = []
 
-    my $sent_objects = $self->{_sent_objects};
-    my $received_objects = $self->{_received_objects};
-    
-    while (@$encoded) { 
-        my $type = shift @$encoded;
-        my $value = shift @$encoded;
-        if ($type == 0) {
+    while encoded.length > 0 
+        type = encoded.shift()
+        value = encoded.shift()
+        if type == @@value
             # primitive value
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - primitive " . (defined($value) ? $value : "<undef>") . "\n" if $RMI::DEBUG;
-            push @message_data, $value;
-        }
-        elsif ($type == 1 or $type == 2) {
-            # exists on the other side: make a proxy
-            my $o = $received_objects->{$value};
-            unless ($o) {
-                my ($remote_class,$remote_shape) = ($value =~ /^(.*?=|)(.*?)\(/);
-                chop $remote_class;
-                my $t;
-                if ($remote_shape eq 'ARRAY') {
-                    $o = [];
-                    $t = tie @$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdArray';                        
-                }
-                elsif ($remote_shape eq 'HASH') {
-                    $o = {};
-                    $t = tie %$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHash';                        
-                }
-                elsif ($remote_shape eq 'SCALAR') {
-                    my $anonymous_scalar;
-                    $o = \$anonymous_scalar;
-                    $t = tie $$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdScalar';                        
-                }
-                elsif ($remote_shape eq 'CODE') {
-                    my $sub_id = $value;
-                    $o = sub {
-                        $self->send_request_and_receive_response('call_coderef', '', '', $sub_id, @_);
-                    };
-                    # TODO: ensure this cleans up on the other side when it is destroyed
-                }
-                elsif ($remote_shape eq 'GLOB' or $remote_shape eq 'IO') {
-                    $o = \do { local *HANDLE };
-                    $t = tie *$o, 'RMI::ProxyReference', $self, $value, "$o", 'Tie::StdHandle';
-                }
-                else {
-                    die "unknown reference type for $remote_shape for $value!!";
-                }
-                if ($type == 1) {
-                    if ($RMI::proxied_classes{$remote_class}) {
-                        bless $o, $remote_class;
-                    }
-                    else {
-                        # Put the object into a custom subclass of RMI::ProxyObject
-                        # this allows class-wide customization of how proxying should
-                        # occur.  It also makes Data::Dumper results more readable.
-                        my $target_class = 'RMI::Proxy::' . $remote_class;
-                        unless ($RMI::classes_with_proxied_objects{$remote_class}) {
-                            no strict 'refs';
-                            @{$target_class . '::ISA'} = ('RMI::ProxyObject');
-                            no strict;
-                            no warnings;
-                            local $SIG{__DIE__} = undef;
-                            local $SIG{__WARN__} = undef;
-                            eval "use $target_class";
-                            $RMI::classes_with_proxied_objects{$remote_class} = 1;
-                        }
-                        bless $o, $target_class;    
-                    }
-                }
-                $received_objects->{$value} = $o;
-                Scalar::Util::weaken($received_objects->{$value});
-                my $o_id = "$o";
-                my $t_id = "$t" if defined $t;
-                $RMI::Node::node_for_object{$o_id} = $self;
-                $RMI::Node::remote_id_for_object{$o_id} = $value;
-                if ($t) {
-                    # ensure calls to work with the "tie-buddy" to the reference
-                    # result in using the orinigla reference on the "real" side
-                    $RMI::Node::node_for_object{$t_id} = $self;
-                    $RMI::Node::remote_id_for_object{$t_id} = $value;
-                }
-            }
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - primitive #{value}\n")
+            message_data.push(value)
+        elsif type == @@object_reference
+            # exists on the other side: we need a proxy for it
+            o = @@received_objects[value]
+            if o == nil
+                # it is not already proxied on this side
+                #if (RMI::proxied_classes{remote_class})
+                #    bless o, remote_class
+                #}
+                #else 
+                #    # Put the object into a custom subclass of RMI::ProxyObject
+                #    # this allows class-wide customization of how proxying should
+                #    # occur.  It also makes Data::Dumper results more readable.
+                #    target_class = 'RMI::Proxy::' + remote_class
+                #    unless (RMI::classes_with_proxied_objects{remote_class})
+                #        no strict 'refs'
+                #        {target_class + '::ISA'} = ('RMI::ProxyObject')
+                #        
+                #        
+                #        local SIG{__DIE__} = undef
+                #        local SIG{__WARN__} = undef
+                #        eval "use target_class"
+                #        RMI::classes_with_proxied_objects{remote_class} = 1
+                #    }
+                #    bless o, target_class    
+                #end 
+                o = RMI::ProxyObject.new()
+                o_id = o.__id__
+                @@received_objects[value] = WeakRef.new(o)
+                @@node_for_object[o_id] = @node
+                @@remote_id_for_object[o_id] = value
+            end 
             
-            push @message_data, $o;
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - made proxy for $value\n" if $RMI::DEBUG;
-        }
-        elsif ($type == 3) {
+            message_data.push(o)
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value}\n")
+        elsif type == @@return_proxy
             # exists on this side, and was a proxy on the other side: get the real reference by id
-            my $o = $sent_objects->{$value};
-            my $msg = "$RMI::DEBUG_MSG_PREFIX N: $$ reconstituting local object $value, but not found in my sent objects!\n";
-            print $msg and Carp::confess($msg) unless $o;
-            push @message_data, $o;
-            print "$RMI::DEBUG_MSG_PREFIX N: $$ - resolved local object for $value\n" if $RMI::DEBUG;
-        }
-        else {
-            die "Unknown type $type????"
-        }
-    }
+            o = @@sent_objects[value]
+            if o == nil
+                msg = "#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} reconstituting local object #{value}, but not found in sent objects!\n"
+                raise IOError, msg
+            end
+            message_data.push(o)
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - resolved local object for #{value}\n")
+        else 
+            raise ArgumentError, "Unknown type #{type}????"
+        end
+    end 
 
-    return \@message_data;
-}
+    return message_data
+end
+
+=begin
 
 =pod
 
 =head1 NAME
 
-RMI::Encoder::Perl5e1
+RMI::Encoder::ruby1e1
 
 =head1 VERSION
 
@@ -275,7 +212,7 @@ Copyright (c) 2008 - 2010 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Perl itself.
 
 The full text of the license can be found in the LICENSE file included with this
@@ -283,7 +220,7 @@ module.
 
 =cut
 
-1;
+1
 
 
 =end
