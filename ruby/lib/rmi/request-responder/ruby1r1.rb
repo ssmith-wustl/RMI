@@ -106,21 +106,22 @@ end
 
 ##
 
+def call_object_method(obj,method,*params)
+    #my $class = ref($object);
+    #$class =~ s/RMI::Proxy:://;
+    return @node.send_request_and_receive_response('call_object_method', @@class, method, obj, *params);
+end
+
+def _respond_to_object_method(klass, method, obj, params) 
+    object.send(method, *params)
+end
+
+
+##
+
 =begin
 
 
-sub call_object_method {
-    # called rarely, since the stub AUTOLOAD actually calls the method transparently
-    my ($self,$object,$method,@params) = @_;
-    my $class = ref($object);
-    $class =~ s/RMI::Proxy:://;
-    return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
-}
-
-def _respond_to_object_method
-    (self, class, method, object, params) = _
-    object.method(params)
-end
 
 sub call_use {
     my ($self,$class,$module,$use_args) = @_;
