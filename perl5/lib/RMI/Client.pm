@@ -3,115 +3,34 @@ package RMI::Client;
 use strict;
 use warnings;
 our $VERSION = $RMI::VERSION; 
-
+use Carp;
 use base 'RMI::Node';
+use RMI::RequestResponder::Perl5r1;
 
 # all methods in this module are convenience wrappers for RMI::Node generic methods.
 
-*call_sub = \&call_function;
-
-sub call_function {
-    my ($self,$fname,@params) = @_;
-    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
-    return $self->send_request_and_receive_response('call_function', $pkg, $sub, @params);
-}
-
-sub call_class_method {
-    my ($self,$class,$method,@params) = @_;
-    return $self->send_request_and_receive_response('call_class_method', $class, $method, @params);
-}
-
-sub call_object_method {
-    # called rarely, since the stub AUTOLOAD actually calls the method transparently
-    my ($self,$object,$method,@params) = @_;
-    my $class = ref($object);
-    $class =~ s/RMI::Proxy:://;
-    return $self->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
-}
-
-sub call_eval {
-    my ($self,$src,@params) = @_;
-    return $self->send_request_and_receive_response('call_eval', '', '', $src, @params);    
-}
-
-sub call_use {
-    my ($self,$class,$module,$use_args) = @_;
-
-    no strict 'refs';
-    if ($class and not $module) {
-        $module = $class;
-        $module =~ s/::/\//g;
-        $module .= '.pm';
+our $AUTOLOAD;
+sub AUTOLOAD {
+    my $self = shift;
+    #print "auto $AUTOLOAD @_\n";
+    my $method = $AUTOLOAD;
+    $method =~ s/^.*:://;
+    return if $method eq 'DESTROY';
+    my $responder = $self->{_request_responder};
+    if (!$responder) {
+        return; 
     }
-    elsif ($module and not $class) {
-        $class = $module;
-        $class =~ s/\//::/g;
-        $class =~ s/.pm$//; 
-    }
-
-    my @exported;
-    my $path;
-    ($class,$module,$path, @exported) = 
-        $self->send_request_and_receive_response(
-            'call_use',
-            $class,
-            '',
-            $module,
-            defined($use_args),
-            ($use_args ? @$use_args : ())
-        );
-        
-    return ($class,$module,$path,@exported);
-}
-
-sub call_use_lib {
-    my ($self,$lib, @other) = @_;
-    return $self->send_request_and_receive_response('call_use_lib', '', '', $lib);
-}
-
-sub use_remote {
-    my $self = shift;
-    my $class = shift;
-    $self->bind_local_class_to_remote($class, undef, @_);
-    $self->bind_local_var_to_remote('@' . $class . '::ISA');
-    return 1;
-}
-
-sub use_lib_remote {
-    my $self = shift;
-    unshift @INC, $self->virtual_lib;
-}
-
-sub virtual_lib {
-    my $self = shift;
-    my $virtual_lib = sub {
-        my $module = pop;
-        $self->bind_local_class_to_remote(undef,$module);
-        my $sym = Symbol::gensym();
-        my $done = 0;
-        return $sym, sub {
-            if (! $done) {
-                $_ = '1;';
-                $done++;
-                return 1;
-            }
-            else {
-                return 0;
-            }
-        };
-    }
-}
-
-sub bind {
-    my $self = shift;
-    if (substr($_[0],0,1) =~ /\w/) {
-        $self->bind_local_class_to_remote(@_);
+    if ($responder->can($method)) {   
+        return $responder->$method(@_)
     }
     else {
-        $self->bind_local_var_to_remote(@_);
+        die "failed to find method $method on " . ref($responder);
+        #print "found $method on $responder!"
+    }
+    unless ($method eq 'DESTROY') {
+        die "failed to find method $method on " . __PACKAGE__ . " or on request responder " . $responder;
     }
 }
-
 
 =pod
 
