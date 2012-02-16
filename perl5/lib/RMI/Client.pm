@@ -5,9 +5,15 @@ use warnings;
 our $VERSION = $RMI::VERSION; 
 use Carp;
 use base 'RMI::Node';
-use RMI::RequestResponder::Perl5r1;
 
 # all methods in this module are convenience wrappers for RMI::Node generic methods.
+
+sub call {
+    my $self = shift;
+    my $type = shift;
+    my $method = 'call_' . $type;
+    $self->{request_responder}->$method(@_);
+}
 
 our $AUTOLOAD;
 sub AUTOLOAD {
