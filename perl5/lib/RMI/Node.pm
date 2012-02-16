@@ -27,9 +27,6 @@ _mk_ro_accessors(qw/reader writer local_language remote_language request_respons
 sub new {
     my $class = shift;
     my $self = bless {
-        reader => undef,
-        writer => undef,
-        
         local_language => 'perl5',      # always (since this is the Perl5 module)
         remote_language => 'perl5',     # may vary,but this is the default
         
@@ -43,6 +40,9 @@ sub new {
         serialization_protocol => 's1',          # determine how to stream the encoded array
         _serialize_method => undef,
         _deserialize_method => undef,        
+        
+        reader => undef,
+        writer => undef,
         
         _sent_objects => {},
         _received_objects => {},

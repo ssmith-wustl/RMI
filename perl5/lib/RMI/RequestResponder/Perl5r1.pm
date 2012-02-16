@@ -90,6 +90,15 @@ sub _process_request_in_context_and_return_response {
     return ($return_type, $return_data);
 }
 
+## below are pairs of calls from a client, and responses on the server
+
+*call_sub = \&call_function;
+
+sub call_function {
+    my ($self,$fname,@params) = @_;
+    my ($pkg,$sub) = ($fname =~ /^(.*)::([^\:]*)$/);
+    return $self->{node}->send_request_and_receive_response('call_function', $pkg, $sub, @params);
+}
 sub _respond_to_function {
     my ($self, $pkg, $sub, @params) = @_;
     no strict 'refs';
@@ -97,16 +106,59 @@ sub _respond_to_function {
     $fname->(@params);
 }
 
+
+sub call_class_method {
+    my ($self,$class,$method,@params) = @_;
+    return $self->{node}->send_request_and_receive_response('call_class_method', $class, $method, @params);
+}
 sub _respond_to_class_method {
     my ($self, $class, $method, @params) = @_;
     $class->$method(@params);
 }
 
+
+sub call_object_method {
+    # called rarely, since the stub AUTOLOAD actually calls the method transparently
+    my ($self,$object,$method,@params) = @_;
+    my $class = ref($object);
+    $class =~ s/RMI::Proxy:://;
+    return $self->{node}->send_request_and_receive_response('call_object_method', $class, $method, $object, @params);
+}
 sub _respond_to_object_method {
     my ($self, $class, $method, $object, @params) = @_;
     $object->$method(@params);
 }
 
+
+sub call_use {
+    my ($self,$class,$module,$use_args) = @_;
+
+    no strict 'refs';
+    if ($class and not $module) {
+        $module = $class;
+        $module =~ s/::/\//g;
+        $module .= '.pm';
+    }
+    elsif ($module and not $class) {
+        $class = $module;
+        $class =~ s/\//::/g;
+        $class =~ s/.pm$//; 
+    }
+
+    my @exported;
+    my $path;
+    ($class,$module,$path, @exported) = 
+        $self->{node}->send_request_and_receive_response(
+            'call_use',
+            $class,
+            '',
+            $module,
+            defined($use_args),
+            ($use_args ? @$use_args : ())
+        );
+        
+    return ($class,$module,$path,@exported);
+}
 sub _respond_to_use {
     my ($self,$class,$dummy_no_method,$module,$has_args,@use_args) = @_;
 
@@ -148,6 +200,10 @@ sub _respond_to_use {
     return ($class,$module,$path,@exported);
 }
 
+sub call_use_lib {
+    my ($self,$lib, @other) = @_;
+    return $self->{node}->send_request_and_receive_response('call_use_lib', '', '', $lib);
+}
 sub _respond_to_use_lib {
     my $self = shift;
     my $dummy_no_class = shift;
@@ -157,6 +213,10 @@ sub _respond_to_use_lib {
     return lib->import(@libs);
 }
 
+sub call_eval {
+    my ($self,$src,@params) = @_;
+    return $self->{node}->send_request_and_receive_response('call_eval', '', '', $src, @params);    
+}
 sub _respond_to_eval {
     my $self = shift;
     my $dummy_no_class = shift;
@@ -175,6 +235,56 @@ sub _respond_to_eval {
     }
 }
 
+#####
+
+sub use_remote {
+    my $self = shift;
+    my $class = shift;
+    $self->bind_local_class_to_remote($class, undef, @_);
+    $self->bind_local_var_to_remote('@' . $class . '::ISA');
+    return 1;
+}
+
+sub use_lib_remote {
+    my $self = shift;
+    unshift @INC, $self->_virtual_lib;
+}
+
+sub _virtual_lib {
+    my $self = shift;
+    my $node = $self->{node};
+    my $virtual_lib = sub {
+        my $module = pop;
+        $self->bind_local_class_to_remote(undef,$module);
+        my $sym = Symbol::gensym();
+        my $done = 0;
+        return $sym, sub {
+            if (! $done) {
+                $_ = '1;';
+                $done++;
+                return 1;
+            }
+            else {
+                return 0;
+            }
+        };
+    }
+}
+
+sub bind {
+    my $self = shift;
+    if (substr($_[0],0,1) =~ /\w/) {
+        $self->bind_local_class_to_remote(@_);
+    }
+    else {
+        $self->bind_local_var_to_remote(@_);
+    }
+}
+
+
+#####
+
+##
 sub _respond_to_coderef {
     # This is used when a CODE ref is proxied, since you can't tie CODE refs.
     # It does not have a matching caller in RMI::Client.
@@ -225,7 +335,7 @@ sub bind_local_var_to_remote {
     }
     
     my $src = '\\' . $type . $remote_var . ";\n";
-    my $r = $node->call_eval($src);
+    my $r = $self->call_eval($src);
     die $@ if $@;
     $src = '*' . $local_var . ' = $r' . ";\n";
     eval $src;
@@ -240,7 +350,7 @@ sub bind_local_class_to_remote {
     my $self = shift;
     my $node = $self->{node};
     
-    my ($class,$module,$path,@exported) = $node->call_use(@_);
+    my ($class,$module,$path,@exported) = $self->call_use(@_);
     my $re_bind = 0;
     if (my $prior = $RMI::proxied_classes{$class}) {
         if ($prior != $node) {
