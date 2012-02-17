@@ -1,3 +1,6 @@
+require 'pp'
+require 'stringio'
+
 class RMI::Serializer::S1 < RMI::Serializer
 
 @@PROTOCOL_VERSION = 1
@@ -23,11 +26,17 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
         else
             serialized_blob += ', '
         end
-        if v.kind_of?(String)
-            serialized_blob += "'" + v + "'"
-        else
-            serialized_blob += v.to_s
-        end
+        s = StringIO.new
+        PP.singleline_pp(v,s)
+        s.rewind
+        s2 = s.read
+        #print "serialized #{v} as #{s2}\n"
+        serialized_blob += s2 
+        #if v.kind_of?(String)
+        #    serialized_blob += "'" + v + "'"
+        #else
+        #    serialized_blob += v.to_s
+        #end
     end
     serialized_blob += ']'
 

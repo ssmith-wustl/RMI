@@ -11,6 +11,17 @@ module Test1
 end
 
 class Foo
+    def initialize
+        @myhash = {}
+    end
+
+    def slurp(name,value)
+        @myhash[name] = value
+    end
+
+    def spit(name)
+        return @myhash[name]
+    end
 end
 
 class Test00 < Test::Unit::TestCase
@@ -38,6 +49,14 @@ class Test00 < Test::Unit::TestCase
         @h1 = { :foo => 111 }
         h2 = @c.call('function','Test1::echo',@h1)
         assert_equal(h2, @h1, "the returned reference is the same as the sent one")
+    
+        e = nil
+        begin 
+            rfoo = @c.call('eval','raise IOError,"some error"')
+        rescue Exception => e
+        end
+        assert(e != nil, 'got an exception')
+        assert(e.kind_of?(IOError), 'the exception is an IOError')
     end
 end
 

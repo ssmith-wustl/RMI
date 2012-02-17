@@ -98,15 +98,13 @@ class RMI::Node
                 self._send(counter_response_type, counter_response_data)   
                 redo
             elsif (response_type == 'exception') 
-                raise response_data[0]
+                raise Object.const_get(response_data[0]), response_data[1]
             else 
                 raise "unexpected message type from RMI message: #{response_type}"
             end
         end 
-
     end
     
-
     def receive_request_and_send_response
         (message_type, message_data) = self._receive()
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} message type #{message_type} with data #{message_data}\n") 

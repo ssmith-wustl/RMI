@@ -23,7 +23,9 @@ def encode(message_data, opts)
     encoded = []
     message_data.each { |o|
         klass = o.class
-        if ! _is_primitive(o)
+        if o.kind_of?(Exception)
+            encoded.push(@@exception, o.class.to_s + "\t" + o.message)
+        elsif ! _is_primitive(o)
             # sending some sort of reference
             remote_id = @@remote_id_for_object[o.__id__] 
             if remote_id != nil

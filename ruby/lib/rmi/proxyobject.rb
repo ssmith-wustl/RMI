@@ -2,7 +2,16 @@ class RMI::ProxyObject
 require "rmi"
 
 Object.methods.each do |name|
-    next
+    if  name == '__id__' || 
+        name == '__send__' || 
+        name == 'to_s' || 
+        name == 'class' || 
+        name == 'kind_of?' ||
+        name == 'methods' ||
+        name == 'respond_to?'
+        name == 'inspect'
+        next
+    end
     define_method name do |*args|
         print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
         #super(*args)

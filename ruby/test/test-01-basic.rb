@@ -30,8 +30,8 @@ class Test01 < Test::Unit::TestCase
         #print "#{r1[0]}\n"
         #@sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
         #@received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
-        print "S #{@sent}\n"
-        print "R #{@received}\n"
+        #print "S #{@sent}\n"
+        #print "R #{@received}\n"
     end 
         
 end

@@ -47,7 +47,7 @@ def _process_request_in_context_and_return_response(message_data)
     
     if (exception)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with EXCEPTION (unserialized): #{exception}\n")
-        return 'exception', [exception] 
+        return 'exception', [exception.class.to_s, exception.message] 
     else 
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} executed with result (unserialized): #{result}\n")
         return 'result', [result]
