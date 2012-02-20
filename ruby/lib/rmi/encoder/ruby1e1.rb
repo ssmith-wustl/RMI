@@ -23,9 +23,9 @@ def encode(message_data, opts)
     encoded = []
     message_data.each { |o|
         klass = o.class
-        if o.kind_of?(Exception)
-            encoded.push(@@exception, o.class.to_s + "\t" + o.message)
-        elsif ! _is_primitive(o)
+        #if o.kind_of?(Exception)
+        #    encoded.push(@@exception, o.class.to_s, o.message, *o.backtrace)
+        if ! _is_primitive(o)
             # sending some sort of reference
             remote_id = @@remote_id_for_object[o.__id__] 
             if remote_id != nil
@@ -43,7 +43,7 @@ def encode(message_data, opts)
                 # a reference originating on this side: send info so the remote side can create a proxy
 
                 # TODO: use something better than stringification since this can be overridden!!!
-                local_id = o.__id__
+                local_id = o.class.to_s + "-" + o.__id__.to_s
                 
                 #if (allowed = self->{allow_modules})
                 #    unless (allowed->{ref(o)})
@@ -89,6 +89,13 @@ def decode(encoded)
             # exists on the other side: we need a proxy for it
             o = @received_objects[value]
             if o == nil
+                pos = value.index('=')
+                if pos == nil
+                    raise IOError, "no '=' found in object identifier to separate the class name from the rest of the object id"
+                end
+                klass = value[0..pos]
+                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} using for remote class #{klass}\n")
+
                 # it is not already proxied on this side
                 #if (RMI::proxied_classes{remote_class})
                 #    bless o, remote_class
@@ -115,9 +122,10 @@ def decode(encoded)
                 @received_objects[value] = WeakRef.new(o)
                 @@node_for_object[o_id] = @node
                 @@remote_id_for_object[o_id] = value
+            else
+                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - using previous remote proxy for #{value}\n")
             end 
             message_data.push(o)
-            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value}\n")
         else 
             raise ArgumentError, "Unknown type #{type}????"
         end
