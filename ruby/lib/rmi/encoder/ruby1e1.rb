@@ -43,7 +43,7 @@ def encode(message_data, opts)
                 # a reference originating on this side: send info so the remote side can create a proxy
 
                 # TODO: use something better than stringification since this can be overridden!!!
-                local_id = o.class.to_s + "-" + o.__id__.to_s
+                local_id = o.class.to_s + "=" + o.__id__.to_s
                 
                 #if (allowed = self->{allow_modules})
                 #    unless (allowed->{ref(o)})
@@ -93,8 +93,8 @@ def decode(encoded)
                 if pos == nil
                     raise IOError, "no '=' found in object identifier to separate the class name from the rest of the object id"
                 end
-                klass = value[0..pos]
-                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} using for remote class #{klass}\n")
+                remote_class = value[0..pos]
+                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} using for remote class #{remote_class}\n")
 
                 # it is not already proxied on this side
                 #if (RMI::proxied_classes{remote_class})
@@ -117,7 +117,7 @@ def decode(encoded)
                 #    }
                 #    bless o, target_class    
                 #end 
-                o = RMI::ProxyObject.new(@node,value)
+                o = RMI::ProxyObject.new(@node,value,remote_class)
                 o_id = o.__id__
                 @received_objects[value] = WeakRef.new(o)
                 @@node_for_object[o_id] = @node

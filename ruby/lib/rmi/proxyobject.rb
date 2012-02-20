@@ -19,10 +19,10 @@ Object.methods.each do |name|
     end
 end
 
-def initialize(node,remote_id) 
+def initialize(node,remote_id,remote_class) 
     @@node = node
     @@remote_id = remote_id
-    @@class = 'blah'
+    @@class = remote_class
 end
 
 def method_missing(name, *p)
