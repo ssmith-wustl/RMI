@@ -1,0 +1,27 @@
+RMI - transparent object proxies (remote method invocation across)
+
+Most languages have a facility to make remote procedure/method calls/invocations.
+
+The common limitations are:
+1 they serialize data in by default, rather than create transparent proxies, so if you pass a complex object a copy if it is actually passed
+2 when they do _not_ serialize data, transparent proxying requires some pre-planning on the part of the developer
+3 the transport layer is language-specific: you can't use Java RMI to talk to Ruby DRb, or either of those to talk to Python Pyro
+4 they don't work over arbitrary streams (DRb is always TCP/IP sockets, for example)
+
+So I wanted a stack where each layer could be upgraded/replaced/improved, and for which a cross-language implementation would have a place.  And be simple.
+
+Why are these bad?  When publishing "services" they aren't, but when you're publishing a service you probably want a REST API anyway.  When trying to integrate components, seamlessly, across processes and across languages, they are a big problem.  Here are the primary ways the above four items cause problems:
+1 When you serialize instead of proxy, the remote call no longer behaves like its local equivalent
+2 When you have to write boilerplate for a class, then for every object it might return, you're doing the work a monkey should be doing for you.
+3 When you can't cross-languages, one of the primary reasons to need another process to do your work is eliminated.
+4 When you have to go over a socket, you can't swap out to something very fast, like mapped-memory where your other process is in another languages on the same machine.
+
+What you should not expect from this:
+* IPC is _slow_ complared to an in-language native procedure call unless your language is really shitty.  It will not perform as well so only do it if, and where, you have a reason.
+* remote != asynchronous: each end of the RMI system can/may achieve asynchronous behavior in its own way, but that is orthogonal to this package: the pair of nodes in a conversation are specifically and intentionally synchronous
+* remote != opaque: because the proxying aims to be complete and transparent by default, you must engineer filters if you want to stop things which would normally happen readily within a single process Éincluding preventing client introspection.  The client is considered trusted by these server by the time the connection is made.
+
+All of the above concerns are addressable using RMI.  The first by selectively, on performance-critical classes, allowing real serialization of data, and by writing custom serialize/deserialize logic.  The second and third items are addressable by making wrappers for the server object, which is fairly simple and straight-forward.
+
+
+
