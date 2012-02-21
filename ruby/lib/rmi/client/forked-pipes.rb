@@ -56,6 +56,7 @@ class RMI::Client::ForkedPipes < RMI::Client
         parent_writer.close
 
         super
+        @peer_pid = child_pid
         @writer = child_writer
         @reader = child_reader
 

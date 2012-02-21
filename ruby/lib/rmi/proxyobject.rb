@@ -16,7 +16,7 @@ Object.methods.each do |name|
     define_method name do |*args|
         print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
         #super(*args)
-        @node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
+        @node.send_request_and_receive_response('call_object_method', @class, name, self, *args)        
     end
 end
 
@@ -27,9 +27,9 @@ def initialize(node,remote_id,remote_class)
 end
 
 def method_missing(name, *p)
-    print "MM: #{name}\n"
-    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} object method #{name} invoked on class #{@class} instance #{self} with params #{p} redirecting to node #{@node}\n")
-    @node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
+    #print "MM: #{name}\n"
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} object method #{name.to_s} invoked on class #{@class} instance #{self} with params #{p} redirecting to node #{@node}\n")
+    @node.send_request_and_receive_response('call_object_method', @class, name.to_s, self, *p)        
 end
 
 def self.method_missing(name, *p)

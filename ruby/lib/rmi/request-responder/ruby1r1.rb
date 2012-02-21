@@ -34,10 +34,14 @@ def _process_request_in_context_and_return_response(message_data)
     exception = nil
     @@executing_nodes.push @node
     begin
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} object call with undef wantarray\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} object call method #{method} params #{message_data.length}: #{message_data.join(',')}\n")
         result = self.send(method, *message_data)
     rescue Exception => e 
         exception = e
+        if $RMI_FLOP
+            # when set, the server doesn't pass back exceptions, but crashes itself
+            raise exception
+        end
     end
     @@executing_nodes.pop
 
@@ -107,12 +111,12 @@ end
 ##
 
 def call_object_method(obj,method,*params)
-    #my $class = ref($object);
-    #$class =~ s/RMI::Proxy:://;
-    return @node.send_request_and_receive_response('call_object_method', @@class, method, obj, *params);
+    #print "XXX call #{@class} #{method} #{obj} #{params}\n"
+    return @node.send_request_and_receive_response('call_object_method', obj.instance_eval { @class }, method, obj, *params);
 end
 
-def _respond_to_object_method(klass, method, obj, params) 
+def _respond_to_object_method(klass, method, obj, *params) 
+    #print "XXX call #{klass} #{method} #{obj} #{params}\n"
     obj.send(method, *params)
 end
 

@@ -15,6 +15,8 @@ def _is_primitive(v)
         return true
     elsif v.kind_of?(Fixnum)
         return true
+    elsif v.class == NilClass
+        return true
     else
         return false
     end

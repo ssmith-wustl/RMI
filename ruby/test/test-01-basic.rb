@@ -3,37 +3,55 @@
 require 'test/unit'
 require 'rmi/client/forked-pipes'
 
+module Test01Module 
+    def self.f1(a,b)
+        return $$,a+b
+    end
+end
+
 class Test01 < Test::Unit::TestCase
+
     def setup 
         @c = RMI::Client::ForkedPipes.new()
         assert(@c, "created an RMI::Client")
-        @sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
-        @received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
+        @sent = @c.instance_eval { @sent_objects };
+        @received = @c.instance_eval { @received_objects };
     end
   
     def expect_counts(expected_sent, expected_received)
         actual_sent = @sent.length
         actual_received = @received.length
-        assert_equals(actual_sent, expected_sent, "  count of sent objects #{actual_sent} is #{expected_sent}, as expected");
-        assert_equals(actual_received, expected_received, "  count of received objects #{actual_received} is #{expected_received}, as expected");    
-        remote_received = @c.call_eval('scalar(keys(%{#{RMI::executing_nodes[-1]->{_received_objects}}))');
-        remote_sent = @c.call_eval('scalar(keys(%{#{RMI::executing_nodes[-1]->{_sent_objects}}))');
-        assert_equals(remote_received,actual_sent, "  count of remote received objects #{remote_received} matches actual sent count #{actual_sent}");
-        assert_equals(remote_sent,actual_received, "  count of remote received objects #{remote_sent} matches actual sent count #{actual_received}");
+        assert_equal(actual_sent, expected_sent, "  count of sent objects #{actual_sent} is #{expected_sent}, as expected");
+        assert_equal(actual_received, expected_received, "  count of received objects #{actual_received} is #{expected_received}, as expected");    
+        remote_received = @c.call('eval','@node.instance_eval{ @received_objects.length }');
+        remote_sent = @c.call('eval','@node.instance_eval{ @sent_objects.length }');
+        assert_equal(remote_received,actual_sent, "  count of remote received objects #{remote_received} matches actual sent count #{actual_sent}");
+        assert_equal(remote_sent,actual_received, "  count of remote sent objects #{remote_sent} matches actual received count #{actual_received}");
     end
 
-    def test_counts
+    def xcounts
+        #o1 = @c.call('eval','[11,22,33]')
+        #v1 = o1[1]
+        #assert_equal(v1,22, "array lookup on remote array works")
+
         # check the count of objects sent and received after each call
         o1 = { :foo => 11, :bar => 22}
         r1 = @c.call('eval', "[*args]", o1)
-        #print "result #{r1}\n"
-        #print "#{r1[0]}\n"
-        #@sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
-        #@received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
-        #print "S #{@sent}\n"
-        #print "R #{@received}\n"
+        print "result #{r1}\n"
+        x = r1[0]
+        print "#{x}\n"
+        @sent = @c.instance_eval { @sent_objects };
+        @received = @c.instance_eval { @received_objects };
+        print "S #{@sent}\n"
+        print "R #{@received}\n"
     end 
-        
+
+    def test_basic_remote_function_attempt_1
+        result = @c.call('function','Test01Module::f1',2,3)
+        assert_equal(result[0], @c.peer_pid, "retval #{result[0]} indicates the method was called in the child/server process #{@c.peer_pid} not this one #{$$}")
+        assert_equal(result[1], 5, "result value #{result[1]} is as expected for 2 + 3")
+        #expect_counts(0,1)
+    end
 end
 
 =begin
@@ -44,11 +62,6 @@ my @result;
 my $result;
 
 note("basic remote function attempt 1");
-@result = $c->call_function('main::f1', 2, 3); 
-is($result[0], $c->peer_pid, "retval indicates the method was called in the child/server process");
-is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
-expect_counts(0,0);
-
 note("basic remote function attempt 2");
 @result = $c->call_function('main::f1', 6, 7);
 is($result[1], 13, "result value $result[1] is as expected for 6 + 7");  

@@ -19,8 +19,9 @@ require 'rmi/serializer'
 #@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
 # turn on debug messages if an environment variable is set
-$RMI_DEBUG = (ENV['RMI_DEBUG'] == '1' ? true : false) 
-$RMI_DUMP  = (ENV['RMI_DUMP'] == '1' ? true : false)
+$RMI_DEBUG = (ENV['RMI_DEBUG'] != nil ? true : false) 
+$RMI_DUMP  = (ENV['RMI_DUMP'] != nil ? true : false)
+$RMI_FLOP  = (ENV['RMI_FLOP'] != nil ? true : false)
 
 # this is used at the beginning of each debug message
 # setting it to a single space for a server makes server/client distinction
