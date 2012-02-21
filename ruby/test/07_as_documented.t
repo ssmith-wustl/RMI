@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env ruby
 use strict;
 use warnings;
 use Test::More tests => 20;
@@ -80,7 +80,7 @@ ok($server_hostname, "call to Sys::Hostname::hostname function on the server sid
 my $otherpid = $c->call_eval('$$'); 
 is($otherpid,$child_pid, "got the other process' pid from call_eval");
 
-# changes to perl refs are visible from both sides 
+# changes to ruby refs are visible from both sides 
 my $a = $c->call_eval('@main::x = (11,22,33); return \@main::x;');
 push @$a, 44, 55;
 is(scalar(@$a), 5, 'got the correct count on the client side');

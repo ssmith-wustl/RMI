@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env ruby
 
 use strict;
 use warnings;
