@@ -5,6 +5,7 @@ Object.methods.each do |name|
     if  name == '__id__' || 
         name == '__send__' || 
         name == 'to_s' || 
+        name == 'to_a' || 
         name == 'class' || 
         name == 'kind_of?' ||
         name == 'methods' ||
@@ -19,15 +20,18 @@ Object.methods.each do |name|
     end
 end
 
-def initialize(node,remote_id) 
+def initialize(node,remote_id,remote_class) 
     @@node = node
     @@remote_id = remote_id
-    @@class = 'blah'
+    @@class = remote_class
 end
 
 def method_missing(name, *p)
-    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) with #{params} redirecting to node #{@@node}\n")
-    @@node.send_request_and_receive_response('call_object_method', @@class, name, self, *p)        
+    print "MM: #{name}\n"
+    #$RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) with #{p} redirecting to node #{@@node}\n")
+    #print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) params #{p} with #{p} redirecting to node #{@@node}\n")
+    print "SEND CALL class #{@class}  method #{name} on obj #{self} with params: #{p}\n"
+    @@node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
 end
 
 def self.method_missing(*p)
