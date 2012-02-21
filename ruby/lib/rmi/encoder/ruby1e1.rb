@@ -8,6 +8,7 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 
 @@remote_id_for_object = {}
 @@node_for_object = {}
+@@proxy_subclasses = {}
 
 def _is_primitive(v)
     if v.kind_of?(String)
@@ -93,35 +94,37 @@ def decode(encoded)
                 if pos == nil
                     raise IOError, "no '=' found in object identifier to separate the class name from the rest of the object id"
                 end
-                remote_class = value[0..pos]
-                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} using for remote class #{remote_class}\n")
+                remote_class = value[0..pos-1]
 
                 # it is not already proxied on this side
                 #if (RMI::proxied_classes{remote_class})
                 #    bless o, remote_class
                 #}
                 #else 
-                #    # Put the object into a custom subclass of RMI::ProxyObject
-                #    # this allows class-wide customization of how proxying should
-                #    # occur.  It also makes Data::Dumper results more readable.
-                #    target_class = 'RMI::Proxy::' + remote_class
-                #    unless (RMI::classes_with_proxied_objects{remote_class})
-                #        no strict 'refs'
-                #        {target_class + '::ISA'} = ('RMI::ProxyObject')
-                #        
-                #        
-                #        local SIG{__DIE__} = undef
-                #        local SIG{__WARN__} = undef
-                #        eval "use target_class"
-                #        RMI::classes_with_proxied_objects{remote_class} = 1
-                #    }
-                #    bless o, target_class    
+                    
+                    # Put the object into a custom subclass of RMI::ProxyObject
+                    # this allows class-wide customization of how proxying should
+                    # occur.  It also makes Data::Dumper results more readable.
+                    target_class_name = 'RMI::ProxyObject::' + remote_class
+                    target_class = @@proxy_subclasses[target_class_name]
+                    if target_class == nil 
+                        mod = target_class_name.downcase.split('::').join('/')
+                        #begin 
+                        #    require mod
+                        #    target_class = eval "#{target_class_name}"
+                        #rescue Exception
+                            target_class = eval "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}";
+                        #end
+                        @@proxy_subclasses[target_class_name] = target_class
+                    end
+
                 #end 
-                o = RMI::ProxyObject.new(@node,value,remote_class)
+                o = target_class.new(@node,value,remote_class)
                 o_id = o.__id__
                 @received_objects[value] = WeakRef.new(o)
                 @@node_for_object[o_id] = @node
                 @@remote_id_for_object[o_id] = value
+                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} (remote class #{remote_class}) #{o}\n")
             else
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - using previous remote proxy for #{value}\n")
             end 

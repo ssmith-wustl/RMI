@@ -22,9 +22,9 @@ class RMI::Node
         @serialization_protocol = 's1'          # determine how to stream the encoded array
         @_serializer = nil
         
-        @_sent_objects = {}
-        @_received_objects = {}
-        @_received_and_destroyed_ids = []
+        @sent_objects = {}
+        @received_objects = {}
+        @received_and_destroyed_ids = []
         @_tied_objects_for_tied_refs = {}
     
         module_list = params.delete(:allow_modules) || []
@@ -52,7 +52,7 @@ class RMI::Node
         # it is independent of the request/response protocol, though that is also language dependent
         require "rmi/encoder/" + @encoding_protocol
         encoder_class = Object.const_get("RMI").const_get("Encoder").const_get(@encoding_protocol.capitalize)
-        @_encoder = encoder_class.new(self,@_sent_objects,@_received_objects)
+        @_encoder = encoder_class.new(self,@sent_objects,@received_objects)
         
         # serialize/deserialize is the way we transmit the encoded array from the encoder/decoder
         require "rmi/serializer/" + @serialization_protocol
@@ -84,7 +84,7 @@ class RMI::Node
         
         1.times do 
             (response_type, response_data) = self._receive()
-            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} recieved #{response_type} with data #{response_data}\n")    
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} recieved #{response_type} with data #{response_data} (response data class #{response_data.class.to_s}\n")    
             if (response_type == 'result') 
                 if (opts and opts.copy_results == true) 
                     response_data = @_request_responder._create_local_copy(response_data)
@@ -138,8 +138,8 @@ class RMI::Node
         message_data.clear 
 
         # reset the received_and_destroyed_ids, but take a copy first so we can send it
-        received_and_destroyed_ids_copy = [] + @_received_and_destroyed_ids
-        @_received_and_destroyed_ids.clear
+        received_and_destroyed_ids_copy = [] + @received_and_destroyed_ids
+        @received_and_destroyed_ids.clear
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} destroyed proxies: #{@received_and_destroyed_ids_copy}\n")
         
         # send the message, and also the list of received_and_destroyed_ids since the last exchange
@@ -184,7 +184,7 @@ class RMI::Node
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} remote side destroyed: #{received_and_destroyed_ids}\n")
         done = []
         received_and_destroyed_ids.each { |id|
-            if (removed = @_sent_objects.delete(id) != nil) 
+            if (removed = @sent_objects.delete(id) != nil) 
                 done.push(removed)
             end 
         }

@@ -16,30 +16,29 @@ Object.methods.each do |name|
     define_method name do |*args|
         print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
         #super(*args)
-        @@node.send_request_and_receive_response('call_object_method', @@class, name, self, *p)        
+        @node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
     end
 end
 
 def initialize(node,remote_id,remote_class) 
-    @@node = node
-    @@remote_id = remote_id
-    @@class = remote_class
+    @node = node
+    @remote_id = remote_id
+    @class = remote_class
 end
 
 def method_missing(name, *p)
     print "MM: #{name}\n"
-    #$RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) with #{p} redirecting to node #{@@node}\n")
-    #print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} #{@@class} #{name} (#{self}) params #{p} with #{p} redirecting to node #{@@node}\n")
-    print "SEND CALL class #{@class}  method #{name} on obj #{self} with params: #{p}\n"
-    @@node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} object method #{name} invoked on class #{@class} instance #{self} with params #{p} redirecting to node #{@node}\n")
+    @node.send_request_and_receive_response('call_object_method', @class, name, self, *p)        
 end
 
-def self.method_missing(*p)
-    print "UNK CLASS METHOD #{p}\n"
+def self.method_missing(name, *p)
+    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} class method #{name} invoked on class #{@class} with params #{p} CANNOT REDIRECT\n")
+    #@node.send_request_and_receive_response('call_class_method', @class, name, *p)
+    super(name,*p)
 end
 
 =begin
-
 
 def can
     object = shift

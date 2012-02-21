@@ -26,7 +26,7 @@ class Test01 < Test::Unit::TestCase
         # check the count of objects sent and received after each call
         o1 = { :foo => 11, :bar => 22}
         r1 = @c.call('eval', "[*args]", o1)
-        print "result #{r1}\n"
+        #print "result #{r1}\n"
         #print "#{r1[0]}\n"
         #@sent = @c.instance_eval { @_request_responder.instance_eval { @sent_objects } };
         #@received = @c.instance_eval { @_request_responder.instance_eval { @received_objects } };
