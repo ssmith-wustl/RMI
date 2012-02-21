@@ -113,7 +113,7 @@ def call_object_method(obj,method,*params)
 end
 
 def _respond_to_object_method(klass, method, obj, params) 
-    object.send(method, *params)
+    obj.send(method, *params)
 end
 
 
