@@ -37,7 +37,7 @@ Scott Smith <sakoht@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008 - 2009 Scott Smith <sakoht@cpan.org>  All rights reserved.
+Copyright (c) 2012 Scott Smith <sakoht@cpan.org>  All rights reserved.
 
 =head1 LICENSE
 

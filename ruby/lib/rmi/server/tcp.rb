@@ -17,6 +17,16 @@ def initialize(*args)
     @server_for_client_socket = {}
 end
 
+def run 
+    while(true) 
+        (response_type,*response_details) = self.receive_request_and_send_response()
+        if response_type == nil
+            redo 
+        end
+        print "response type was #{response_type}\n"
+    end
+end
+
 def receive_request_and_send_response(timeout=1000)
     readable, writable = IO.select([@listen_socket] + @client_sockets)
     readable.each do |s|
@@ -26,13 +36,18 @@ def receive_request_and_send_response(timeout=1000)
                 @client_sockets.push(new_socket)
                 node = RMI::Node.new(
                     :reader => new_socket,
-                    :writer => new_socket,
-                    :peer_pid => new_socket.__id__
+                    :writer => new_socket
                 )
                 @server_for_client_socket[new_socket] = node
             else
                 delegate_server = @server_for_client_socket[s]
                 retval = delegate_server.receive_request_and_send_response
+                if retval == nil
+                    # connection closed
+                    @client_sockets.delete_if { |sx| sx == s }
+                    print "closing #{s}, tossing #{delegate_server}\n"
+                    @server_for_client_socket.delete(s)
+                end
                 return retval
             end
         rescue Errno::EAGAIN, Errno::EWOULDBLOCK
@@ -40,7 +55,26 @@ def receive_request_and_send_response(timeout=1000)
     end
 end
 
+
 =begin
+def _close_connection
+    # This is no longer called, and somehow the select sockets get things removed?
+    my $self = shift;
+    my $socket = shift;
+
+    unless ($self->sockets_select->exists($socket)) {
+        warn ("Passed-in socket $socket is not on the list of connected clients");
+    }
+    unless ($self->all_select->exists($socket)) {
+        warn ("Passed-in socket $socket is not on the list of all clients");
+    }
+    print "removed $socket\n";
+
+    $self->sockets_select->remove($socket);
+    $self->all_select->remove($socket);
+    $socket->close();
+    return 1;
+end
                 buf = @buffer_for_socket[s] ||= ''
                 buf << s.read_nonblock(1024)
                 if buf =~ /^.*?\r?\n/
@@ -136,24 +170,6 @@ sub new {
 # Note, that this only receives queries, since the delegate will receive all responses
 # to our own counter queries.
 
-sub _close_connection {
-    # This is no longer called, and somehow the select sockets get things removed?
-    my $self = shift;
-    my $socket = shift;
-
-    unless ($self->sockets_select->exists($socket)) {
-        warn ("Passed-in socket $socket is not on the list of connected clients");
-    }
-    unless ($self->all_select->exists($socket)) {
-        warn ("Passed-in socket $socket is not on the list of all clients");
-    }
-    print "removed $socket\n";
-
-    $self->sockets_select->remove($socket);
-    $self->all_select->remove($socket);
-    $socket->close();
-    return 1;
-}
 
 1;
 
@@ -199,3 +215,4 @@ B<RMI>, B<RMI::Client::Tcp>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node>, B<RMI
 =end
 
 end
+

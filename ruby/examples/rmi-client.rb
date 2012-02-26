@@ -1,18 +1,25 @@
 #!/usr/bin/env ruby
 require 'rmi/client/tcp'
+require 'readline'
+require 'pp'
 
 c = RMI::Client::Tcp.new(
-    host => 'localhost', 
-    port => 1234
+    :host => 'localhost', 
+    :port => 1234
 )
 
-r = c.call_eval("2+3")
-print r,"\n"
+while line = Readline.readline('> ', true) do
+    args = eval(line)
+    retval = c.call(*args)
+    PP.pp(retval)
+end
 
 
 =begin
 
-c.call_use('IO::File'); 
+require "rmi/client/tcp"
+
+c = RMI::Client::Tcp.new(:port => 1234)
 
 r = c.call_class_method('IO::File','new','/etc/passwd');
 

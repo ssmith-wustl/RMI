@@ -1,54 +1,31 @@
-module RMI::Client::Tcp;
+require "rmi"
+require "socket"
+
+class RMI::Client::Tcp < RMI::Client
+
+
+attr_accessor :host, :port
+
+@@DEFAULT_HOST = "127.0.0.1"
+@@DEFAULT_PORT = 4409
+
+def initialize(*args)
+    super(*args)
+
+    if @host == nil
+        @host = @@DEFAULT_HOST
+    end
+
+    if @port == nil
+        @port == @DEFAULT_PORT
+    end
+
+    socket = TCPSocket.new(@host, @port)
+    @reader = socket
+    @writer = socket
+end
 
 =begin
-
-use strict;
-use warnings;
-our $VERSION = $RMI::VERSION; 
-
-use base 'RMI::Client';
-
-use IO::Socket;
-
-RMI::Node::_mk_ro_accessors(__PACKAGE__, qw/host port/);
-
-our $DEFAULT_HOST = "127.0.0.1";
-our $DEFAULT_PORT = 4409;
-
-sub new {
-    my $class = shift;
-    my $self = $class->SUPER::new(
-            host => $DEFAULT_HOST,
-            port => $DEFAULT_PORT,
-            reader => 1, # replaced below
-            writer => 1, # replaced below
-            @_
-    );
-    return unless $self;
-
-    my $socket = IO::Socket::INET->new(
-        PeerHost => $self->host,
-        PeerPort => $self->port,
-        ReuseAddr => 1,
-        #ReusePort => 1,
-    );
-    unless ($socket) {
-        my $msg = sprintf(
-            "Error connecting to remote host %s on port %s : $!",
-            $self->host,
-            $self->port
-        );
-        $self = undef;
-        die $msg;
-    }
-
-    $self->{reader} = $socket;
-    $self->{writer} = $socket;
-
-    return $self;
-}
-
-1;
 
 =pod
 
@@ -62,14 +39,13 @@ This document describes RMI::Client::Tcp v0.11.
 
 =head1 SYNOPSIS
 
-    $c = RMI::Client::Tcp->new(
-        host => 'myserver.com', # defaults to 'localhost'
-        port => 1234            # defaults to 4409
-    );
+    c = RMI::Client::Tcp.new(
+        :host => 'myserver.com', # defaults to 'localhost'
+        :port => 1234            # defaults to 4409
+    )
 
-    $c->call_use('IO::File');
-    $remote_fh = $c->call_class_method('IO::File', 'new', '/my/file');
-    print <$remote_fh>;
+    remote_fh = c.call_class_method('File', 'open', '/my/file', 'r');
+    print remote_fh.readline
     
 =head1 DESCRIPTION
 
