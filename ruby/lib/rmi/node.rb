@@ -514,11 +514,11 @@ B<IO::Socket>, B<Tie::Handle>, B<Tie::Array>, B<Tie:Hash>, B<Tie::Scalar>
 
 =head1 AUTHORS
 
-Scott Smith <sakoht@cpan.org>
+Scott Smith <https://github.com/sakoht>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2012 Scott Smith <sakoht@cpan.org>  All rights reserved.
+Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 
 =head1 LICENSE
 

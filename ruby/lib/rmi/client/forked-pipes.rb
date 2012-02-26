@@ -111,11 +111,11 @@ B<RMI>, B<RMI::Server::ForkedPipes>, B<RMI::Client>, B<RMI::Server>, B<RMI::Node
 
 =head1 AUTHORS
 
-Scott Smith <sakoht@cpan.org>
+Scott Smith <https://github.com/sakoht>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2012 Scott Smith <sakoht@cpan.org>  All rights reserved.
+Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 
 =head1 LICENSE
 
