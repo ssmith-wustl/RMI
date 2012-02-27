@@ -38,7 +38,7 @@ class RMI::Client::ForkedPipes < RMI::Client
             ##    exec(@_);   
             ##}
             
-            # otherwise, we do the servicing in Perl
+            # otherwise, we do the servicing in Ruby
             $RMI_DEBUG_MSG_PREFIX = '  '
             server = RMI::Server::ForkedPipes.new(
                 :peer_pid => parent_pid,
@@ -120,7 +120,7 @@ Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

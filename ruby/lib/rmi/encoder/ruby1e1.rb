@@ -26,8 +26,6 @@ def encode(message_data, opts)
     encoded = []
     message_data.each { |o|
         klass = o.class
-        #if o.kind_of?(Exception)
-        #    encoded.push(@@exception, o.class.to_s, o.message, *o.backtrace)
         if ! _is_primitive(o)
             # sending some sort of reference
             remote_id = @@remote_id_for_object[o.__id__] 
@@ -39,7 +37,7 @@ def encode(message_data, opts)
             elsif (opts != nil and (opts['copy'] == true or opts['copy_params'] == true))
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
-                # or to get around known bugs in the C<->Perl interaction in some modules (DBI).
+                # or to get around known bugs in the C<->Ruby interaction in some modules (DBI).
                 o = _create_remote_copy(o)
                 redo
             else 
@@ -67,11 +65,9 @@ def encode(message_data, opts)
 end
 
 
-# decode from a Perl5::E1 remote node
+# decode from a Ruby5::E1 remote node
 def decode(encoded)
-    
     message_data = []
-
     while encoded.length > 0 
         type = encoded.shift()
         value = encoded.shift()
@@ -98,29 +94,21 @@ def decode(encoded)
                 end
                 remote_class = value[0..pos-1]
 
-                # it is not already proxied on this side
-                #if (RMI::proxied_classes{remote_class})
-                #    bless o, remote_class
-                #}
-                #else 
-                    
-                    # Put the object into a custom subclass of RMI::ProxyObject
-                    # this allows class-wide customization of how proxying should
-                    # occur.  It also makes Data::Dumper results more readable.
-                    target_class_name = 'RMI::ProxyObject::' + remote_class
-                    target_class = @@proxy_subclasses[target_class_name]
-                    if target_class == nil 
-                        mod = target_class_name.downcase.split('::').join('/')
-                        #begin 
-                        #    require mod
-                        #    target_class = eval "#{target_class_name}"
-                        #rescue Exception
-                            target_class = eval "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}";
-                        #end
-                        @@proxy_subclasses[target_class_name] = target_class
-                    end
-
-                #end 
+                # Put the object into a custom subclass of RMI::ProxyObject
+                # this allows class-wide customization of how proxying should
+                # occur.  It also makes Data::Dumper results more readable.
+                target_class_name = 'RMI::ProxyObject::' + remote_class
+                target_class = @@proxy_subclasses[target_class_name]
+                if target_class == nil 
+                    mod = target_class_name.downcase.split('::').join('/')
+                    #begin 
+                    #    require mod
+                    #    target_class = eval "#{target_class_name}"
+                    #rescue Exception
+                        target_class = eval "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}";
+                    #end
+                    @@proxy_subclasses[target_class_name] = target_class
+                end
                 o = target_class.new(@node,value,remote_class)
                 o_id = o.__id__
                 @received_objects[value] = WeakRef.new(o)
@@ -149,7 +137,7 @@ RMI::Encoder::Ruby1e1
 
 =head1 VERSION
 
-This document describes RMI::Encoder::Perl5e1 for RMI v0.11.
+This document describes RMI::Encoder::Ruby5e1 for RMI v0.11.
 
 =head1 DESCRIPTION
 
@@ -158,15 +146,15 @@ return an array which has no references.  The complimentary decode() method
 must be able to take a copy of the encode() results, in another process on the opposite 
 side of the node pair, and turn it into something which behaves like the original array.
 
-The RMI::Encoder::Perl5e1 module handles encode/decode for RMI nodes where
-the remote node specifies perl5e1 as its encoding.  It uses a simple 4-value system
+The RMI::Encoder::Ruby5e1 module handles encode/decode for RMI nodes where
+the remote node specifies ruby5e1 as its encoding.  It uses a simple 4-value system
 of categorizing a data value, and the categorized value, when a reference, embeds both
 the class/module and the object identity.
 
-This implementation is in Perl, so it is used for Perl processes to talk with each other.
-For a process in another language to talk with a Perl process, it could implement a
-Perl5e1 encoding module.  Alternatively, that process's language could implement an
-encoding module for which there is a Perl implementation.
+This implementation is in Ruby, so it is used for Ruby processes to talk with each other.
+For a process in another language to talk with a Ruby process, it could implement a
+Ruby5e1 encoding module.  Alternatively, that process's language could implement an
+encoding module for which there is a Ruby implementation.
 
 Currently, each RMI Node knows its encoding protocol, and it is up to the constructor
 of the node to ensure that it is using a protocol which matches the protocol on the other
@@ -225,7 +213,7 @@ Copyright (c) 2008 - 2010 Scott Smith <https://github.com/sakoht>  All rights re
 =head1 LICENSE
 
 This program is free software you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

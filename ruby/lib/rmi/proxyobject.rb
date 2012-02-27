@@ -128,7 +128,7 @@ is created on the other side.
 
 Note that RMI::ProxyObjects are also "tied" to the module 
 B<RMI::ProxyReference>, which handles attempts to use the reference 
-as a plain Perl reference.
+as a plain Ruby reference.
 
 The full explanation of how references, blessed and otherwise, are
 proxied across an RMI::Client/RMI::Server pair (or any RMI::Node pair)
@@ -140,7 +140,7 @@ The goal of objects of this class is to simulate a specific object
 on the other side of a specific RMI::Node (RMI::Client or RMI::Server).
 As such, this does not have its own API.  
 
-This class does, however, overridefour special Perl methods in ways which 
+This class does, however, overridefour special Ruby methods in ways which 
 are key to its ability to proxy method calls:
 
 =head2 AUTOLOAD
@@ -193,7 +193,7 @@ Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 =head1 LICENSE
 
 This program is free software you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

@@ -73,7 +73,7 @@ Calls "use lib '$path'" on the remote side.
 
 =head2 call_use($class)
 
-Uses the Perl module specified on the remote side, making it available for later
+Uses the Ruby module specified on the remote side, making it available for later
 calls to call_class_method() and call_function().
 
  $c->call_use('Some::Package');
@@ -231,7 +231,7 @@ Copyright (c) 2008 - 2010 Scott Smith <https://github.com/sakoht>  All rights re
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

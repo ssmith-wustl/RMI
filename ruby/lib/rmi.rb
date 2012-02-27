@@ -86,7 +86,7 @@ from the client are also automatically proxied on the server side during method
 execution.
 
 In addition to invoking methods on proxy objects trasparently, an RMI::Client
-can invoke class methods, regular function calls, and other Perl functionaity 
+can invoke class methods, regular function calls, and other Ruby functionaity 
 on the remote server.  Calls like these are typically the first step to obtain 
 a remote object in the first place.  This is different than implementations
 in other languages, which typically require that a server have limited and
@@ -142,9 +142,9 @@ across the connection to the remote side, and will maintain the correct API.
 Remote objects which implement AUTOLOAD for their API will still work correctly.
 
 Plain proxied references, and as well as objects, are "tied" so as to
-operate as the correct type of Perl primitive.  SCALAR, ARRAY, HASH, CODE and
+operate as the correct type of Ruby primitive.  SCALAR, ARRAY, HASH, CODE and
 GLOB/IO references, blessed or otherwise, will be proxied as the same type of
-reference on the other side.  The RMI system uses Perl"s "tie" functionality to
+reference on the other side.  The RMI system uses Ruby"s "tie" functionality to
 do this.
 
 =head1 GARBAGE COLLECTION
@@ -223,7 +223,7 @@ call.
 This is supportable, but adds considerable overhead to support modules which
 create a side effect which is avoided because it is, mostly, a bad idea.
 
-Perl technically passes an alias to even non-reference values, though the
+Ruby technically passes an alias to even non-reference values, though the
 common "my ($v1,$v2) = @_;" makes a copy which safely allows the subroutine to
 behave as though the values were pass-by-copy.
 
@@ -292,7 +292,7 @@ Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

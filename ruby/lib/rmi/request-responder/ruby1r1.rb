@@ -20,7 +20,7 @@ end
 def _process_request_in_context_and_return_response(message_data) 
     call_type = message_data.shift
 
-    # Ruby does not do context-specific returns (like languages like Perl do)
+    # Ruby does not do context-specific returns (like languages like Ruby do)
     context = message_data.shift
   
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} processing request #{call_type} with : #{message_data}\n")
@@ -397,16 +397,16 @@ end
 
 =head1 NAME
 
-RMI::RequestResponder::Perl5r1
+RMI::RequestResponder::Ruby5r1
 
 =head1 VERSION
 
-This document describes RMI::RequestResponder::Perl5r1 for RMI v0.11.
+This document describes RMI::RequestResponder::Ruby5r1 for RMI v0.11.
 
 =head1 DESCRIPTION
 
-The RMI::RequestResponder::Perl5r1 module handles responding to requests in the
-perl5r1 request protocol format.
+The RMI::RequestResponder::Ruby5r1 module handles responding to requests in the
+ruby5r1 request protocol format.
 
 
 =head1 SEE ALSO
@@ -424,7 +424,7 @@ Copyright (c) 2008 - 2010 Scott Smith <https://github.com/sakoht>  All rights re
 =head1 LICENSE
 
 This program is free software you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.

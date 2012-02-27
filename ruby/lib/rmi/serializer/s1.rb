@@ -17,7 +17,7 @@ def serialize(sproto, eproto, rproto, message_type, encoded_message_data, receiv
         received_and_destroyed_ids +
         encoded_message_data
 
-    # TODO: this is turning the array "a" into a string eval-able in Ruby, JSON, Perl and Python
+    # TODO: this is turning the array "a" into a string eval-able in Ruby, JSON, Ruby and Python
     # a built-in dumper may be faster, but the structure is so simple it may not be.  Test it.
     serialized_blob = '' 
     a.each do |v|
@@ -110,7 +110,7 @@ This is the default serialization protocol for RMI in Ruby.
 
 By using double-quoted strings, newlines are removed from any message, leading 
 to a simple blob format of readable characters with one message per line, and easy 
-debugging.  The message is itself eval-able in Ruby, JavaScript, Perl, Python.
+debugging.  The message is itself eval-able in Ruby, JavaScript, Ruby, Python.
 
 =cut
 

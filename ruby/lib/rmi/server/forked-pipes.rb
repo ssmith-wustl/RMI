@@ -42,7 +42,7 @@ Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or modify it under
-the same terms as Perl itself.
+the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
 module.
