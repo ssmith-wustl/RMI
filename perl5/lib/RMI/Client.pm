@@ -12,7 +12,7 @@ sub call {
     my $self = shift;
     my $type = shift;
     my $method = 'call_' . $type;
-    $self->{request_responder}->$method(@_);
+    $self->{_request_responder}->$method(@_);
 }
 
 our $AUTOLOAD;
