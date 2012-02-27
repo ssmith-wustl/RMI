@@ -117,7 +117,7 @@ class RMI::Node
             # the return value is mostly incidental, in case the server logic wants to log what just happened...
             return message_type, message_data, response_type, response_data
         elsif (message_type == 'close')
-            return nil, nil, nil, nil
+            return nil
         else
             raise IOError, "Unexpected message type #{message_type}!  message_data was: #{message_data}"
         end        

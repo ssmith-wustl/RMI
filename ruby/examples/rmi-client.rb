@@ -9,7 +9,15 @@ c = RMI::Client::Tcp.new(
 )
 
 while line = Readline.readline('> ', true) do
-    args = eval(line)
+    begin
+        args = eval(line)
+    rescue Exception => e
+        print "ERROR CREATING MESSAGE ARRAY: #{e}\n"
+        next
+    end
+    if args == nil
+        next
+    end
     retval = c.call(*args)
     PP.pp(retval)
 end

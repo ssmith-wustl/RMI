@@ -19,11 +19,11 @@ end
 
 def run 
     while(true) 
-        (response_type,*response_details) = self.receive_request_and_send_response()
-        if response_type == nil
+        (message_type,*message_detail) = self.receive_request_and_send_response()
+        if message_type == nil
             redo 
         end
-        print "response type was #{response_type}\n"
+        print "message was #{message_type} : #{message_detail.join(',')}\n"
     end
 end
 
@@ -39,6 +39,7 @@ def receive_request_and_send_response(timeout=1000)
                     :writer => new_socket
                 )
                 @server_for_client_socket[new_socket] = node
+                print "opening non-blocking socket #{new_socket} and rmi node #{node} for new connection\n"
             else
                 delegate_server = @server_for_client_socket[s]
                 retval = delegate_server.receive_request_and_send_response
@@ -47,12 +48,17 @@ def receive_request_and_send_response(timeout=1000)
                     @client_sockets.delete_if { |sx| sx == s }
                     print "closing #{s}, tossing #{delegate_server}\n"
                     @server_for_client_socket.delete(s)
+                    return nil
+                else
+                    print "message on #{s} for #{delegate_server}\n"
+                    return retval
                 end
-                return retval
             end
         rescue Errno::EAGAIN, Errno::EWOULDBLOCK
         end
     end
+    # we only get here if NOTHING is readable
+    return nil
 end
 
 

@@ -107,7 +107,7 @@ sub _accept_connection {
     return $socket;
 }
 
-sub _close_connection {
+sub X_close_connection {
     # This is no longer called, and somehow the select sockets get things removed?
     my $self = shift;
     my $socket = shift;
