@@ -1,15 +1,5 @@
 class RMI::Server < RMI::Node
 
-def run 
-    while(true) 
-        if self.is_closed 
-            return true
-        end
-        self.receive_request_and_send_response()
-    end
-    return true;
-end
-
 
 =begin
 
@@ -28,17 +18,17 @@ This docuement describes RMI::Server v0.11.
     $s = RMI::Server->new(
         reader => $fh1,
         writer => $fh2,
-    );
-    $s->run;
+    )
+    s.run
 
     $s = RMI::Server::Tcp->new(
         port => 1234
-    );
-    $s->run;
+    )
+    s.run
 
-    $s = RMI::Server->new(...);
+    s = RMI::Server.new(...)
     for (1..3) {
-        $s->receive_request_and_send_response;
+        s.receive_request_and_send_response
     }
     
 =head1 DESCRIPTION
@@ -78,7 +68,7 @@ a single request from the reader handle.
 
 =head2 run()
 
- $s->run();
+ s.run()
  
 Enter a loop processing RMI requests.  This will continue as long as the
 connection is open.
@@ -101,7 +91,7 @@ Copyright (c) 2012 Scott Smith <https://github.com/sakoht>  All rights reserved.
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this

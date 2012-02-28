@@ -15,38 +15,38 @@ This document describes RMI::Client v0.11.
 =head1 SYNOPSIS
 
  # simple
- $c = RMI::Client::ForkedPipes->new(); 
+ c = RMI::Client::ForkedPipes.new() 
 
  # typical
- $c = RMI::Client::Tcp->new(host => 'server1', port => 1234);
+ c = RMI::Client::Tcp.new(host => 'server1', port => 1234)
  
  # roll-your-own...
- $c = RMI::Client->new(reader => $fh1, writer => $fh2); # generic
+ c = RMI::Client.new(reader => fh1, writer => fh2) # generic
  
- $c->call_use('IO::File');
- $c->call_use('Sys::Hostname');
+ c.call_use('IO::File')
+ c.call_use('Sys::Hostname')
 
- $remote_obj = $c->call_class_method('IO::File','new','/tmp/myfile');
- print $remote_obj->getline;
- print <$remote_obj>;
+ remote_obj = c.call_class_method('IO::File','new','/tmp/myfile')
+ print remote_obj.getline
+ print <remote_obj>
 
  $host = $c->call_function('Sys::Hostname::hostname')
- $host eq 'server1'; #!
+ host eq 'server1' #!
  
- $remote_hashref = $c->call_eval('$main::h = { k1 => 111, k2 => 222, k3 => 333}'); 
- $remote_hashref->{k4} = 444;
- print sort keys %$remote_hashref;
- print $c->call_eval('sort keys %$main::h'); # includes changes!
+ remote_hashref = c.call_eval('main::h = { k1 => 111, k2 => 222, k3 => 333}') 
+ remote_hashref.{k4} = 444
+ print sort keys %remote_hashref
+ print c.call_eval('sort keys %main::h') # includes changes!
 
- $c->use_remote('Sys::Hostname');   # this whole module is on the other side
- $host = Sys::Hostname::hostname(); # possibly not this hostname...
+ c.use_remote('Sys::Hostname')   # this whole module is on the other side
+ host = Sys::Hostname::hostname() # possibly not this hostname...
 
- our $c;
+ our c
  BEGIN {
-    $c = RMI::Client::Tcp->new(port => 1234);
-    $c->use_lib_remote;
+    c = RMI::Client::Tcp.new(port => 1234)
+    c.use_lib_remote
  }
- use Some::Class;               # remote!
+ use Some::Class               # remote!
   
 =head1 DESCRIPTION
 
@@ -58,18 +58,18 @@ for a private out-of-process object server.
 
 =head1 METHODS
  
-=head2 call_use_lib($path);
+=head2 call_use_lib(path)
 
 Calls "use lib '$path'" on the remote side.
 
- $c->call_use_lib('/some/path/on/the/server');
+ c.call_use_lib('/some/path/on/the/server')
 
 =head2 call_use($class)
 
 Uses the Ruby module specified on the remote side, making it available for later
 calls to call_class_method() and call_function().
 
- $c->call_use('Some::Package');
+ c.call_use('Some::Package')
 
 =head2 call_class_method($class, $method, @params)
 
@@ -77,20 +77,20 @@ Does $class->$method(@params) on the remote side.
 
 Calling remote constructors is the primary way to make a remote object.
 
- $remote_obj = $client->call_class_method('Some::Class','new',@params);
+ remote_obj = client.call_class_method('Some::Class','new',params)
  
- $possibly_another_remote_obj = $remote_obj->some_method(@p);
+ possibly_another_remote_obj = remote_obj.some_method(p)
  
 =head2 call_function($fname, @params)
 
 A plain function call made by name to the remote side.  The function name must be fully qualified.
 
- $c->call_use('Sys::Hostname');
- my $server_hostname = $c->call_function('Sys::Hostname::hostname');
+ c.call_use('Sys::Hostname')
+ server_hostname = c.call_function('Sys::Hostname::hostname')
 
 =head2 call_sub($subname, @params)
 
-An alias for call_function();
+An alias for call_function()
 
 =head2 call_eval($src,@args)
 
@@ -98,9 +98,9 @@ Calls eval $src on the remote side.
 
 Any additional arguments are set to @_ before eval on the remote side, after proxying.
 
-    my $a = $c->call_eval('@main::x = (11,22,33); return \@main::x;');  # pass an arrayref back
-    push @$a, 44, 55;                                                   # changed on the server
-    scalar(@$a) == $c->call_eval('scalar(@main::x)');                   # ...true! 
+    a = c.call_eval('main::x = (11,22,33) return \main::x;');  # pass an arrayref back
+    push a, 44, 55                                                   # changed on the server
+    scalar(a) == c.call_eval('scalar(main::x)')                   # ...true! 
  
 =head2 use_remote($class)
 
@@ -114,11 +114,11 @@ that ALL objects of the given class must come from through this client.
  # _really_ want all of its files to open on the server,
  # while open() opens on the client...
  
- $c->use_remote('IO::File');    # never touches IO/File.pm on the client                                
- $fh = IO::File->new('myfile'); # actually a remote call
- print <$fh>;                   # printing rows from a remote file
+ c.use_remote('IO::File')    # never touches IO/File.pm on the client                                
+ fh = IO::File.new('myfile') # actually a remote call
+ print <fh>                   # printing rows from a remote file
 
- require IO::File;              # does nothing, since we've already "used" IO::File
+ require IO::File              # does nothing, since we've already "used" IO::File
  
 The @ISA array is also bound to the remote @ISA, but all other variables
 must be explicitly bound on the client to be accessible.  This may be changed in a
@@ -126,11 +126,11 @@ future release.
 
 Exporting does work.  To turn it off, use empty braces as you would empty parens.
 
- $c->use_remote('Sys::Hostname',[]);
+ c.use_remote('Sys::Hostname',[])
 
 To get the effect of the following (prevents export of the hostame() function).
 
- use Sys::Hostname ();
+ use Sys::Hostname ()
 
 =head2 use_lib_remote($path)
 
@@ -138,22 +138,22 @@ Installs a special handler into the local @INC which causes it to check the remo
 side for a module in subsequent use/require calls.  If available, it will do
 use_remote() on that class.
 
- use A;
- use B; 
- BEGIN { $c->use_remote_lib; }; # do everything remotely from now on if possible...
- use C; #remote!
- use D; #remote!
- use E; #local, b/c not found on the remote side
+ use A
+ use B 
+ BEGIN { c.use_remote_lib }; # do everything remotely from now on if possible...
+ use C #remote!
+ use D #remote!
+ use E #local, b/c not found on the remote side
 
 =head2 bind($varname)
 
 Create a local transparent proxy for a module variable on the remote side.
 
   $c->bind('$Some::Package::somevar')
-  $Some::Package::somevar = 123; # changed remotely
+  Some::Package::somevar = 123 # changed remotely
   
-  $c->bind('@main::foo');
-  push @main::foo, 11, 22 33; #changed remotely
+  c.bind('main::foo')
+  push main::foo, 11, 22 33 #changed remotely
 
 =head1 ADDITIONAL EXAMPLES
 
@@ -161,47 +161,47 @@ Create a local transparent proxy for a module variable on the remote side.
 
 This makes a hashref on the server, and makes a proxy on the client:
 
-    my $remote_hashref = $c->call_eval('{}');
+    remote_hashref = c.call_eval('{}')
 
 This seems to put a key in the hash, but actually sends a message to the server
 to modify the hash.
 
-    $remote_hashref->{key1} = 100;
+    remote_hashref.{key1} = 100
 
 Lookups also result in a request to the server:
 
-    print $remote_hashref->{key1};
+    print remote_hashref.{key1}
 
 When we do this, the hashref on the server is destroyed, as since the ref-count
 on both sides is now zero:
 
-    $remote_hashref = undef;
+    remote_hashref = undef
 
 =head2 put remote objects from one server in a remote hash on another
 
-$c1 = RMI::Client::Tcp->new(host => 'host1', port => 1234);
-$c2 = RMI::Client::Tcp->new(host => 'host2', port => 1234);
-$c3 = RMI::Client::Tcp->new(host => 'host3', port => 1234);
+c1 = RMI::Client::Tcp.new(host => 'host1', port => 1234)
+c2 = RMI::Client::Tcp.new(host => 'host2', port => 1234)
+c3 = RMI::Client::Tcp.new(host => 'host3', port => 1234)
 
-$o1 = $c1->call_class_method('IO::File','new','/etc/passwd');
-$o2 = $c2->call_class_method('IO::File','new','/etc/passwd');
+o1 = c1.call_class_method('IO::File','new','/etc/passwd')
+o2 = c2.call_class_method('IO::File','new','/etc/passwd')
 
-$h  = $c3->call_eval('{ handle1 => $_[0] }', $o1);
+h  = c3.call_eval('{ handle1 => _[0] }', o1)
 
-$h->{handle2} = $o2;
+h.{handle2} = o2
 
 =head2 making a remote CODE ref, and using it with local and remote objects
 
-    my $local_fh = IO::File->new('/etc/passwd');
-    my $remote_fh = $c->call_class_method('IO::File','new','/etc/passwd');
+    local_fh = IO::File.new('/etc/passwd')
+    remote_fh = c.call_class_method('IO::File','new','/etc/passwd')
     my $remote_coderef = $c->call_eval('
                             sub {
-                                my $f1 = shift; my $f2 = shift;
-                                my @lines = (<$f1>, <$f2>);
+                                f1 = shift f2 = shift;
+                                lines = (<f1>, <f2>)
                                 return scalar(@lines)
                             }
-                        ');
-    my $total_line_count = $remote_coderef->($local_fh, $remote_fh);
+                        ')
+    total_line_count = remote_coderef.(local_fh, remote_fh)
 
 =head1 BUGS AND CAVEATS
 
@@ -223,7 +223,7 @@ Copyright (c) 2008 - 2010 Scott Smith <https://github.com/sakoht>  All rights re
 
 =head1 LICENSE
 
-This program is free software; you can redistribute it and/or modify it under
+This program is free software you can redistribute it and/or modify it under
 the same terms as Ruby itself.
 
 The full text of the license can be found in the LICENSE file included with this
@@ -232,7 +232,7 @@ module.
 
 =cut
 
-1;
+1
 
 =end
 

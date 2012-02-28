@@ -77,6 +77,18 @@ class RMI::Node
         @_request_responder.send(method,*params)
     end
 
+    def run
+        while(true) 
+            (message_type,*message_detail) = self.receive_request_and_send_response()
+            if message_type == nil
+                redo 
+            end
+            #print "message was #{message_type} : #{message_detail.join(',')}\n"
+        end
+    end
+
+    # API for the request responder
+
     def send_request_and_receive_response(call_type,pkg,sub,*params)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} calling #{call_type} using ns #{pkg} method #{sub} with params #{params}\n")
         
@@ -132,7 +144,7 @@ class RMI::Node
     end
 
 
-    # private API
+    # private API used by the above to interact with the encoder/decoder and serializer/deserializer
 
     attr_accessor :_sent_objects, :_received_objects, :_received_and_destroyed_ids, :_tied_objects_for_tied_refs
 

@@ -17,15 +17,6 @@ def initialize(*args)
     @server_for_client_socket = {}
 end
 
-def run 
-    while(true) 
-        (message_type,*message_detail) = self.receive_request_and_send_response()
-        if message_type == nil
-            redo 
-        end
-        print "message was #{message_type} : #{message_detail.join(',')}\n"
-    end
-end
 
 def receive_request_and_send_response(timeout=1000)
     readable, writable = IO.select([@listen_socket] + @client_sockets)
