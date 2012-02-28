@@ -116,6 +116,15 @@ sub call {
     $self->{_request_responder}->$method(@_);
 }
 
+sub run {
+    my($self) = @_;
+    while(1) {
+        last if $self->{is_closed}; 
+        $self->receive_request_and_send_response();
+    }
+    return 1;
+}
+
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;
