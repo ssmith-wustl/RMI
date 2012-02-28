@@ -2,19 +2,8 @@ require 'rmi'
 require 'rmi/server/forked-pipes'
 
 class RMI::Client::ForkedPipes < RMI::Client
-    attr_accessor :peer_pid
 
-
-    @@rw = {}
-
-    @@finalizer = Proc.new do |id|
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}\n")
-        @@rw.each do |handle| 
-            handle.close
-        end
-    end
-
-    def initialize(params = {}) 
+    def initialize(*args) 
         parent_reader = nil
         parent_writer = nil
         child_reader = nil
@@ -34,14 +23,14 @@ class RMI::Client::ForkedPipes < RMI::Client
             # if a command was passed to the constructor, we exec() it.
             # this allows us to use a custom server, possibly one
             # in a different language..
-            ##if (@_) {
-            ##    exec(@_);   
-            ##}
+            ##if args.length
+            ##    exec(*args)  
+            ##end
             
             # otherwise, we do the servicing in Ruby
             $RMI_DEBUG_MSG_PREFIX = '  '
             server = RMI::Server::ForkedPipes.new(
-                :peer_pid => parent_pid,
+                :peer_id => parent_pid,
                 :writer => parent_writer,
                 :reader => parent_reader
             )
@@ -55,14 +44,7 @@ class RMI::Client::ForkedPipes < RMI::Client
         parent_reader.close 
         parent_writer.close
 
-        super
-        @peer_pid = child_pid
-        @writer = child_writer
-        @reader = child_reader
-
-        # ensure we call the finalizer to 
-        @@rw[self.__id__] = [ @reader, @writer ]
-        ObjectSpace.define_finalizer(self, @@finalizer)
+        super(:writer => child_writer, :reader => child_reader, :peer_id => child_pid)
     end 
 end
 
@@ -96,7 +78,7 @@ a module at once in the same program.
 
 =head1 METHODS
 
-=head2 peer_pid
+=head2 peer_id
  
  Both the RMI::Client::ForkedPipes and RMI::Server::ForkedPipes have a method to 
  return the process ID of their remote partner.

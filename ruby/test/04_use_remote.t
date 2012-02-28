@@ -44,7 +44,7 @@ ok($remote1, "created a remote object using regular/local syntax");
 ok($remote1->UNIVERSAL::isa("RMI::TestClass1"), "real class on remote object is a proxy object");
 isa_ok($remote1,"RMI::TestClass1", "isa returns true when used with the proxied class");
 
-is($remote1->m1, $c->peer_pid, "object method returns a value indicating it ran in the other process");
+is($remote1->m1, $c->peer_id, "object method returns a value indicating it ran in the other process");
 ok($remote1->m1 != $$, "object method returns a value indicating it did not run in this process");
 
 my($rv,$h);

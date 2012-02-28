@@ -48,7 +48,7 @@ class Test01 < Test::Unit::TestCase
 
     def test_basic_remote_function_attempt_1
         result = @c.call('function','Test01Module::f1',2,3)
-        assert_equal(result[0], @c.peer_pid, "retval #{result[0]} indicates the method was called in the child/server process #{@c.peer_pid} not this one #{$$}")
+        assert_equal(result[0], @c.peer_id, "retval #{result[0]} indicates the method was called in the child/server process #{@c.peer_id} not this one #{$$}")
         assert_equal(result[1], 5, "result value #{result[1]} is as expected for 2 + 3")
         #expect_counts(0,1)
     end

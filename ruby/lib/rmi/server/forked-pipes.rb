@@ -1,5 +1,4 @@
 class RMI::Server::ForkedPipes < RMI::Server
-    attr_accessor :peer_pid
 
 =begin
 
@@ -18,9 +17,9 @@ This document describes RMI::Server::ForkedPipes v0.11.
 This is used internally by RMI::Client::ForkedPipes.  When constructed
 the client makes a private server of this class in a forked process.  
 
-$client->peer_pid eq $client->remote_eval('$$');
+$client->peer_id eq $client->remote_eval('$$');
 
-$server->peer_pid eq $server->remtoe_eval('$$');
+$server->peer_id eq $server->remtoe_eval('$$');
 
 =head1 DESCRIPTION
 
@@ -48,6 +47,7 @@ The full text of the license can be found in the LICENSE file included with this
 module.
 
 =cut
+
 =end
 
 end

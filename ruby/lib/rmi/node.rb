@@ -4,7 +4,16 @@ require 'set'
 class RMI::Node
 
     # public API
-    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules, :is_closed
+    attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules, :is_closed, :peer_id
+
+    @@rw = {}
+
+    @@finalizer = Proc.new do |id|
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}\n")
+        @@rw.each do |handle| 
+            handle.close
+        end
+    end
 
     def initialize(params = {})
         @reader = nil
@@ -59,6 +68,10 @@ class RMI::Node
         serializer_class = Object.const_get("RMI").const_get("Serializer").const_get(@serialization_protocol.capitalize)
         @_serializer = serializer_class.new(self)
        
+        # ensure we call the finalizer to close handles 
+        @@rw[self.__id__] = [ @reader, @writer ]
+        ObjectSpace.define_finalizer(self, @@finalizer)
+
         #print "initializing node #{self}\n"
     end
 
