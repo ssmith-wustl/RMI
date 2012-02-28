@@ -1,12 +1,5 @@
 class RMI::Client < RMI::Node
 
-# all methods in this module are convenience wrappers for RMI::Node generic methods.
-
-def call(type,*params)
-    method = 'call_' + type
-    @_request_responder.send(method,*params)
-end
-
 =begin
 
 =pod

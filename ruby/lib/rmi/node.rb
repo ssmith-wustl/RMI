@@ -69,6 +69,14 @@ class RMI::Node
         @reader.close
     end 
 
+    def call(type,*params)
+        # delegate to the request responder, which wraps the
+        # two methods below in a request/response protocol
+        # which might vary per language, or over time.
+        method = 'call_' + type
+        @_request_responder.send(method,*params)
+    end
+
     def send_request_and_receive_response(call_type,pkg,sub,*params)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} calling #{call_type} using ns #{pkg} method #{sub} with params #{params}\n")
         
