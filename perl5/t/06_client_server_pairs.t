@@ -85,7 +85,7 @@ my $result;
 
 note("basic remote function attempt 1");
 @result = $c->call_function('main::f1', 2, 3); 
-is($result[0], $c->peer_pid, "retval indicates the method was called in the child/server process");
+is($result[0], $c->peer_id, "retval indicates the method was called in the child/server process");
 is($result[1], 5, "result value $result[1] is as expected for 2 + 3");
 expect_counts(0,0);
 

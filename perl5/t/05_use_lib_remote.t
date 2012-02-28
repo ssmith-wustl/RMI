@@ -31,7 +31,7 @@ ok($remote2, "created a remote object using regular/local syntax");
 is(ref($remote2),'RMI::TestClass1', "real class on remote object is returned as the expected name");
 isa_ok($remote2,"RMI::TestClass1", "isa returns true when used with the proxied class");
 
-is($remote2->m1, $c->peer_pid, "object method returns a value indicating it ran in the other process");
+is($remote2->m1, $c->peer_id, "object method returns a value indicating it ran in the other process");
 ok($remote2->m1 != $$, "object method returns a value indicating it did not run in this process");
 
 use_ok("Sys::Hostname");

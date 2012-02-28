@@ -22,7 +22,7 @@ require 'Config_heavy.pl';
 
 # public API
 
-_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol serialization_protocol/);
+_mk_ro_accessors(qw/reader writer local_language remote_language request_response_protocol encoding_protocol serialization_protocol peer_id/);
 
 sub new {
     my $class = shift;
@@ -41,6 +41,7 @@ sub new {
         _serialize_method => undef,
         _deserialize_method => undef,        
         
+        peer_id => undef,
         reader => undef,
         writer => undef,
         
@@ -48,6 +49,7 @@ sub new {
         _received_objects => {},
         _received_and_destroyed_ids => [],
         _tied_objects_for_tied_refs => {},
+
         @_
     }, $class;
 

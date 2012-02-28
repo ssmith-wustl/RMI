@@ -94,7 +94,7 @@ sub _accept_connection {
     my $server = RMI::Server->new(
         reader => $socket,
         writer => $socket,
-        peer_pid => "$socket",
+        peer_id => "$socket",
     );
     unless ($server) {
         die "failed to create RMI::Server for accepted socket";

@@ -9,8 +9,6 @@ use base 'RMI::Client';
 use RMI::Server::ForkedPipes;
 use IO::Handle;     # "thousands of lines just for autoflush" :(
 
-RMI::Node::_mk_ro_accessors(__PACKAGE__,'peer_pid');
-
 sub new {
     my $class = shift;
     
@@ -40,7 +38,7 @@ sub new {
         # otherwise, we do the servicing in Perl
         $RMI::DEBUG_MSG_PREFIX = '  ';
         my $server = RMI::Server::ForkedPipes->new(
-            peer_pid => $parent_pid,
+            peer_id => $parent_pid,
             writer => $parent_writer,
             reader => $parent_reader,
         );
@@ -53,7 +51,7 @@ sub new {
     close $parent_reader; close $parent_writer;
 
     my $self = $class->SUPER::new(
-        peer_pid => $child_pid,
+        peer_id => $child_pid,
         writer => $child_writer,
         reader => $child_reader,
     );
@@ -91,7 +89,7 @@ a module at once in the same program.
 
 =head1 METHODS
 
-=head2 peer_pid
+=head2 peer_id
  
  Both the RMI::Client::ForkedPipes and RMI::Server::ForkedPipes have a method to 
  return the process ID of their remote partner.
