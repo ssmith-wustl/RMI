@@ -109,6 +109,13 @@ sub close {
     $self->{reader}->close;
 }
 
+sub call {
+    my $self = shift;
+    my $type = shift;
+    my $method = 'call_' . $type;
+    $self->{_request_responder}->$method(@_);
+}
+
 sub send_request_and_receive_response {
     my ($self,$call_type,$pkg,$sub,@params) = @_;
     print "$RMI::DEBUG_MSG_PREFIX N: $$ calling @_\n" if $RMI::DEBUG;

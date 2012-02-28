@@ -8,13 +8,6 @@ use base 'RMI::Node';
 
 # all methods in this module are convenience wrappers for RMI::Node generic methods.
 
-sub call {
-    my $self = shift;
-    my $type = shift;
-    my $method = 'call_' . $type;
-    $self->{_request_responder}->$method(@_);
-}
-
 our $AUTOLOAD;
 sub AUTOLOAD {
     my $self = shift;
