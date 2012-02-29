@@ -34,7 +34,7 @@ class RMI::Client::ForkedPipes < RMI::Client
                 :writer => parent_writer,
                 :reader => parent_reader
             )
-            server.run; 
+            server.run(forever = false)
             parent_reader.close 
             parent_writer.close
             exit

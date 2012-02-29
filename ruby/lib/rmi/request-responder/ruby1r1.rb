@@ -120,6 +120,13 @@ def _respond_to_object_method(klass, method, obj, *params)
     obj.send(method, *params)
 end
 
+def call_require(pkg) 
+    @node.send_request_and_receive_response('call_require', nil, 'require', pkg)
+end
+
+def _respond_to_require(dummy_class,dummy_method,name)
+    require name
+end
 
 ##
 

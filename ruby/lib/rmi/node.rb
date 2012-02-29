@@ -7,7 +7,6 @@ class RMI::Node
     attr_accessor :reader, :writer, :local_language, :remote_language, :request_response_protocol, :encoding_protocol, :serialization_protocol, :allow_modules, :is_closed, :peer_id
 
     @@rw = {}
-
     @@finalizer = Proc.new do |id|
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N:  Object #{id} dying at #{Time.new} reader/writer #{@@rw[id]}\n")
         @@rw.each do |handle| 
@@ -90,11 +89,15 @@ class RMI::Node
         @_request_responder.send(method,*params)
     end
 
-    def run
+    def run(forever = true)
         while(true) 
             (message_type,*message_detail) = self.receive_request_and_send_response()
             if message_type == nil
-                redo 
+                if forever
+                    redo 
+                else 
+                    return
+                end
             end
             #print "message was #{message_type} : #{message_detail.join(',')}\n"
         end

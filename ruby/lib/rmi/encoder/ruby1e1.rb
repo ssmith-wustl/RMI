@@ -97,7 +97,7 @@ def decode(encoded)
                 # Put the object into a custom subclass of RMI::ProxyObject
                 # this allows class-wide customization of how proxying should
                 # occur.  It also makes Data::Dumper results more readable.
-                target_class_name = 'RMI::ProxyObject::' + remote_class
+                target_class_name = 'RMI::ProxyObject::' + remote_class #gsub(':','')
                 target_class = @@proxy_subclasses[target_class_name]
                 if target_class == nil 
                     mod = target_class_name.downcase.split('::').join('/')
@@ -105,7 +105,18 @@ def decode(encoded)
                     #    require mod
                     #    target_class = eval "#{target_class_name}"
                     #rescue Exception
-                        target_class = eval "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}";
+                        src = ''
+                        words = remote_class.split('::')
+                        prev = ''
+                        words.each do |word|
+                            if (prev.length > 0) 
+                                src += "class RMI::ProxyObject#{prev}; end; "
+                            end
+                            prev += '::' + word
+                        end
+                        src += "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}"
+                        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - defining proxy sub-class #{src}\n")
+                        target_class = eval src
                     #end
                     @@proxy_subclasses[target_class_name] = target_class
                 end
