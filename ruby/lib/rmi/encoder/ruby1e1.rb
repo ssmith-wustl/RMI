@@ -99,9 +99,6 @@ def decode(encoded)
                 # occur.  It also makes Data::Dumper results more readable.
                 target_class_name = 'RMI::ProxyObject::' + remote_class #gsub(':','')
                 target_class = @@proxy_subclasses[target_class_name]
-                if target_class_name == 'RMI::ProxyObject::Proc'
-                    target_class = @@proxy_subclasses[target_class_name] = RMI::ProxyObject::Proc
-                end
                 if target_class == nil 
                     mod = target_class_name.downcase.split('::').join('/')
                     #begin 
@@ -128,6 +125,10 @@ def decode(encoded)
                 @received_objects[value] = WeakRef.new(o)
                 @@node_for_object[o_id] = @node
                 @@remote_id_for_object[o_id] = value
+
+                if target_class_name == 'RMI::ProxyObject::Proc'
+                    
+                end
 
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} (remote class #{remote_class}) #{o}\n")
 

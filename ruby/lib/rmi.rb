@@ -13,7 +13,7 @@ require 'rmi/proxyobject'
 require 'rmi/request-responder'
 require 'rmi/encoder'
 require 'rmi/serializer'
-require 'rmi/proxyobject/proc'
+require 'rmi/proxywrapper/proc'
 
 # these have been moved into the request-responder/ruby1r1.rb file
 #@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
