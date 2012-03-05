@@ -10,6 +10,8 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 @@node_for_object = {}
 @@proxy_subclasses = {}
 
+@@proc_src = {}
+
 def _is_primitive(v)
     if v.kind_of?(String)
         return true
@@ -128,10 +130,38 @@ def decode(encoded)
 
                 if target_class_name == 'RMI::ProxyObject::Proc'
                     orig = o
-                    o = RMI::ProxyWrapper::Proc.new(o) do |a,b|
-                        print "CALLING ENCODER BLOCK!\n";
-                        orig.call(a,b)
+                    arity = orig.arity
+                    src = @@proc_src[arity]
+                    if src == nil 
+                        params = ''
+                        if arity > 0 
+                            arity.times do |n| 
+                                if n != 0 
+                                    params += ','
+                                end
+                                params += "p#{n}"
+                            end
+                        elsif arity < 0
+                            arity.times do |n| 
+                                if n != 0
+                                    params += ','
+                                end
+                                if n == arity-1
+                                    params += "*p#{n}"
+                                else
+                                    params += "p#{n}"
+                                end
+                            end
+                            params = '*p'
+                        end
+                        src = <<"EOS"
+                        RMI::ProxyWrapper::Proc.new(o) do |#{params}|
+                            orig.call(#{params})
+                        end
+EOS
                     end
+                    #print src,"\n"
+                    o = eval src
                 end
 
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} (remote class #{remote_class}) #{o}\n")

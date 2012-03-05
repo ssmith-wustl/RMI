@@ -11,11 +11,11 @@ class RMI::ProxyWrapper::Proc < Proc
         end
     end
 
-    def call(a,b)
-        @delegate.call(a,b)
-    end
+    #def call(*a)
+    #    @delegate.call(*a)
+    #end
 
-    def arity(*a)
+    def Xarity(*a)
         print "call arity on #{self} with delegate #{@delegate} with params #{a}\n"
         @delegate.arity(*a)
     end
