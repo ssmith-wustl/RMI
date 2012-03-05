@@ -128,13 +128,13 @@ def decode(encoded)
 
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} (remote class #{remote_class}) #{o}\n")
 
-                if remote_class == 'Proc'
-                    # wrap our proxy in a real Proc which is callable on this side
-                    orig = o
-                    o = Proc.new do |*args| 
-                        orig.call(*args) 
-                    end 
-                end
+                #if remote_class == 'Proc'
+                #    # wrap our proxy in a real Proc which is callable on this side
+                #    orig = o
+                #    o = Proc.new do |*args| 
+                #        orig.call(*args) 
+                #    end 
+                #end
             else
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - using previous remote proxy for #{value}\n")
             end 
