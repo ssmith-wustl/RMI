@@ -11,8 +11,8 @@ class RMI::ProxyWrapper::Proc < Proc
         end
     end
 
-    def call(*a)
-        @delegate.call(*a)
+    def call(a,b)
+        @delegate.call(a,b)
     end
 
     def arity(*a)

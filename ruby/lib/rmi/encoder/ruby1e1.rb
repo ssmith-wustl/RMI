@@ -128,9 +128,9 @@ def decode(encoded)
 
                 if target_class_name == 'RMI::ProxyObject::Proc'
                     orig = o
-                    o = RMI::ProxyWrapper::Proc.new(o) do |*a|
+                    o = RMI::ProxyWrapper::Proc.new(o) do |a,b|
                         print "CALLING ENCODER BLOCK!\n";
-                        orig.call(*a)
+                        orig.call(a,b)
                     end
                 end
 
