@@ -195,7 +195,7 @@ class RMI::Node
     end
 
     def _receive()
-        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} receiving\n")
+        $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} **RECEIVING**\n")
 
         serialized_blob = @reader.gets
         

@@ -5,9 +5,19 @@ class RMI::ProxyWrapper::Proc < Proc
     include RMI::ProxyWrapper
 
     def initialize(delegate, &block) 
+        @delegate = delegate
         super(delegate) do 
             print "CALLING DUMMY BLOCK!\n"
         end
+    end
+
+    def call(*a)
+        @delegate.call(*a)
+    end
+
+    def arity(*a)
+        print "call arity on #{self} with delegate #{@delegate} with params #{a}\n"
+        @delegate.arity(*a)
     end
 
     methods = Proc.methods - Object.methods

@@ -127,7 +127,11 @@ def decode(encoded)
                 @@remote_id_for_object[o_id] = value
 
                 if target_class_name == 'RMI::ProxyObject::Proc'
-                    
+                    orig = o
+                    o = RMI::ProxyWrapper::Proc.new(o) do |*a|
+                        print "CALLING ENCODER BLOCK!\n";
+                        orig.call(*a)
+                    end
                 end
 
                 $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - made proxy for #{value} (remote class #{remote_class}) #{o}\n")
