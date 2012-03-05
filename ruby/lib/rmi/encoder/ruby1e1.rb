@@ -99,6 +99,9 @@ def decode(encoded)
                 # occur.  It also makes Data::Dumper results more readable.
                 target_class_name = 'RMI::ProxyObject::' + remote_class #gsub(':','')
                 target_class = @@proxy_subclasses[target_class_name]
+                if target_class_name == 'RMI::ProxyObject::Proc'
+                    target_class = @@proxy_subclasses[target_class_name] = RMI::ProxyObject::Proc
+                end
                 if target_class == nil 
                     mod = target_class_name.downcase.split('::').join('/')
                     #begin 

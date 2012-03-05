@@ -1,108 +1,11 @@
-class RMI::ProxyObject
 require "rmi"
+require "rmi/proxymethods"
 
-Object.methods.each do |name|
-    if  name == '__id__' || 
-        name == '__send__' || 
-        name == 'to_s' || 
-        name == 'to_a' || 
-        name == 'class' || 
-        name == 'kind_of?' ||
-        name == 'methods' ||
-        name == 'respond_to?'
-        name == 'inspect'
-        next
-    end
-    define_method name do |*args|
-        print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
-        #super(*args)
-        @node.send_request_and_receive_response('call_object_method', @class, name, self, *args)        
-    end
-end
-
-def initialize(node,remote_id,remote_class) 
-    @node = node
-    @remote_id = remote_id
-    @class = remote_class
-end
-
-def method_missing(name, *p, &block)
-    #print "MM: #{name}\n"
-    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} object method #{name.to_s} invoked on class #{@class} instance #{self} with params #{p} redirecting to node #{@node}\n")
-    @node.send_request_and_receive_response('call_object_method', @class, name.to_s, self, *p, &block)        
-end
-
-def self.method_missing(name, *p, &block)
-    $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} #{$$} class method #{name} invoked on class #{@class} with params #{p} CANNOT REDIRECT\n")
-    #@node.send_request_and_receive_response('call_class_method', @class, name, *p)
-    super(name,*p)
+class RMI::ProxyObject
+    include RMI::ProxyMethods
 end
 
 =begin
-
-def can
-    object = shift
-    class = ref(object) || object
-    class =~ s/RMI::Proxy:://
-    node = RMI::Node::node_for_object{object} || RMI::proxied_classes{class}
-    unless (node)
-        die "no node for object object: cannot call can (_)" + Data::Dumper::Dumper(\%RMI::Node::node_for_object)
-    }
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} $object 'can' redirecting to node $node\n")
-    
-
-    if (ref(object))
-        node.send_request_and_receive_response('call_object_method', class, 'can', object, _)        
-    }
-    else 
-        node.send_request_and_receive_response('call_class_method', class, 'can', _)        
-    }
-
-end
-
-def isa
-    object = shift
-    class = ref(object) || object
-    class =~ s/RMI::Proxy:://
-    node = RMI::Node::node_for_object{object} || RMI::proxied_classes{class}
-    unless (node)
-        die "no node for object object: cannot call isa (_)" + Data::Dumper::Dumper(\%RMI::Node::node_for_object)
-    }
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} $object 'isa' redirecting to node $node\n")
-    if (ref(object))
-        node.send_request_and_receive_response('call_object_method', class, 'isa', object, _)        
-    }
-    else 
-        node.send_request_and_receive_response('call_class_method', class, 'isa', _)        
-    }
-end
-
-END {
-    RMI::process_is_ending = 1
-end
-
-def DESTROY
-    self = _[0]
-    id = "self"
-    node = delete RMI::Node::node_for_object{id}
-    remote_id = delete RMI::Node::remote_id_for_object{id}
-    if (not defined remote_id)
-        if (RMI::DEBUG)
-            warn "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $node but NO REMOTE ID FOUND DURING DESTRUCTION?!\n"
-                + Data::Dumper::Dumper(node.{_received_objects})
-        }
-        return
-    }
-    $RMI_DEBUG && print("$RMI_DEBUG_MSG_PREFIX O: #{$$} DESTROYING $id wrapping $remote_id from $node\n")
-    other_ref = delete node.{_received_objects}{remote_id}
-    if (!other_ref and !RMI::process_is_ending)
-        warn "$RMI::DEBUG_MSG_PREFIX O: $$ DESTROYING $id wrapping $remote_id from $node NOT ON RECORD AS RECEIVED DURING DESTRUCTION?!\n"
-            + Data::Dumper::Dumper(node.{_received_objects})
-    }
-    push { node.{_received_and_destroyed_ids} }, remote_id
-end
-
-1
 
 =pod
 
@@ -202,5 +105,4 @@ module.
 
 =end
 
-end
 
