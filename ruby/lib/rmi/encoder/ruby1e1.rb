@@ -5,6 +5,7 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 @@value = 0
 @@object_reference = 1
 @@return_proxy = 3
+@@sym = 4
 
 @@remote_id_for_object = {}
 @@node_for_object = {}
@@ -12,31 +13,21 @@ class RMI::Encoder::Ruby1e1 < RMI::Encoder
 
 @@proc_src = {}
 
-def _is_primitive(v)
-    if v.kind_of?(String)
-        return true
-    elsif v.kind_of?(Fixnum)
-        return true
-    elsif v.class == NilClass
-        return true
-    else
-        return false
-    end
-end
-
 def encode(message_data, opts) 
     encoded = []
     message_data.each { |o|
         klass = o.class
-        if ! _is_primitive(o)
-            # sending some sort of reference
-            remote_id = @@remote_id_for_object[o.__id__] 
-            if remote_id != nil
-                # this is a proxy object on THIS side: the real object will be used on the remote side
-                $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} proxy #{o} references remote #{remote_id}\n")
-                encoded.push(@@return_proxy, remote_id)
-                next
-            elsif (opts != nil and (opts['copy'] == true or opts['copy_params'] == true))
+        remote_id = @@remote_id_for_object[o.__id__] 
+        if remote_id != nil
+            # this is a proxy object on THIS side: the real object will be used on the remote side
+            $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} proxy #{o} references remote #{remote_id}\n")
+            encoded.push(@@return_proxy, remote_id)
+        elsif remote_id == nil && ( o.kind_of?(String) || o.kind_of?(Fixnum) || o.kind_of?(NilClass) )
+            # sending a non-reference value
+            encoded.push(@@value, o)
+        else
+            # sending some sort of reference which originates on this side
+            if (opts != nil and (opts['copy'] == true or opts['copy_params'] == true))
                 # a reference on this side which should be copied on the other side instead of proxied
                 # this never happens by default in the RMI modules, only when specially requested for performance
                 # or to get around known bugs in the C<->Ruby interaction in some modules (DBI).
@@ -57,9 +48,6 @@ def encode(message_data, opts)
                 encoded.push(@@object_reference, local_id)
                 @sent_objects[local_id] = o
             end
-        else 
-            # sending a non-reference value
-            encoded.push(@@value, o)
         end 
     } 
 
@@ -154,11 +142,7 @@ def decode(encoded)
                             end
                             params = '*p'
                         end
-                        src = <<"EOS"
-                        RMI::ProxyWrapper::Proc.new(o) do |#{params}|
-                            orig.call(#{params})
-                        end
-EOS
+                        src = "RMI::ProxyWrapper::Proc.new(o) do |#{params}| orig.call(#{params}) end"
                     end
                     #print src,"\n"
                     o = eval src
