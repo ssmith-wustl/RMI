@@ -5,11 +5,6 @@ class RMI::RequestResponder::Ruby1r1 < RMI::RequestResponder
 @@executing_nodes = [] # required for some methods on the remote side to find the RMI node acting upon them
 @@proxied_classes = {} # tracks classes which have been fully proxied into this process by some client
 
-# used by the requestor to capture context
-def _capture_context 
-    return 1 
-end
-
 # used by the requestor to use that context after a result is returned
 def _return_result_in_context(response_data, context) 
     $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} returning (#{response_data.class.to_s}) #{response_data} w/o context consideration\n")
@@ -35,7 +30,12 @@ def _process_request_in_context_and_return_response(message_data)
     @@executing_nodes.push @node
     begin
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} object call method #{method} params #{message_data.length}: #{message_data.join(',')}\n")
-        result = self.send(method, *message_data)
+        if context == 0 
+            result = self.send(method, *message_data)
+        else
+            block = message_data.pop
+            result = self.send(method, *message_data, &block)
+        end
     rescue Exception => e 
         exception = e
         if $RMI_FLOP
@@ -98,26 +98,26 @@ end
 
 ##
 
-def call_class_method(klass, method, *params)
-    return @node.send_request_and_receive_response('call_class_method', klass, method, *params);
+def call_class_method(klass, method, *params, &block)
+    return @node.send_request_and_receive_response('call_class_method', klass, method, *params, &block);
 end
 
-def _respond_to_class_method(klass, method, *params)
+def _respond_to_class_method(klass, method, *params, &block)
     ns = _resolve_namespace(klass)
     m = ns.method(method)
-    return m.call(*params)
+    return m.call(*params, &block)
 end
 
 ##
 
-def call_object_method(obj,method,*params)
+def call_object_method(obj, method, *params, &block)
     #print "XXX call #{@class} #{method} #{obj} #{params}\n"
-    return @node.send_request_and_receive_response('call_object_method', obj.instance_eval { @class }, method, obj, *params);
+    return @node.send_request_and_receive_response('call_object_method', obj.instance_eval { @class }, method, obj, *params, &block);
 end
 
-def _respond_to_object_method(klass, method, obj, *params) 
-    #print "XXX call #{klass} #{method} #{obj} #{params}\n"
-    obj.send(method, *params)
+def _respond_to_object_method(klass, method, obj, *params, &block) 
+    #print "XXX call #{klass} #{method} #{obj} len: #{params.length} p: #{params.join(',')} b: #{block}\n"
+    obj.send(method, *params, &block)
 end
 
 def call_require(pkg) 
@@ -131,8 +131,6 @@ end
 ##
 
 =begin
-
-
 
 sub call_use {
     my ($self,$class,$module,$use_args) = @_;

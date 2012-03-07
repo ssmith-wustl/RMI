@@ -105,18 +105,22 @@ class RMI::Node
 
     # API for the request responder
 
-    def send_request_and_receive_response(call_type,pkg,sub,*params)
+    def send_request_and_receive_response(call_type, pkg, sub, *params, &block)
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} calling #{call_type} using ns #{pkg} method #{sub} with params #{params}\n")
         
         #opts = RMI::ProxyObject::DEFAULT_OPTS[pkg][sub]
         opts = nil
         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} request #{call_type} on #{pkg} #{sub} has default opts #{opts}\n")    
 
-        # lookup context
-        context = @_request_responder._capture_context()
+        # set context 
+        context = 0
+        if block != nil
+            context = 1
+            params.push(block)
+        end
         
         # send, with context
-        self._send('request', [call_type, context, pkg, sub, *params], opts) # || raise(IOError, "failed to send!")
+        self._send('request', [call_type, context, pkg, sub, *params ], opts) # || raise(IOError, "failed to send!")
         
         1.times do 
             (response_type, response_data) = self._receive()
@@ -421,9 +425,9 @@ This is the type for standard remote method invocatons.
   
 The message data contains, in order:
 
- - wantarray    1, '', or undef, depending on the requestor's calling context.
-                This is passed to the remote side, and also used on the
-                local side to control how results are returned.
+ - context      In Ruby, this is true if the call includes a block. 
+                The block will be passed as a proc at the end of the params list.
+                This tells the remote side to pop it off and use it as a block.
 
  - object/class A class name, or an object which is a proxy for something on the remote side.
                 This value is not present for plain function calls, or evals.

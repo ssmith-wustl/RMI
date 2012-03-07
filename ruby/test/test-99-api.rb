@@ -36,5 +36,16 @@ class Test99 < Test::Unit::TestCase
         a = n5.call('eval',"2+3")
         assert_equal(a, 5, "basic eval returning primitives works")
     end
+
+    def test_remote_array
+        require "rmi/client/forked-pipes"
+        n6 = RMI::Client::ForkedPipes.new()
+        a = n6.call('eval','[11,22,33]')
+        t = 0
+        e = a.each do |v|
+            t += v
+        end
+        assert_equal(t, 11+22+33, 'can iterate over remote array and call local block')
+    end
 end
 

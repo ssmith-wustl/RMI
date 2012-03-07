@@ -34,8 +34,10 @@ class Test02 < Test::Unit::TestCase
 
 
         a = remote1.create_and_return_arrayref('one', 111, 'two', 222)
-        #a.each { |e| print "E: #{e}\n" }
-        #assert(a.kind_of?(Array), "object #{a} is an Array")
+        b = [a[0],a[1],a[2],a[3]]
+
+        #b.each { |e| print "E: #{e}\n" }
+        assert(b.kind_of?(Array), "object #{a} is an Array")
     end
 end
 
