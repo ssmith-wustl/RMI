@@ -22,7 +22,7 @@ def encode(message_data, opts)
             # this is a proxy object on THIS side: the real object will be used on the remote side
             $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} proxy #{o} references remote #{remote_id}\n")
             encoded.push(@@return_proxy, remote_id)
-        elsif remote_id == nil && ( o.kind_of?(String) || o.kind_of?(Fixnum) || o.kind_of?(NilClass) )
+        elsif remote_id == nil && ( o.kind_of?(String) || o.kind_of?(Fixnum) || o.kind_of?(NilClass) || o.kind_of?(FalseClass) || o.kind_of?(TrueClass) )
             # sending a non-reference value
             encoded.push(@@value, o)
         else
