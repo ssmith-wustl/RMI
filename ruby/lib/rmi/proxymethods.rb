@@ -1,7 +1,8 @@
 module RMI::ProxyMethods
 require 'rmi'
 
-Object.instance_methods.each do |name|
+Object.instance_methods.each do |sym|
+    name = sym.to_s
     if  name == '__id__' || 
         name == '__send__' || 
         name == 'to_s' || 
@@ -10,11 +11,13 @@ Object.instance_methods.each do |name|
         name == 'kind_of?' ||
         name == 'methods' ||
         name == 'respond_to?' ||
-        name == 'inspect'
+        name == 'inspect' ||
+        name == 'object_id' 
+        name == '=='
             next
     end
     define_method name do |*args, &block|
-        #print "OBJECT METHOD BASE #{name} #{args.join(',')}\n"
+        #print "OBJECT METHOD BASE #{name} with #{args.join(',')}\n"
         #super(*args)
         @node.send_request_and_receive_response('call_object_method', @class, name, self, *args, &block)        
     end
