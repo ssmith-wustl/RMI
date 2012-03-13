@@ -91,10 +91,10 @@ def decode(encoded)
                 target_class = @@proxy_subclasses[target_class_name]
                 if target_class == nil 
                     mod = target_class_name.downcase.split('::').join('/')
-                    #begin 
-                    #    require mod
-                    #    target_class = eval "#{target_class_name}"
-                    #rescue Exception
+                    begin 
+                        require mod
+                        target_class = eval "#{target_class_name}"
+                    rescue Exception
                         src = ''
                         words = remote_class.split('::')
                         prev = ''
@@ -107,7 +107,7 @@ def decode(encoded)
                         src += "class #{target_class_name} < RMI::ProxyObject\nend\n#{target_class_name}"
                         $RMI_DEBUG && print("#{$RMI_DEBUG_MSG_PREFIX} N: #{$$} - defining proxy sub-class #{src}\n")
                         target_class = eval src
-                    #end
+                    end
                     @@proxy_subclasses[target_class_name] = target_class
                 end
                 o = target_class.new(@node,value,remote_class)
